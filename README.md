@@ -31,15 +31,24 @@ AI-first product: primary interface is a **chat experience** that answers user q
 ## Architecture (v0)
 
 ```mermaid
-graph LR
-  Browser -->|HTTP_SSE| NextJS[Next.js]
-  NextJS -->|fetch| FastAPI
-  FastAPI -->|stream_chat| LLM[LLM_API]
-  FastAPI -->|read_write| PG["Postgres + pgvector"]
-  FastAPI -->|enqueue_tasks| Redis
-  Redis -->|consume| CeleryWorker[Celery_Worker]
-  CeleryWorker -->|"title gen, embed, ingest"| LLM
-  CeleryWorker -->|write| PG
+graph TB
+  subgraph request [Request path]
+    Browser
+    NextJS[Next.js]
+    FastAPI
+    Browser -->|HTTP SSE| NextJS
+    NextJS -->|fetch| FastAPI
+  end
+  FastAPI -->|stream chat| LLM[LLM API]
+  FastAPI -->|read write| PG["Postgres + pgvector"]
+  FastAPI -->|enqueue tasks| Redis
+  subgraph background [Background]
+    Redis
+    CeleryWorker[Celery Worker]
+    Redis -->|consume| CeleryWorker
+    CeleryWorker -->|title gen embed ingest| LLM
+    CeleryWorker -->|write| PG
+  end
 ```
 
 - Chat responses stream (SSE) directly from FastAPI to the browser; they are not queued through Celery.
