@@ -6,8 +6,10 @@ alwaysApply: true
 # Tech stack
 - Frontend: Next.js (SSR + routing) + React + TypeScript
 - Backend: FastAPI + LangChain
-- Async: Celery (tasks) + RabbitMQ (broker)
-- Data: Postgres
+- Streaming: SSE (FastAPI StreamingResponse) for chat
+- Async: Celery (tasks) + Redis (broker + cache)
+- Data: Postgres + pgvector (embeddings)
+- Types: OpenAPI spec -> generated TypeScript types (openapi-typescript)
 - Infra/dev: Docker (+ docker-compose)
 
 # Repo structure (MVP)
@@ -32,10 +34,11 @@ alwaysApply: true
 │  │    - `api/services/chat_service.py` (calls `packages/core`)  
 │  │  
 │  └─ worker/  
-│     - Celery worker for async/long-running jobs (broker = RabbitMQ)  
+│     - Celery worker for async/long-running jobs (broker = Redis)  
 │     - Should contain: celery app config + task definitions  
 │     - Examples:  
 │       - `celery_app.py` (Celery config, queues)  
+│       - `tasks/generate_title.py` (LLM call to name a conversation after first message)  
 │       - `tasks/ingest_dataset.py` (parse/normalize data into Postgres)  
 │       - `tasks/embed_documents.py` (chunk/embed/index)  
 │       - `tasks/rebuild_index.py`, `tasks/sync_connectors.py`, `tasks/cleanup.py`  
@@ -71,12 +74,11 @@ alwaysApply: true
 │  - Local infrastructure for development (compose + configs)  
 │  
 │  └─ docker-compose/  
-│     - Local service orchestration: Postgres, RabbitMQ, Redis (optional)  
+│     - Local service orchestration: Postgres, Redis  
 │     - Should contain: compose files + local service configs/init scripts  
 │     - Examples:  
 │       - `docker-compose.yml`  
-│       - `postgres/init.sql` (optional)  
-│       - `rabbitmq/definitions.json` (optional)  
+│       - `postgres/init.sql` (optional, enable pgvector extension)  
 │       - `redis/redis.conf` (optional)  
 │  
 └─ docs/ (optional)  
@@ -85,5 +87,10 @@ alwaysApply: true
 # Intent notes (why it’s organized this way)
 - `apps/*` are runnable services (web/api/worker).
 - `packages/*` are internal libraries shared across services.
-- RabbitMQ is the Celery broker (api enqueues jobs, worker consumes).
-- Postgres is the system of record; async jobs may build indexes/artifacts for retrieval.
+- Redis is the Celery broker AND cache/session store (one service, two roles).
+- Chat responses are streamed (SSE) directly from FastAPI — never queued through Celery.
+- Celery handles background work: title generation, data ingestion, embedding, index rebuilds.
+- pgvector keeps vector search inside Postgres (no extra vector DB service).
+- TypeScript types are generated from the FastAPI OpenAPI spec to prevent drift.
+- LangChain is used inside `packages/core` but kept behind clean interfaces so it can be swapped.
+- The directory structure is a target layout — start flat, extract as complexity demands. Not every directory needs to exist from day one.
