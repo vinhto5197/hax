@@ -1,0 +1,35 @@
+---
+description: Project context — what we are building and why (no implementation rules).
+alwaysApply: true
+---
+
+# Project context
+
+## One-liner
+Build **hax**: an AI-first product where the primary interface is a **chat experience** that answers user questions using the user’s own data + context.
+
+## The MVP outcome
+Ship a working vertical slice where a user can:
+1) Get into the app (basic auth / session)
+2) Provide or connect data (even if it’s just a seed dataset at first)
+3) Ask questions in chat
+4) Receive useful answers grounded in that data
+5) See key outputs in a simple **table / structured view** (not only free-form text)
+
+## What “good” means for MVP
+- The chat reliably produces:
+  - a direct answer that understands context of user's data from previous conversations
+  - a short explanation of what data it used (high level)
+  - a structured output when helpful (table-like results)
+- The product feels cohesive (not a collection of demos)
+- We can iterate fast: adding new data sources, new question types, and new agent capabilities without rewriting everything
+
+## Non-goals
+- Perfect agent autonomy or complex multi-agent orchestration
+- Over-optimized architecture
+- Full enterprise security/compliance (but we still avoid obvious foot-guns like logging secrets)
+
+## Guiding principles
+- Working software > perfect abstractions
+- Prefer minimal, testable vertical slices
+- Treat user data as sensitive by default

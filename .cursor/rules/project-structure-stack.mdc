@@ -1,0 +1,89 @@
+---
+description: Complete project structure + stack + what belongs where (MVP-first).
+alwaysApply: true
+---
+
+# Tech stack
+- Frontend: Next.js (SSR + routing) + React + TypeScript
+- Backend: FastAPI + LangChain
+- Async: Celery (tasks) + RabbitMQ (broker)
+- Data: Postgres
+- Infra/dev: Docker (+ docker-compose)
+
+# Repo structure (MVP)
+
+/  
+├─ apps/  
+│  ├─ web/  
+│  │  - Next.js (SSR) frontend: chat UI + routing + table/structured outputs  
+│  │  - Should contain: pages/routes, UI components, client API wrappers  
+│  │  - Examples:  
+│  │    - `app/layout.tsx`, `app/chat/page.tsx`, `app/datasets/page.tsx`  
+│  │    - `components/chat/MessageList.tsx`, `components/tables/ResultTable.tsx`  
+│  │    - `lib/apiClient.ts` (typed fetch wrappers), `lib/uiTypes.ts` (UI-only types)  
+│  │  
+│  ├─ api/  
+│  │  - FastAPI HTTP boundary: auth, request validation, orchestration, responses  
+│  │  - Should contain: routers/controllers, API-only configs, middleware, wiring to shared packages  
+│  │  - Examples:  
+│  │    - `main.py` (create app, include routers)  
+│  │    - `api/routers/chat.py` (POST /chat), `api/routers/datasets.py`  
+│  │    - `api/deps.py` (db session, current user), `api/config.py`  
+│  │    - `api/services/chat_service.py` (calls `packages/core`)  
+│  │  
+│  └─ worker/  
+│     - Celery worker for async/long-running jobs (broker = RabbitMQ)  
+│     - Should contain: celery app config + task definitions  
+│     - Examples:  
+│       - `celery_app.py` (Celery config, queues)  
+│       - `tasks/ingest_dataset.py` (parse/normalize data into Postgres)  
+│       - `tasks/embed_documents.py` (chunk/embed/index)  
+│       - `tasks/rebuild_index.py`, `tasks/sync_connectors.py`, `tasks/cleanup.py`  
+│  
+├─ packages/  
+│  - Internal shared code (YOUR code), imported by apps. Not third-party dependencies.  
+│  - Purpose: keep reusable “business/AI logic” shared across FastAPI + Celery, avoid duplication.  
+│  
+│  ├─ core/  
+│  │  - Shared product brain: LangChain workflows, RAG, tool-calling, shared schemas  
+│  │  - Must be framework-light: avoid importing FastAPI or Celery directly  
+│  │  - Examples:  
+│  │    - `workflows/answer_question.py` (user msg → answer + citations + table result)  
+│  │    - `workflows/ingest.py` (shared ingest pipeline pieces)  
+│  │    - `chains/chat_chain.py` (LangChain composition)  
+│  │    - `rag/retriever.py`, `rag/chunking.py`, `rag/reranker.py` (optional)  
+│  │    - `tools/sql_tool.py` (query Postgres), `tools/vector_tool.py` (vector access)  
+│  │    - `prompts/system.py`, `prompts/chat.py`  
+│  │    - `llm/client.py` (LLM wrapper)  
+│  │    - `schemas/chat.py`, `schemas/datasets.py`, `schemas/results.py`  
+│  │    - `utils/errors.py`, `utils/logging.py` (PII-safe), `utils/ids.py`  
+│  │  
+│  └─ db/  
+│     - Shared Postgres layer (API + worker both use it)  
+│     - Should contain: session/engine, models, migrations, repositories/queries  
+│     - Examples:  
+│       - `session.py` (engine/session factory)  
+│       - `models/` (SQLAlchemy models)  
+│       - `repos/` (query functions)  
+│       - `migrations/` (Alembic)  
+│  
+├─ infra/  
+│  - Local infrastructure for development (compose + configs)  
+│  
+│  └─ docker-compose/  
+│     - Local service orchestration: Postgres, RabbitMQ, Redis (optional)  
+│     - Should contain: compose files + local service configs/init scripts  
+│     - Examples:  
+│       - `docker-compose.yml`  
+│       - `postgres/init.sql` (optional)  
+│       - `rabbitmq/definitions.json` (optional)  
+│       - `redis/redis.conf` (optional)  
+│  
+└─ docs/ (optional)  
+   - Project docs humans read (onboarding, runbooks, architecture notes)
+
+# Intent notes (why it’s organized this way)
+- `apps/*` are runnable services (web/api/worker).
+- `packages/*` are internal libraries shared across services.
+- RabbitMQ is the Celery broker (api enqueues jobs, worker consumes).
+- Postgres is the system of record; async jobs may build indexes/artifacts for retrieval.

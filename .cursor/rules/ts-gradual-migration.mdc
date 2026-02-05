@@ -1,0 +1,54 @@
+---
+description: Gradual TypeScript (JS -> TS) rules for this repo (Next.js web app)
+globs: apps/web/**/*.ts, apps/web/**/*.tsx, apps/web/**/*.js, apps/web/**/*.jsx
+alwaysApply: false
+---
+
+# Goal
+We are starting the frontend in TypeScript, but we're *learning TS gradually*.
+Prioritize clarity for a JavaScript developer over "type wizardry".
+
+## How to write TypeScript here (gradual typing)
+- **Type the boundaries first**:
+  - exported functions/components
+  - API responses
+  - props
+  - shared utilities
+- **Inside a function**, prefer type inference unless it gets confusing.
+- Avoid `any`. If you're unsure, use `unknown` and **narrow** with checks.
+- Prefer **`type` aliases** for unions and simple shapes; use **`interface`** for React props if it reads better.
+- Add **return types** for exported functions and hooks when it improves readability.
+- Prefer `as const` for literal objects/arrays that are used as enums.
+
+## JS -> TS conversion approach (small steps)
+When converting a JS file:
+1. Rename `*.js` -> `*.ts` (or `*.jsx` -> `*.tsx`) **only if the file is already stable**.
+2. Fix the minimum TS errors with these steps in order:
+   - Add parameter/prop types
+   - Type object shapes (e.g., `type User = { id: string; name: string }`)
+   - Add return types (especially for exported funcs)
+   - Replace unsafe access with narrowing (`if (!x) return;`, `typeof`, `in`, etc.)
+3. If types are unclear, introduce a small helper type and move on—don’t block the whole PR.
+
+## Patterns we prefer
+- Prefer **union types** over enums unless it’s truly shared/large:
+  - `type Status = "idle" | "loading" | "success" | "error"`
+- Prefer `Record<string, T>` for dictionaries.
+- Prefer `readonly` arrays when returning constants.
+- For React:
+  - Components should have typed props
+  - Event handlers should use React types (`React.ChangeEvent<HTMLInputElement>`, etc.) only when needed
+
+## Patterns we avoid (unless asked)
+- No heavy generics unless they simplify code.
+- No advanced conditional types unless there is a clear payoff.
+- Don’t introduce a new library solely for typing.
+
+## When you (Cursor) respond with code
+- Keep changes **minimal and localized**.
+- If you add a type, include a **1-line explanation** in comments *only when it teaches a TS concept*.
+- If there are multiple options, choose the simplest and mention the alternative briefly.
+
+## Repo context
+- Frontend lives in `apps/web` (Next.js + TypeScript).
+- Keep code modular and easy to refactor later (don’t over-engineer types now).
