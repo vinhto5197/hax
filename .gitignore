@@ -4,6 +4,13 @@
 node_modules/
 .pnp
 .pnp.js
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+.pnpm-debug.log*
 
 # testing
 coverage/
@@ -65,7 +72,7 @@ celerybeat.pid
 # docker
 .docker/
 
-# ide (optional: remove .idea if you commit project config)
+# ide
 .idea/
 *.swp
 *.swo
