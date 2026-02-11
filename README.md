@@ -10,6 +10,16 @@ AI-first product: primary interface is a **chat experience** that answers user q
 
 **Non-goals:** perfect agent autonomy, over-optimized architecture, full enterprise compliance. **Principles:** working software over perfect abstractions; minimal testable vertical slices; treat user data as sensitive.
 
+## Local Dev Setup
+
+Run from repo root:
+
+```bash
+source setup.sh
+```
+
+Creates `.venv`, installs `requirements.txt` and dev tools (black, ruff, pre-commit), installs the pre-commit hook, and activates the venv in the current shell.
+
 ## Stack
 
 | Layer   | Tech |
