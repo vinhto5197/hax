@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hax"
+version = "0.1.0"
+description = "Local dev configuration for hax."
+requires-python = ">=3.11"
+
+[project.optional-dependencies]
+dev = [
+  "black>=24.3.0",
+  "ruff>=0.6.0",
+]
+
+[tool.black]
+line-length = 88
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+fix = true
+respect-gitignore = true
+src = ["apps", "packages"]
+extend-exclude = [
+  "apps/web",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["apps", "packages"]
