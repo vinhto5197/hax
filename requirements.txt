@@ -1,5 +1,5 @@
 # API
-fastapi>=0.115.0
+fastapi[standard]>=0.115.0
 uvicorn[standard]>=0.32.0
 
 # LangChain (core, LLM, embeddings, RAG)
