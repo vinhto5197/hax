@@ -11,5 +11,6 @@
     "javascriptreact",
     "typescript",
     "typescriptreact"
-  ]
+  ],
+  "editor.semanticHighlighting.enabled": true
 }
