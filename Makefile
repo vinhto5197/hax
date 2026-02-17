@@ -1,7 +1,7 @@
 # ── Infrastructure ──────────────────────────────────────────────
 .PHONY: infra-up infra-down infra-logs infra-ps infra-clean
 
-COMPOSE := docker compose -f infra/docker-compose/docker-compose.yml
+COMPOSE := docker-compose -f infra/docker-compose/docker-compose.yml
 
 infra-up:
 	$(COMPOSE) up -d

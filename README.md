@@ -10,6 +10,18 @@ AI-first product: primary interface is a **chat experience** that answers user q
 
 **Non-goals:** perfect agent autonomy, over-optimized architecture, full enterprise compliance. **Principles:** working software over perfect abstractions; minimal testable vertical slices; treat user data as sensitive.
 
+## Prerequisites
+
+Install these before setup. Versions are minimums.
+
+| Tool           | Version | Notes                                           |
+| -------------- | ------- | ----------------------------------------------- |
+| Python         | 3.11+   | Via pyenv or Homebrew                           |
+| Node.js        | 18+     | Via nvm or Homebrew                             |
+| Docker         | 20+     | Docker Desktop, Colima, Rancher, etc.           |
+| docker-compose | 2+      | Usually bundled with Docker; Homebrew otherwise |
+| Make           | any     | Pre-installed on macOS / Linux                  |
+
 ## Local Dev Setup
 
 First-time setup (creates venv, installs deps, pre-commit hooks):
@@ -17,6 +29,8 @@ First-time setup (creates venv, installs deps, pre-commit hooks):
 ```bash
 source setup.sh
 ```
+
+This creates the venv, installs deps, copies `.env.example` to `.env` (if missing), and sets up pre-commit hooks. Defaults work for local dev.
 
 Start everything (Postgres, Redis, FastAPI, Next.js):
 
@@ -30,17 +44,25 @@ Stop all services:
 make dev-stop
 ```
 
+Other useful commands:
+
+```bash
+make infra-logs    # tail Postgres + Redis logs
+make infra-clean   # tear down containers AND delete volumes (full reset)
+make setup         # re-run setup.sh without sourcing
+```
+
 ## Stack
 
-| Layer   | Tech |
-|---------|------|
-| Frontend | Next.js (SSR + routing), React, TypeScript |
-| Backend  | FastAPI, LangChain |
-| Streaming | SSE (FastAPI `StreamingResponse`) for chat |
-| Async    | Celery + Redis (broker + cache) |
-| Data     | Postgres + pgvector (embeddings) |
-| Types    | OpenAPI spec → generated TypeScript (e.g. openapi-typescript) |
-| Infra    | Docker, Docker Compose |
+| Layer     | Tech                                                          |
+| --------- | ------------------------------------------------------------- |
+| Frontend  | Next.js (SSR + routing), React, TypeScript                    |
+| Backend   | FastAPI, LangChain                                            |
+| Streaming | SSE (FastAPI `StreamingResponse`) for chat                    |
+| Async     | Celery + Redis (broker + cache)                               |
+| Data      | Postgres + pgvector (embeddings)                              |
+| Types     | OpenAPI spec → generated TypeScript (e.g. openapi-typescript) |
+| Infra     | Docker, Docker Compose                                        |
 
 ## Build milestones (v0)
 
