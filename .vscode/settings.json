@@ -12,5 +12,9 @@
     "typescript",
     "typescriptreact"
   ],
-  "editor.semanticHighlighting.enabled": true
+  "editor.semanticHighlighting.enabled": true,
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": true
+  }
 }

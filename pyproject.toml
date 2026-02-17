@@ -3,7 +3,8 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = []
+include = ["packages*", "apps.api*"]
+exclude = ["apps.web*"]
 
 [project]
 name = "hax"
@@ -13,14 +14,9 @@ requires-python = ">=3.11"
 
 [project.optional-dependencies]
 dev = [
-  "black>=24.3.0",
   "pre-commit>=3.7.0",
   "ruff>=0.6.0",
 ]
-
-[tool.black]
-line-length = 88
-target-version = ["py311"]
 
 [tool.ruff]
 line-length = 88
