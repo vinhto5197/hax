@@ -70,6 +70,14 @@ else
   echo "Python dependencies already installed."
 fi
 
+# ── Environment file ──
+if [[ ! -f .env ]]; then
+  cp .env.example .env
+  echo "Created .env from .env.example (edit as needed)."
+else
+  echo ".env already exists, skipping."
+fi
+
 # ── Node.js dependencies (apps/web) ──
 if [[ ! -d apps/web/node_modules ]]; then
   echo "Installing Node.js dependencies (apps/web)..."
@@ -78,7 +86,7 @@ else
   echo "Node.js dependencies already installed (apps/web)."
 fi
 
-# ── Pre-commit hooks (black + ruff on commit) ──
+# ── Pre-commit hooks (ruff on commit) ──
 if [[ ! -f .git/hooks/pre-commit ]]; then
   echo "Installing pre-commit hooks..."
   .venv/bin/pre-commit install
