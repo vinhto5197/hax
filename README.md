@@ -12,13 +12,23 @@ AI-first product: primary interface is a **chat experience** that answers user q
 
 ## Local Dev Setup
 
-Run from repo root:
+First-time setup (creates venv, installs deps, pre-commit hooks):
 
 ```bash
 source setup.sh
 ```
 
-Creates `.venv`, installs `requirements.txt` and dev tools (black, ruff, pre-commit), installs the pre-commit hook, and activates the venv in the current shell.
+Start everything (Postgres, Redis, FastAPI, Next.js):
+
+```bash
+make dev
+```
+
+Stop all services:
+
+```bash
+make dev-stop
+```
 
 ## Stack
 
@@ -30,7 +40,7 @@ Creates `.venv`, installs `requirements.txt` and dev tools (black, ruff, pre-com
 | Async    | Celery + Redis (broker + cache) |
 | Data     | Postgres + pgvector (embeddings) |
 | Types    | OpenAPI spec → generated TypeScript (e.g. openapi-typescript) |
-| Infra    | Docker, docker-compose |
+| Infra    | Docker, Docker Compose |
 
 ## Build milestones (v0)
 
