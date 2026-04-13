@@ -32,6 +32,15 @@ source setup.sh
 
 This creates the venv, installs deps, copies `.env.example` to `.env` (if missing), and sets up pre-commit hooks. Defaults work for local dev.
 
+Make sure Docker is running before starting services:
+
+```bash
+# If using Colima
+colima start
+
+# If using Docker Desktop, just open the app
+```
+
 Start everything (Postgres, Redis, FastAPI, Next.js):
 
 ```bash
