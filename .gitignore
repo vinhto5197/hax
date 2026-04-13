@@ -72,6 +72,9 @@ celerybeat.pid
 # docker
 .docker/
 
+# claude code
+.claude/
+
 # ide
 .idea/
 *.swp

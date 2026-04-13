@@ -41,10 +41,16 @@ setup:
 .PHONY: dev dev-stop
 
 dev: infra-up
-	@echo "Starting API and Web servers (run with: make -j dev for parallel)..."
+	@echo "Starting API and Web servers..."
 	@$(MAKE) -j2 api web
 
 dev-stop:
 	@echo "Stopping dev services..."
 	@pkill -f "uvicorn apps.api.main:app" || true
 	@pkill -f "next dev" || true
+
+# ── Lint ─────────────────────────────────────────────────────
+.PHONY: lint
+
+lint:
+	ruff check . && ruff format --check .

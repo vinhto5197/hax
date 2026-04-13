@@ -44,7 +44,6 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
 - Working software > perfect abstractions
 - Prefer minimal, testable vertical slices
 - Treat user data as sensitive by default
-
 # Tech stack
 - Frontend: Next.js (SSR + routing) + React + TypeScript
 - Backend: FastAPI + LangChain

@@ -64,7 +64,6 @@ fi
 
 if ! .venv/bin/pip show fastapi &>/dev/null; then
   echo "Installing Python dependencies..."
-  .venv/bin/pip install --quiet -r requirements.txt
   .venv/bin/pip install --quiet -e ".[dev]"
 else
   echo "Python dependencies already installed."
