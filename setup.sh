@@ -15,8 +15,6 @@ if [[ -n "${BASH_SOURCE[0]}" ]]; then
   ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 elif [[ -n "${ZSH_VERSION}" ]]; then
   ROOT="$(cd "$(dirname "${(%):-%x}")" && pwd)"
-else
-  ROOT="$(cd "$(dirname "$0")" && pwd)"
 fi
 cd "$ROOT"
 
