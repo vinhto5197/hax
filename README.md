@@ -72,12 +72,14 @@ make setup         # re-run setup.sh without sourcing
 | Data      | Postgres + pgvector (embeddings)                              |
 | Types     | OpenAPI spec → generated TypeScript (e.g. openapi-typescript) |
 | Infra     | Docker, Docker Compose                                        |
+| Deploy    | AWS, provisioned via Terraform                                |
 
 ## Build milestones (v0)
 
 1. **Streaming chat** — Next.js + FastAPI + SSE, conversation history in Postgres, basic auth, background chat title generation (Celery + Redis), Docker Compose (Postgres, Redis, all services).
 2. **Data + RAG** — User data upload (files), ingestion (chunk → embed → pgvector) via Celery, RAG in chat, conversation memory with user data context.
 3. **Structured outputs + polish** — Table/structured view for results, citation/source display, cohesive UI.
+4. **AWS deploy** — provision cloud infrastructure with Terraform and deploy all services to AWS.
 
 ## Architecture (v0)
 
