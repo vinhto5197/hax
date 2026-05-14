@@ -27,6 +27,10 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
    - Citation/source display (what data the answer used)
    - Cohesive UI — feels like a product, not a demo collection
 
+4. **Milestone 4 — AWS deploy**
+   - Provision cloud infrastructure with Terraform
+   - Deploy all services to AWS
+
 ## What "good" means for MVP
 - The chat reliably produces:
   - a direct answer that understands context of user's data from previous conversations
@@ -52,6 +56,7 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
 - Data: Postgres + pgvector (embeddings)
 - Types: OpenAPI spec -> generated TypeScript types (openapi-typescript)
 - Infra/dev: Docker (+ docker-compose)
+- Deploy: AWS, provisioned via Terraform
 
 # Repo structure (MVP)
 
