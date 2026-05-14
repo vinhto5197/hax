@@ -15,9 +15,11 @@ dependencies = [
   # API
   "fastapi[standard]>=0.115.0",
   "uvicorn[standard]>=0.32.0",
+  # LLM
+  "anthropic>=0.40.0",
   # LangChain
   "langchain-core>=0.3.0",
-  "langchain-openai>=0.2.0",
+  "langchain-anthropic>=0.3.0",
   "langchain-community>=0.3.0",
   # Async tasks
   "celery[redis]>=5.4.0",
