@@ -32,10 +32,18 @@ web:
 	cd apps/web && npm run dev
 
 # ── Setup ─────────────────────────────────────────────────────
-.PHONY: setup
+.PHONY: setup sync sync-web
 
 setup:
 	@bash setup.sh
+
+# Re-sync python deps with pyproject.toml (after editing dependencies).
+sync:
+	.venv/bin/pip install -e ".[dev]"
+
+# Re-sync web deps with package.json (after editing dependencies).
+sync-web:
+	cd apps/web && npm install
 
 # ── Dev (infra + api + web) ───────────────────────────────────
 .PHONY: dev dev-stop
