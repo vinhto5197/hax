@@ -35,9 +35,12 @@ export async function streamChat(
   prompt: string,
   onChunk: (content: string) => void,
 ): Promise<void> {
-  // Same-origin path. In dev, Next rewrites proxies it to FastAPI on :8000;
-  // in prod, the ALB routes /api/* to the FastAPI service. No CORS either way.
-  const response = await fetch("/api/chat", {
+  // In dev, NEXT_PUBLIC_API_URL points at FastAPI directly (Next's dev
+  // rewrite buffers SSE responses and kills streaming). In prod, the env
+  // var is unset, the fetch is same-origin, and the ALB routes /api/* to
+  // FastAPI.
+  const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
+  const response = await fetch(`${BASE_URL}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ prompt }),

@@ -17,5 +17,7 @@
     "editor.defaultFormatter": "charliermarsh.ruff",
     "editor.formatOnSave": true
   },
-  "python.terminal.activateEnvironment": false
+  "python.terminal.activateEnvironment": false,
+  "python.terminal.useEnvFile": true,
+  "python.envFile": "${workspaceFolder}/.env"
 }
