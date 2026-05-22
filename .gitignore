@@ -33,14 +33,13 @@ yarn-debug.log*
 yarn-error.log*
 *.log
 
-# local env files
+# local
 .env*.local
 .env
 .env.*
 !.env.example
 .envrc
-
-*.local.md
+local/
 
 # vercel
 .vercel
