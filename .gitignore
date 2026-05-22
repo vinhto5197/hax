@@ -40,8 +40,6 @@ yarn-error.log*
 !.env.example
 .envrc
 
-# Local-only scratch / notes files. Anything matching *.local.md stays out
-# of git — useful for personal dev backlogs that aren't ready to publish.
 *.local.md
 
 # vercel
