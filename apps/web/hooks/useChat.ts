@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 
-import { type ChatMessage, streamChat } from "@/lib/chatApi";
+import { type ChatBackend, type ChatMessage, streamChat } from "@/lib/chatApi";
 
 type UseChatResult = {
   messages: ChatMessage[];
@@ -12,7 +12,7 @@ type UseChatResult = {
   send: (text: string) => Promise<void>;
 };
 
-export function useChat(): UseChatResult {
+export function useChat(backend: ChatBackend): UseChatResult {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
@@ -34,10 +34,14 @@ export function useChat(): UseChatResult {
 
       try {
         let fullContent = "";
-        await streamChat(prompt, (chunk) => {
-          fullContent += chunk;
-          setStreamingContent(fullContent);
-        });
+        await streamChat(
+          prompt,
+          (chunk) => {
+            fullContent += chunk;
+            setStreamingContent(fullContent);
+          },
+          backend,
+        );
 
         // Skip commit if the stream produced no content — avoid an empty
         // phantom assistant bubble (e.g. refused/empty response).
@@ -58,9 +62,9 @@ export function useChat(): UseChatResult {
         setStreamingContent("");
       }
     },
-    // `send` reads `isLoading` — must be a dep so the closure refreshes
-    // when it changes (else stale closure bug).
-    [isLoading],
+    // `send` reads `isLoading` and `backend` — must be deps so the closure
+    // refreshes when either changes (else stale closure bug).
+    [isLoading, backend],
   );
 
   return { messages, isLoading, streamingContent, error, send };

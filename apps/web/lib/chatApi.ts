@@ -5,6 +5,15 @@ export type ChatMessage = {
   content: string;
 };
 
+// Which FastAPI route handles the request. Both speak the same SSE wire
+// format; only the LLM backend differs (see ADR 0002).
+export type ChatBackend = "agent-sdk" | "anthropic";
+
+const BACKEND_PATHS: Record<ChatBackend, string> = {
+  "agent-sdk": "/api/chat-agent-sdk",
+  anthropic: "/api/chat",
+};
+
 type StreamEvent =
   | { type: "chunk"; content: string }
   | { type: "done" }
@@ -34,13 +43,14 @@ function parseStreamEvent(rawEvent: string): StreamEvent {
 export async function streamChat(
   prompt: string,
   onChunk: (content: string) => void,
+  backend: ChatBackend = "agent-sdk",
 ): Promise<void> {
   // In dev, NEXT_PUBLIC_API_URL points at FastAPI directly (Next's dev
   // rewrite buffers SSE responses and kills streaming). In prod, the env
   // var is unset, the fetch is same-origin, and the ALB routes /api/* to
   // FastAPI.
   const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
-  const response = await fetch(`${BASE_URL}/api/chat`, {
+  const response = await fetch(`${BASE_URL}${BACKEND_PATHS[backend]}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ prompt }),
