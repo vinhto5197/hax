@@ -1,3 +1,4 @@
+import { Markdown } from "@/components/chat/Markdown";
 import { type ChatMessage } from "@/lib/chatApi";
 
 interface MessageListProps {
@@ -36,7 +37,11 @@ export function MessageList({
                     : "bg-black/5 text-foreground dark:bg-white/10"
                 }`}
               >
-                {message.content}
+                {isUser ? (
+                  message.content
+                ) : (
+                  <Markdown content={message.content} />
+                )}
               </div>
             </div>
           );
@@ -48,7 +53,7 @@ export function MessageList({
         {streamingContent ? (
           <div className="flex justify-start">
             <div className="max-w-[85%] rounded-lg bg-black/5 px-3 py-2 text-sm text-foreground dark:bg-white/10">
-              {streamingContent}
+              <Markdown content={streamingContent} />
             </div>
           </div>
         ) : null}
