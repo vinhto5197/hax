@@ -31,3 +31,10 @@ async def chat(payload: ChatRequest) -> StreamingResponse:
         # whole stream (default for HTTP/1.1 but worth being explicit).
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
     )
+
+
+"""
+curl -N -X POST http://localhost:8000/api/chat \
+    -H 'Content-Type: application/json' \
+    -d '{"prompt": "tell me a fable"}'
+"""
