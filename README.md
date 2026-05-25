@@ -68,7 +68,7 @@ make setup           # re-run setup.sh without sourcing
 
 After a fresh clone, a Docker version bump, or anything else that touches the data services, run this end-to-end pass to confirm Postgres + Redis are wired up correctly. Stop and diagnose if any step fails.
 
-**Shortcut:** `make infra-verify` runs all 8 steps below in one command. The breakdown is here for reading or debugging a specific failure.
+**Shortcut:** `make infra-verify` runs the equivalent checks non-interactively via [infra/docker-compose/verify.sh](infra/docker-compose/verify.sh). The script uses `docker exec` directly instead of `make infra-psql` / `make infra-redis-cli`, because those open interactive shells (`-it`) which don't work from a script. Same coverage; the breakdown below is the human-friendly form for debugging a specific failure.
 
 1. `make infra-clean` — start from a known-empty state (deletes named volumes).
 2. `make infra-up` — bring postgres + redis up in the background.
