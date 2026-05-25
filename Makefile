@@ -1,9 +1,15 @@
 # ── Infrastructure ──────────────────────────────────────────────
-.PHONY: infra-up infra-down infra-logs infra-ps infra-clean
+.PHONY: infra-up infra-down infra-logs infra-ps infra-clean infra-psql infra-redis-cli infra-verify
 
 COMPOSE := docker-compose -f infra/docker-compose/docker-compose.yml
 
 infra-up:
+	@docker info >/dev/null 2>&1 || { \
+	  echo "Docker daemon not reachable. Start your runtime first:"; \
+	  echo "  colima start    # if you use Colima"; \
+	  echo "  open -a Docker  # if you use Docker Desktop"; \
+	  exit 1; \
+	}
 	$(COMPOSE) up -d
 
 infra-down:
@@ -18,6 +24,15 @@ infra-ps:
 # Tear down containers AND delete volumes (full reset)
 infra-clean:
 	$(COMPOSE) down -v
+
+infra-psql:
+	docker exec -it hax-postgres psql -U hax -d hax
+
+infra-redis-cli:
+	docker exec -it hax-redis redis-cli
+
+infra-verify:
+	@bash infra/docker-compose/verify.sh
 
 # ── Backend (FastAPI) ──────────────────────────────────────────
 .PHONY: api

@@ -56,10 +56,28 @@ make dev-stop
 Other useful commands:
 
 ```bash
-make infra-logs    # tail Postgres + Redis logs
-make infra-clean   # tear down containers AND delete volumes (full reset)
-make setup         # re-run setup.sh without sourcing
+make infra-logs      # tail Postgres + Redis logs
+make infra-clean     # tear down containers AND delete volumes (full reset)
+make infra-psql      # open a psql shell against postgres
+make infra-redis-cli # open a redis-cli shell against redis
+make infra-verify    # run the full end-to-end infra check (see below)
+make setup           # re-run setup.sh without sourcing
 ```
+
+### Verify local infra
+
+After a fresh clone, a Docker version bump, or anything else that touches the data services, run this end-to-end pass to confirm Postgres + Redis are wired up correctly. Stop and diagnose if any step fails.
+
+**Shortcut:** `make infra-verify` runs all 8 steps below in one command. The breakdown is here for reading or debugging a specific failure.
+
+1. `make infra-clean` — start from a known-empty state (deletes named volumes).
+2. `make infra-up` — bring postgres + redis up in the background.
+3. `make infra-ps` — both services should report `(healthy)` (~20s on cold start).
+4. `make infra-psql`, then `SELECT * FROM pg_extension WHERE extname='vector';` — expect one row (confirms the M2-bound `vector` extension is loaded). Exit with `\q`.
+5. `make infra-redis-cli`, then `PING` — expect `PONG`. Exit with `exit`.
+6. Confirm host-side connectivity (this is the URL `apps/api` uses). With `psql` on the host: `psql postgresql://hax:hax@localhost:5432/hax -c '\dx'`. Without `psql`, via the venv: `.venv/bin/python -c "from sqlalchemy import create_engine, text; print(create_engine('postgresql://hax:hax@localhost:5432/hax').connect().execute(text('SELECT 1')).scalar())"` (expect `1`).
+7. Volume-persistence check: in `make infra-psql`, run `CREATE TABLE _probe (x int); INSERT INTO _probe VALUES (1);`. Then `make infra-down`, `make infra-up`, `make infra-psql`, `SELECT * FROM _probe;` — expect the row. Clean up with `DROP TABLE _probe;`.
+8. `make infra-down` — leave the machine in containers-down, volumes-kept state.
 
 ## Stack
 
