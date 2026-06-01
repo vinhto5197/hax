@@ -46,6 +46,16 @@ api:
 web:
 	cd apps/web && npm run dev
 
+# ── Types (OpenAPI → TypeScript) ───────────────────────────────
+.PHONY: types
+
+# Regenerate the frontend's API types from the OpenAPI spec. Offline: dumps
+# the spec via app.openapi() (no running server needed), then runs
+# openapi-typescript. Also a prerequisite of `make dev`, so types stay synced.
+types:
+	.venv/bin/python -m apps.api.utils.export_openapi
+	cd apps/web && npm run generate:types
+
 # ── Setup ─────────────────────────────────────────────────────
 .PHONY: setup sync sync-web
 
@@ -63,7 +73,7 @@ sync-web:
 # ── Dev (infra + api + web) ───────────────────────────────────
 .PHONY: dev dev-stop
 
-dev: infra-up
+dev: infra-up types
 	@echo "Starting API and Web servers..."
 	@$(MAKE) -j2 api web
 

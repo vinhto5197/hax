@@ -48,6 +48,9 @@ local/
 *.tsbuildinfo
 next-env.d.ts
 
+# generated openapi spec (intermediate for TS codegen; the .ts is committed)
+apps/web/openapi.json
+
 # python
 __pycache__/
 *.py[cod]
