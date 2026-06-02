@@ -48,8 +48,7 @@ export interface paths {
         /** List Conversations */
         get: operations["list_conversations_api_conversations_get"];
         put?: never;
-        /** Create Conversation */
-        post: operations["create_conversation_api_conversations_post"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -269,26 +268,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConversationOut"][];
-                };
-            };
-        };
-    };
-    create_conversation_api_conversations_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConversationOut"];
                 };
             };
         };
