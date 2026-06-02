@@ -1,9 +1,7 @@
-import json
-from collections.abc import AsyncIterator
-
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
+from apps.api.chat_service import SSE_HEADERS, chat_event_stream, persist_user_turn
 from packages.core.llm.agent_client import stream_completion_agent
 from packages.core.schemas.chat import ChatRequest
 
@@ -16,15 +14,11 @@ router = APIRouter(prefix="/chat-agent-sdk", tags=["chat"])
 
 @router.post("")
 async def chat_agent_sdk(payload: ChatRequest) -> StreamingResponse:
-    async def events() -> AsyncIterator[str]:
-        async for chunk in stream_completion_agent(payload.prompt):
-            yield f"data: {json.dumps({'content': chunk})}\n\n"
-        yield "data: [DONE]\n\n"
-
+    conversation_id = await persist_user_turn(payload.prompt, payload.conversation_id)
     return StreamingResponse(
-        events(),
+        chat_event_stream(stream_completion_agent, payload.prompt, conversation_id),
         media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+        headers=SSE_HEADERS,
     )
 
 
