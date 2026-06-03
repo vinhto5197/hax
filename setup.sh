@@ -99,3 +99,15 @@ if [[ "$SOURCED" -eq 1 ]]; then
 else
   echo "Setup complete. Run 'source .venv/bin/activate' to activate venv."
 fi
+
+# ── direnv tip ──
+# `make dev` reads .env from the shell environment. direnv (with the committed
+# .envrc) loads the venv + .env automatically on cd; without it, load manually.
+if command -v direnv &>/dev/null; then
+  echo "direnv detected — run 'direnv allow' once to auto-load the venv + .env on cd."
+else
+  echo ""
+  echo "Tip: install direnv (https://direnv.net) to auto-load the venv + .env on cd."
+  echo "     Without it, run this before 'make dev' each shell:"
+  echo "       source .venv/bin/activate && set -a && source .env && set +a"
+fi
