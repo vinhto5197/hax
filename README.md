@@ -21,6 +21,7 @@ Install these before setup. Versions are minimums.
 | Docker         | 20+     | Docker Desktop, Colima, Rancher, etc.           |
 | docker-compose | 2+      | Usually bundled with Docker; Homebrew otherwise |
 | Make           | any     | Pre-installed on macOS / Linux                  |
+| direnv         | 2+      | Optional, recommended — auto-loads venv + `.env` on `cd` |
 
 ## Local Dev Setup
 
@@ -31,6 +32,23 @@ source setup.sh
 ```
 
 This creates the venv, installs deps, copies `.env.example` to `.env` (if missing), and sets up pre-commit hooks. Defaults work for local dev.
+
+### Loading the environment
+
+`make dev` needs the Python venv active and `.env` exported into your shell — the API reads `ANTHROPIC_API_KEY` / `CLAUDE_CODE_OAUTH_TOKEN` and the web app reads `NEXT_PUBLIC_API_URL` from the environment.
+
+- **Recommended — [direnv](https://direnv.net):** the committed `.envrc` activates the venv and loads `.env` automatically on `cd` into the repo. Install direnv, hook it into your shell, then approve this repo once:
+
+  ```bash
+  brew install direnv          # then add: eval "$(direnv hook zsh)"  to ~/.zshrc
+  direnv allow                 # approve .envrc (one time)
+  ```
+
+- **Without direnv:** run this once per shell before `make dev`:
+
+  ```bash
+  source .venv/bin/activate && set -a && source .env && set +a
+  ```
 
 Make sure Docker is running before starting services:
 
