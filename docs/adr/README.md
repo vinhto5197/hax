@@ -36,3 +36,4 @@ Each ADR is a single markdown file: `NNNN-kebab-case-title.md` with a numeric pr
 | [0003](0003-monorepo-apps-and-packages.md) | Monorepo: `apps/` for services, `packages/` for shared libs | accepted |
 | [0004](0004-skip-langchain-in-v0-llm-client.md) | Skip LangChain in v0 LLM client | accepted |
 | [0005](0005-bypass-next-dev-rewrite-for-sse.md) | Bypass Next dev rewrite for SSE streaming | accepted |
+| [0006](0006-async-sqlalchemy-asyncpg-alembic.md) | Async SQLAlchemy + asyncpg + Alembic for persistence | accepted |

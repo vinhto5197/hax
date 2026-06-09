@@ -84,6 +84,7 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
 - Chat responses are streamed (SSE) directly from FastAPI — never queued through Celery.
 - Celery handles background work: title generation, data ingestion, embedding, index rebuilds.
 - pgvector keeps vector search inside Postgres (no extra vector DB service).
+- `packages/db` is the persistence layer: async SQLAlchemy 2.0 over asyncpg, schema managed by Alembic (`make migrate` applies, `make migration m="..."` generates). Models live in `packages/db/models`; no `repos/` layer yet — queries currently sit in `apps/api` (e.g. `chat_service.py`). See ADR 0006.
 - TypeScript types are generated from the FastAPI OpenAPI spec to prevent drift.
 - LangChain is used inside `packages/core` but kept behind clean interfaces so it can be swapped.
 - The directory structure is a target layout — start flat, extract as complexity demands. Not every directory needs to exist from day one.
