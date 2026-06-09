@@ -89,7 +89,7 @@ sync-web:
 	cd apps/web && npm install
 
 # ── Dev (infra + api + web) ───────────────────────────────────
-.PHONY: dev dev-stop
+.PHONY: dev dev-stop debug
 
 dev: infra-up types
 	@echo "Starting API and Web servers..."
@@ -99,6 +99,29 @@ dev-stop:
 	@echo "Stopping dev services..."
 	@pkill -f "uvicorn apps.api.main:app" || true
 	@pkill -f "next dev" || true
+
+# Like `make dev` but WITHOUT the API: the VS Code debugger (F5, see
+# .vscode/launch.json) launches uvicorn itself, so :8000 must stay free.
+# Starts infra + web only. Run `make migrate` first if the schema isn't applied.
+debug: infra-up types
+	@echo "Infra up, types generated. Starting Next on :3000 (leaving :8000 for the debugger)."
+	@echo "In VS Code: Run & Debug -> 'Full stack (API + Web)' -> F5 to launch the API + Chrome under the debugger."
+	@$(MAKE) web
+
+# ── Status ────────────────────────────────────────────────────
+.PHONY: status
+
+# Show whether each service answers on its port. Uses a TCP connect probe
+# (nc -z) rather than lsof: lsof only sees host-process listeners, not
+# Colima/Docker port-forwarded ones, so it reports false "down" for postgres/redis.
+status:
+	@printf "%-10s %-6s %s\n" "service" "port" "status"
+	@printf "%-10s %-6s %s\n" "-------" "----" "------"
+	@for svc in "postgres 5432" "redis 6379" "api 8000" "web 3000"; do \
+	  set -- $$svc; name=$$1; port=$$2; \
+	  if nc -z -G1 localhost $$port >/dev/null 2>&1; then st="UP"; else st="down"; fi; \
+	  printf "%-10s %-6s %s\n" "$$name" "$$port" "$$st"; \
+	done
 
 # ── Lint ─────────────────────────────────────────────────────
 .PHONY: lint
