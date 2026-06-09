@@ -23,6 +23,8 @@ Install these before setup. Versions are minimums.
 | Make           | any     | Pre-installed on macOS / Linux                  |
 | direnv         | 2+      | Optional, recommended — auto-loads venv + `.env` on `cd` |
 
+> **Windows:** the tooling and `make` targets assume a Unix shell (the Makefile recipes use `bash`, `nc`, `pkill`, `docker exec`, etc.). Use [WSL2](https://learn.microsoft.com/windows/wsl/install) — a Linux environment on Windows — and run everything from there; `make`, Docker, and the setup scripts then work exactly as on Linux. Native cmd/PowerShell is not supported, even with `make` installed.
+
 ## Local Dev Setup
 
 First-time setup (creates venv, installs deps, pre-commit hooks):
@@ -113,6 +115,27 @@ make migrate-down              # roll back the most recent migration
 - **`make migrate` is idempotent.** Alembic records applied revisions in an `alembic_version` table and runs only what's pending, so re-running is safe.
 - **After changing a model:** run `make migration m="..."`, then **review the generated file** before committing — autogenerate misses some changes (e.g. constraint/type edits) and can emit an empty migration. Apply it with `make migrate`.
 - **`make migrate-down`** reverses the schema change and steps the version pointer back one; it does **not** delete the migration file (migrations are version-controlled history — to undo further, write a new migration forward).
+
+### Debugging (VS Code)
+
+Full-stack debugging launches the **API under a debugger** plus a **debuggable Chrome** for the frontend, via [.vscode/launch.json](.vscode/launch.json). Requires the Python extension (`ms-python.python`); the JS/Chrome debugger is built into VS Code.
+
+Use `make debug` instead of `make dev` — it starts infra + web but **not** the API, leaving `:8000` free for the debugger to launch uvicorn itself:
+
+```bash
+make migrate   # if the schema isn't applied
+make debug     # infra + Next on :3000; the API is left for the debugger
+```
+
+Then in VS Code: **Run & Debug** → **"Full stack (API + Web)"** → **F5**. This launches uvicorn under `debugpy` on `:8000` and opens a debuggable Chrome at `:3000`.
+
+- **Backend** breakpoints go in `apps/api/**` / `packages/**` — they pause when a request reaches them.
+- **Frontend** breakpoints go in `apps/web/**/*.tsx` — Next's dev source maps map them to the running JS.
+- Frontend and backend are **separate debug sessions** (switch in the **Call Stack** panel). You can't single-step across the network boundary; each side pauses at its own breakpoints.
+
+> **Don't run `make dev` and F5 together.** `make dev` already binds `:8000`, so the debugger's uvicorn fails to start and your backend breakpoints silently never fire. Use `make debug` (or `make dev-stop` first).
+
+Check what's running at any time with `make status` (a TCP probe of each service's port).
 
 ## Stack
 
