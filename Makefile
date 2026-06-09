@@ -34,6 +34,24 @@ infra-redis-cli:
 infra-verify:
 	@bash infra/docker-compose/verify.sh
 
+# ── Database (migrations) ──────────────────────────────────────
+.PHONY: migrate migrate-down migration
+
+# Apply all pending migrations. Idempotent: no-ops if already at head.
+# Requires Postgres up (make infra-up).
+migrate:
+	.venv/bin/alembic upgrade head
+
+# Roll back the most recent migration.
+migrate-down:
+	.venv/bin/alembic downgrade -1
+
+# Autogenerate a migration from model changes: make migration m="add x table".
+# Review the generated file before committing — autogenerate isn't authoritative.
+migration:
+	@test -n "$(m)" || { echo 'Usage: make migration m="describe the change"'; exit 1; }
+	.venv/bin/alembic revision --autogenerate -m "$(m)"
+
 # ── Backend (FastAPI) ──────────────────────────────────────────
 .PHONY: api
 

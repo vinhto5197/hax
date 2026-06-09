@@ -97,6 +97,23 @@ After a fresh clone, a Docker version bump, or anything else that touches the da
 7. Volume-persistence check: in `make infra-psql`, run `CREATE TABLE _probe (x int); INSERT INTO _probe VALUES (1);`. Then `make infra-down`, `make infra-up`, `make infra-psql`, `SELECT * FROM _probe;` — expect the row. Clean up with `DROP TABLE _probe;`.
 8. `make infra-down` — leave the machine in containers-down, volumes-kept state.
 
+### Database migrations
+
+The Postgres schema is managed by [Alembic](https://alembic.sqlalchemy.org). ORM models live in [packages/db/models/](packages/db/models/); migration scripts in [packages/db/migrations/versions/](packages/db/migrations/versions/). See [ADR 0006](docs/adr/0006-async-sqlalchemy-asyncpg-alembic.md) for why the stack is async (SQLAlchemy 2.0 + asyncpg + Alembic).
+
+Postgres must be up (`make infra-up`) for any of these:
+
+```bash
+make migrate                   # apply all pending migrations (idempotent; no-op if at head)
+make migration m="add x table" # autogenerate a migration after changing models
+make migrate-down              # roll back the most recent migration
+```
+
+- **Fresh database:** after `make infra-up`, run `make migrate` once to create the schema. `make dev` does **not** auto-migrate — run `make migrate` yourself after pulling new migrations or starting from an empty volume.
+- **`make migrate` is idempotent.** Alembic records applied revisions in an `alembic_version` table and runs only what's pending, so re-running is safe.
+- **After changing a model:** run `make migration m="..."`, then **review the generated file** before committing — autogenerate misses some changes (e.g. constraint/type edits) and can emit an empty migration. Apply it with `make migrate`.
+- **`make migrate-down`** reverses the schema change and steps the version pointer back one; it does **not** delete the migration file (migrations are version-controlled history — to undo further, write a new migration forward).
+
 ## Stack
 
 | Layer     | Tech                                                          |
