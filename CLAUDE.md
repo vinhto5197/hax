@@ -8,19 +8,22 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
 
 ## Build milestones (v0)
 
-1. **Milestone 1 — Streaming chat**
+1. **Milestone 1 — Streaming chat** *(shipped; auth + title generation moved to M2.5)*
    - Next.js chat UI + FastAPI backend + SSE streaming
    - Single LLM, no RAG yet
    - Conversation history persisted to Postgres
-   - Basic auth / session
-   - Background chat title generation (Celery + Redis)
    - Docker Compose: Postgres, Redis, all services
 
-2. **Milestone 2 — Data + RAG**
+2. **Milestone 2 — Data + RAG** *(active)*
+   - Conversation memory: replay persisted turns into the LLM prompt (de-amnesia)
    - User data upload (files at minimum)
-   - Ingestion pipeline: chunking, embedding, store in pgvector (Celery tasks)
+   - Ingestion pipeline: chunking, embedding (Voyage AI), store in pgvector — sync first, Celery from slice 2
    - RAG retrieval wired into chat flow
-   - Conversation memory that incorporates user's data context
+   - Slice 3: retrieval becomes a model-invoked tool (simple agent + harness)
+
+2.5. **Milestone 2.5 — Auth + background titles** *(deferred from M1; done after M2)*
+   - Basic auth / session; `users` table; conversations + documents scoped to a user
+   - Background chat title generation (Celery + Redis — worker exists from M2)
 
 3. **Milestone 3 — Structured outputs + polish**
    - Table / structured view for results (not only free-form text)
@@ -54,6 +57,7 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
 - Streaming: SSE (FastAPI StreamingResponse) for chat
 - Async: Celery (tasks) + Redis (broker + cache)
 - Data: Postgres + pgvector (embeddings)
+- Embeddings: Voyage AI (Anthropic has no embeddings API) — see ADR 0007
 - Types: OpenAPI spec -> generated TypeScript types (openapi-typescript)
 - Infra/dev: Docker (+ docker-compose)
 - Deploy: AWS, provisioned via Terraform
@@ -86,5 +90,5 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
 - pgvector keeps vector search inside Postgres (no extra vector DB service).
 - `packages/db` is the persistence layer: async SQLAlchemy 2.0 over asyncpg, schema managed by Alembic (`make migrate` applies, `make migration m="..."` generates). Models live in `packages/db/models`; no `repos/` layer yet — queries currently sit in `apps/api` (e.g. `chat_service.py`). See ADR 0006.
 - TypeScript types are generated from the FastAPI OpenAPI spec to prevent drift.
-- LangChain is used inside `packages/core` but kept behind clean interfaces so it can be swapped.
+- LangChain is used inside `packages/core` behind clean interfaces — in M2 only for text splitting + the embeddings provider interface; retrieval SQL and generation stay hand-rolled (ADR 0008).
 - The directory structure is a target layout — start flat, extract as complexity demands. Not every directory needs to exist from day one.
