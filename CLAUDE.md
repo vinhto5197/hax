@@ -34,6 +34,13 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
    - Provision cloud infrastructure with Terraform
    - Deploy all services to AWS
 
+5. **Milestone 5 — Cleanup + hardening** *(final pass before v0 is "done")*
+   - Test infrastructure: stand up pytest (+ async DB/API fixtures), backfill
+     coverage for the chat + RAG paths that were verified by hand during M1/M2
+   - Drain the remaining dev + QOL backlogs (`local/*BACKLOG*.local.md`)
+   - Tighten foot-guns deferred during feature work (input validation, error
+     surfaces, anything flagged "fix in cleanup")
+
 ## What "good" means for MVP
 - The chat reliably produces:
   - a direct answer that understands context of user's data from previous conversations
