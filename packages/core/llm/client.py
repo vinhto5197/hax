@@ -1,6 +1,7 @@
 from collections.abc import AsyncIterator
 
 from anthropic import AsyncAnthropic
+from anthropic.types import MessageParam
 
 DEFAULT_MODEL = "claude-haiku-4-5"
 MAX_TOKENS = 32000
@@ -11,13 +12,13 @@ _client = AsyncAnthropic()
 
 
 async def stream_completion(
-    prompt: str, model: str = DEFAULT_MODEL
+    messages: list[MessageParam], model: str = DEFAULT_MODEL
 ) -> AsyncIterator[str]:
     async with _client.messages.stream(
         model=model,
         max_tokens=MAX_TOKENS,
         # thinking={"type": "adaptive"},
-        messages=[{"role": "user", "content": prompt}],
+        messages=messages,
     ) as stream:
         async for text in stream.text_stream:
             yield text

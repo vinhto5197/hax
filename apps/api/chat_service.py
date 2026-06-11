@@ -2,8 +2,9 @@ import json
 from collections.abc import AsyncIterator, Callable
 from uuid import UUID
 
+from anthropic.types import MessageParam
 from fastapi import HTTPException
-from sqlalchemy import func, update
+from sqlalchemy import func, select, update
 
 from packages.db import AsyncSessionLocal
 from packages.db.models import Conversation, Message
@@ -46,6 +47,28 @@ async def persist_user_turn(prompt: str, conversation_id: UUID | None) -> UUID:
     return conversation_id
 
 
+async def load_history(conversation_id: UUID) -> list[MessageParam]:
+    """Replay the conversation's persisted turns as Anthropic `messages`.
+
+    Called after persist_user_turn, so the just-sent user message is already
+    in the table and lands at the end of the list — the array is ready to
+    send as-is, no separate append of the current prompt.
+
+    Roles map 1:1 (the DB check constraint allows exactly 'user'/'assistant').
+    Consecutive same-role turns are possible (e.g. the LLM errored before
+    streaming, so no assistant turn was saved) — the API merges them, so no
+    special handling. No windowing yet: the full history is sent every turn
+    (bounded-context strategies are an M2 slice 2 concern).
+    """
+    async with AsyncSessionLocal() as session:
+        rows = await session.execute(
+            select(Message.role, Message.content)
+            .where(Message.conversation_id == conversation_id)
+            .order_by(Message.created_at)
+        )
+        return [{"role": role, "content": content} for role, content in rows]
+
+
 async def persist_assistant_turn(conversation_id: UUID, content: str) -> None:
     """Persist the assistant message and bump the conversation's updated_at.
 
@@ -72,8 +95,8 @@ async def persist_assistant_turn(conversation_id: UUID, content: str) -> None:
 
 
 async def chat_event_stream(
-    stream_fn: Callable[[str], AsyncIterator[str]],
-    prompt: str,
+    stream_fn: Callable[[list[MessageParam]], AsyncIterator[str]],
+    messages: list[MessageParam],
     conversation_id: UUID,
 ) -> AsyncIterator[str]:
     """Wrap an LLM token stream as SSE, persisting the assistant turn at the end.
@@ -87,11 +110,9 @@ async def chat_event_stream(
     # first turn, where the client started without an id.
     yield sse_event({"conversation_id": str(conversation_id)})
 
-    # The LLM is amnesiac for now: only the current prompt is sent, not prior
-    # turns. Feeding back conversation history is a deliberate follow-up.
     buffer: list[str] = []
     try:
-        async for chunk in stream_fn(prompt):
+        async for chunk in stream_fn(messages):
             buffer.append(chunk)
             yield sse_event({"content": chunk})
         # Terminator the frontend looks for to know the stream is over.
