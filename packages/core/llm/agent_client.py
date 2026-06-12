@@ -2,6 +2,7 @@ import os
 import tempfile
 from collections.abc import AsyncIterator
 
+from anthropic.types import MessageParam
 from claude_agent_sdk import (
     ClaudeAgentOptions,
     StreamEvent,
@@ -39,7 +40,40 @@ _OPTIONS = ClaudeAgentOptions(
 )
 
 
-async def stream_completion_agent(prompt: str) -> AsyncIterator[str]:
+def _render_transcript(messages: list[MessageParam]) -> str:
+    """Flatten an Anthropic messages array into a single prompt string.
+
+    The Agent SDK's query() is prompt-shaped (one string per call) and keeps
+    its own session state on disk, which doesn't fit our stateless
+    replay-from-Postgres model: adopting the SDK's resume machinery would
+    make its session files a second source of truth for history that can
+    silently diverge from the DB (temp cleanup, new machine -> amnesia
+    returns while Postgres still has everything). Rendering prior turns as a
+    tagged transcript keeps Postgres canonical and the route stateless, at
+    the cost of losing the structured role framing the primary route gets.
+    Acceptable for an A/B route; revisit if it ever graduates (ADR 0002).
+
+    A user-typed literal '</history>' could escape the transcript block —
+    inherent to flattening; tolerated here, impossible on the primary route.
+    """
+    *history, current = messages
+    current_text = current["content"]
+    assert isinstance(current_text, str)  # we only ever build text-content messages
+    if not history:
+        # First turn: bare prompt, byte-identical to the pre-history behavior.
+        return current_text
+    turns = "\n".join(f"<{m['role']}>\n{m['content']}\n</{m['role']}>" for m in history)
+    return (
+        "The following is your conversation with the user so far:\n\n"
+        f"<history>\n{turns}\n</history>\n\n"
+        "Continue the conversation. Reply to the user's latest message:\n\n"
+        f"{current_text}"
+    )
+
+
+async def stream_completion_agent(messages: list[MessageParam]) -> AsyncIterator[str]:
+    prompt = _render_transcript(messages)
+
     # With include_partial_messages=True, the SDK emits StreamEvent objects
     # carrying the raw Anthropic API stream events (content_block_delta, etc.)
     # as tokens arrive. The terminal AssistantMessage is the *complete* message
