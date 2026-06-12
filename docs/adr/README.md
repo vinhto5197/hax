@@ -38,4 +38,5 @@ Each ADR is a single markdown file: `NNNN-kebab-case-title.md` with a numeric pr
 | [0005](0005-bypass-next-dev-rewrite-for-sse.md) | Bypass Next dev rewrite for SSE streaming | accepted |
 | [0006](0006-async-sqlalchemy-asyncpg-alembic.md) | Async SQLAlchemy + asyncpg + Alembic for persistence | accepted |
 | [0007](0007-voyage-ai-for-embeddings.md) | Voyage AI for embeddings | accepted |
-| [0008](0008-langchain-boundaries-for-rag.md) | LangChain boundaries for RAG | accepted |
+| [0008](0008-langchain-boundaries-for-rag.md) | LangChain boundaries for RAG | superseded by 0009 |
+| [0009](0009-voyage-sdk-direct-langchain-splitter-only.md) | Voyage SDK directly; LangChain only for text splitting | accepted |

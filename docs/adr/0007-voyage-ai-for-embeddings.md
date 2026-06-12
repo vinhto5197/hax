@@ -1,6 +1,6 @@
 # 0007 — Voyage AI for embeddings
 
-**Status:** accepted
+**Status:** accepted — decision point 4 (access via the LangChain interface) revised by [0009](0009-voyage-sdk-direct-langchain-splitter-only.md)
 **Date:** 2026-06-09
 
 ## Context

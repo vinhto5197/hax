@@ -97,5 +97,5 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
 - pgvector keeps vector search inside Postgres (no extra vector DB service).
 - `packages/db` is the persistence layer: async SQLAlchemy 2.0 over asyncpg, schema managed by Alembic (`make migrate` applies, `make migration m="..."` generates). Models live in `packages/db/models`; no `repos/` layer yet — queries currently sit in `apps/api` (e.g. `chat_service.py`). See ADR 0006.
 - TypeScript types are generated from the FastAPI OpenAPI spec to prevent drift.
-- LangChain is used inside `packages/core` behind clean interfaces — in M2 only for text splitting + the embeddings provider interface; retrieval SQL and generation stay hand-rolled (ADR 0008).
+- LangChain is used inside `packages/core` for **text splitting only** (`langchain-text-splitters`). Embeddings call the **Voyage SDK directly**; retrieval SQL, prompt assembly, and generation stay hand-rolled (ADR 0008 → superseded by 0009).
 - The directory structure is a target layout — start flat, extract as complexity demands. Not every directory needs to exist from day one.
