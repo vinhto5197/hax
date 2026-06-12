@@ -7,7 +7,10 @@ services:
       POSTGRES_PASSWORD: hax
       POSTGRES_DB: hax
     ports:
-      - "5432:5432"
+      # Bind to loopback only: the short form "5432:5432" binds 0.0.0.0, exposing
+      # Postgres (creds hax/hax) to the whole LAN. Containers reach each other via
+      # the compose network, not this published port, so this is non-breaking.
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -21,7 +24,8 @@ services:
     image: redis:7-alpine
     container_name: hax-redis
     ports:
-      - "6379:6379"
+      # Loopback only — Redis runs with no auth; don't expose it to the LAN.
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes

@@ -9,7 +9,13 @@ class ChatRequest(BaseModel):
     # 400s on empty content, and a persisted empty turn would be replayed by
     # load_history into every later request — permanently breaking the
     # conversation. strip_whitespace matters: whitespace-only also 400s.
-    prompt: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+    # max_length caps the unbounded body that otherwise feeds straight to the
+    # paid LLM and an unbounded TEXT column (~20k chars ≈ 5k tokens, well under
+    # the model's context window; large data belongs in M2 file upload, not a
+    # chat turn).
+    prompt: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=20000)
+    ]
     # None on the first turn of a new chat — the server lazily creates a
     # conversation and returns its id in the SSE prelude.
     conversation_id: UUID | None = None
