@@ -1,7 +1,13 @@
 # 0008 — LangChain boundaries for RAG
 
-**Status:** accepted
+**Status:** superseded by [0009](0009-voyage-sdk-direct-langchain-splitter-only.md)
 **Date:** 2026-06-09
+
+> **Superseded 2026-06-11.** The embeddings half of this decision
+> (`langchain-voyageai`) proved incompatible with a 1.x LangChain stack —
+> see [ADR 0009](0009-voyage-sdk-direct-langchain-splitter-only.md), which keeps
+> LangChain for the text splitter only and calls the Voyage SDK directly. The
+> hand-rolled retrieval/prompt/generation boundaries below still hold.
 
 ## Context
 
