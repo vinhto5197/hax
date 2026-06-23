@@ -10,6 +10,7 @@ export type ChatMessage = {
 // Response shapes generated from the FastAPI OpenAPI spec (see `make types`).
 export type ConversationSummary = components["schemas"]["ConversationOut"];
 export type ConversationDetail = components["schemas"]["ConversationDetailOut"];
+export type DocumentSummary = components["schemas"]["DocumentOut"];
 
 // Which FastAPI route handles the request. Both speak the same SSE wire
 // format; only the LLM backend differs (see ADR 0002).
@@ -39,6 +40,46 @@ export async function getConversation(id: string): Promise<ConversationDetail> {
   const response = await fetch(`${API_BASE}/api/conversations/${id}`);
   if (!response.ok) {
     throw new Error(`API ${response.status}: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+// Document upload / listing. The uploaded doc is ingested synchronously, so the
+// returned row already carries its final status (ready | failed).
+export async function listDocuments(): Promise<DocumentSummary[]> {
+  const response = await fetch(`${API_BASE}/api/documents`);
+  if (!response.ok) {
+    throw new Error(`API ${response.status}: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export async function uploadDocument(file: File): Promise<DocumentSummary> {
+  const form = new FormData();
+  // The field name "file" must match the FastAPI param (`file: UploadFile`); a
+  // mismatch is a runtime 422, not a compile error — an untyped string contract.
+  form.append("file", file);
+  // No Content-Type header on purpose: a FormData body makes the browser set
+  // `multipart/form-data; boundary=…` itself. Setting it by hand omits the
+  // boundary, and the server can't split the parts.
+  const response = await fetch(`${API_BASE}/api/documents`, {
+    method: "POST",
+    body: form,
+  });
+  if (!response.ok) {
+    // Surface FastAPI's `detail` (e.g. "only .txt and .md files are supported")
+    // instead of a bare status, since these errors are user-actionable.
+    let detail = `API ${response.status}: ${response.statusText}`;
+    try {
+      // FastAPI's `detail` is a string for HTTPException (400/413) but an array
+      // of error objects for 422 validation failures — typed `unknown` so we
+      // must narrow; the array case falls through to the status message.
+      const body = (await response.json()) as { detail?: unknown };
+      if (typeof body.detail === "string") detail = body.detail;
+    } catch {
+      // non-JSON error body — keep the status-based message
+    }
+    throw new Error(detail);
   }
   return response.json();
 }
