@@ -40,6 +40,7 @@ export function ConversationsProvider({
       });
   }, []);
 
+  // load conversations initially 1 time since conversations state is set to [] on mount
   useEffect(() => {
     refresh();
   }, [refresh]);

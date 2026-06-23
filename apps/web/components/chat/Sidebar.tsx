@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { useConversations } from "@/components/chat/ConversationsProvider";
+import { DocumentsPanel } from "@/components/chat/DocumentsPanel";
 
 export function Sidebar() {
   // Shared list from context (see ConversationsProvider), not a prop.
@@ -44,6 +45,8 @@ export function Sidebar() {
           })
         )}
       </nav>
+
+      <DocumentsPanel />
     </aside>
   );
 }
