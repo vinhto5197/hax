@@ -34,7 +34,12 @@ async def persist_user_turn(prompt: str, conversation_id: UUID | None) -> UUID:
         if conversation_id is None:
             conversation = Conversation()
             session.add(conversation)
-            await session.flush()  # populate the server-default id via RETURNING
+            # flush, not commit: emit the INSERT so the DB fills the
+            # server-default id (via RETURNING), keeping conversation + message in
+            # ONE atomic transaction (the commit below covers both). Committing
+            # here would also expire id under the default expire_on_commit=True,
+            # and the un-awaited lazy reload on the next read would MissingGreenlet.
+            await session.flush()
             conversation_id = conversation.id
         elif await session.get(Conversation, conversation_id) is None:
             raise HTTPException(status_code=404, detail="conversation not found")
