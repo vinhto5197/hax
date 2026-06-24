@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from apps.api.routers.chat import router as chat_router
 from apps.api.routers.chat_agent_sdk import router as chat_agent_sdk_router
 from apps.api.routers.conversations import router as conversations_router
+from apps.api.routers.documents import router as documents_router
 
 app = FastAPI()
 
@@ -23,6 +24,7 @@ app.add_middleware(
 app.include_router(chat_router, prefix="/api")
 app.include_router(chat_agent_sdk_router, prefix="/api")
 app.include_router(conversations_router, prefix="/api")
+app.include_router(documents_router, prefix="/api")
 
 
 @app.get("/health")

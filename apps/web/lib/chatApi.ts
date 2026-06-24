@@ -139,6 +139,8 @@ export async function streamChat(
   const response = await fetch(`${API_BASE}${BACKEND_PATHS[backend]}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    // These field names must match the FastAPI `ChatRequest` schema; a mismatch
+    // is a runtime 422, not a compile error (the body is hand-built, not typed).
     body: JSON.stringify({ prompt, conversation_id: conversationId }),
   });
 
