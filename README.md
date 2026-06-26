@@ -152,10 +152,12 @@ Check what's running at any time with `make status` (a TCP probe of each service
 
 ## Build milestones (v0)
 
-1. **Streaming chat** — Next.js + FastAPI + SSE, conversation history in Postgres, basic auth, background chat title generation (Celery + Redis), Docker Compose (Postgres, Redis, all services).
-2. **Data + RAG** — User data upload (files), ingestion (chunk → embed → pgvector) via Celery, RAG in chat, conversation memory with user data context.
-3. **Structured outputs + polish** — Table/structured view for results, citation/source display, cohesive UI.
-4. **AWS deploy** — provision cloud infrastructure with Terraform and deploy all services to AWS.
+1. **Streaming chat** *(shipped)* — Next.js + FastAPI + SSE, conversation history in Postgres, Docker Compose (Postgres, Redis, all services). Auth + background titles deferred to M2.5.
+2. **Data + RAG** *(active)* — User data upload (files), ingestion (chunk → embed → pgvector; sync first, Celery from slice 2), RAG in chat, conversation memory with user data context.
+2.5. **Auth + background titles** — basic auth/session, `users` table, conversations + documents scoped to a user; background chat title generation (Celery + Redis).
+3. **AWS deploy + CI/CD** *(brought forward — deploy early, then continuous)* — provision with Terraform (ECS Fargate, ALB, RDS + pgvector, ElastiCache); CI/CD pipeline so later milestones auto-deploy.
+4. **Structured outputs + polish** — table/structured view for results, citation/source display, cohesive UI.
+5. **Cleanup + hardening + eval** — test + eval infrastructure, drain backlogs, tighten deferred foot-guns.
 
 ## Architecture (v0)
 

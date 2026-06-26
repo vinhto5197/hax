@@ -40,6 +40,14 @@ agent orchestration — are deliberately not used here.
 2. **Embeddings call the `voyageai` SDK directly** (`voyageai>=0.4,<1`):
    `voyageai.Client().embed(texts, model=…, input_type="document"|"query")`.
    This replaces the `langchain-voyageai` wrapper from ADR 0008.
+
+   **Update 2026-06-26 — use the async client.** Embeddings call
+   `voyageai.AsyncClient().embed(...)` and `await` it on the event loop
+   natively. The *sync* client blocks the calling thread for the whole network
+   round-trip, so it had to be offloaded via `asyncio.to_thread` to keep from
+   freezing the loop (a worker-thread bridge bounded by the ~`cpu+4` default
+   thread pool). The async client (aiohttp under the hood) removes both the
+   bridge and that ceiling. Do **not** reintroduce the sync client + `to_thread`.
 3. **Drop `langchain-anthropic` and `langchain-community`** — unused in the v0
    plan.
 4. Retrieval (our SQL), prompt assembly (our function in `packages/core`), and
