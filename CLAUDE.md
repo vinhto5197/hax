@@ -100,12 +100,15 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
 ├─ infra/
 │  └─ docker-compose/   Local service orchestration: Postgres, Redis
 │
+├─ scripts/         Ad-hoc dev utilities (read-mostly; e.g. corpus inspection)
+│
 └─ docs/            Project docs (onboarding, runbooks, architecture notes)
 ```
 
 ## Intent notes
 - `apps/*` are runnable services (web/api/worker).
 - `packages/*` are internal libraries shared across services.
+- `scripts/*` are standalone, read-mostly dev utilities (e.g. `corpus.py`); not imported by the app.
 - Redis is the Celery broker AND cache/session store (one service, two roles).
 - Chat responses are streamed (SSE) directly from FastAPI — never queued through Celery.
 - Celery handles background work: title generation, data ingestion, embedding, index rebuilds.
