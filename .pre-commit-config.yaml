@@ -16,8 +16,11 @@ repos:
       - id: detect-private-key
 
   # Python: lint + auto-fix + format (matches ruff config in pyproject.toml)
+  # Pin EXACTLY to the same ruff as CI + pyproject — ruff's formatter changes
+  # between versions, so a floating/older pin reformats files the other side
+  # then rejects (a local-green / CI-red skew). Bump all three together.
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.0
+    rev: v0.15.0
     hooks:
       - id: ruff
         args: [--fix]
