@@ -40,7 +40,10 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
   "pre-commit>=3.7.0",
-  "ruff>=0.6.0",
+  # Pin exact: ruff's formatter changes between versions; keep this == the CI
+  # install and the pre-commit rev so formatting never diverges (see
+  # .pre-commit-config.yaml).
+  "ruff==0.15.0",
 ]
 
 [tool.ruff]

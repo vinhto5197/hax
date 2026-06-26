@@ -42,9 +42,9 @@ async def augment_messages(
     # just-persisted user message with string content. Assert it so a future
     # contract break (e.g. RAG wired into a tool-use/block-content path) fails
     # loudly instead of producing a malformed prompt.
-    assert last["role"] == "user" and isinstance(
-        last["content"], str
-    ), "augment_messages expects the final turn to be a string-content user message"
+    assert last["role"] == "user" and isinstance(last["content"], str), (
+        "augment_messages expects the final turn to be a string-content user message"
+    )
     augmented = dict(last)
     augmented["content"] = f"{_format_context(chunks)}\n\n{last['content']}"
     return RAG_SYSTEM, [*messages[:-1], augmented]

@@ -17,7 +17,9 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install "ruff>=0.6.0"
+        # Pin exact: must match .pre-commit-config.yaml rev + pyproject dev dep,
+        # or the formatter diverges (local-green / CI-red). Bump all three together.
+        run: pip install "ruff==0.15.0"
 
       - name: Ruff
         run: ruff check . && ruff format --check .
