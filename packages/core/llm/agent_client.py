@@ -1,3 +1,4 @@
+import dataclasses
 import os
 import tempfile
 from collections.abc import AsyncIterator
@@ -71,15 +72,25 @@ def _render_transcript(messages: list[MessageParam]) -> str:
     )
 
 
-async def stream_completion_agent(messages: list[MessageParam]) -> AsyncIterator[str]:
+async def stream_completion_agent(
+    messages: list[MessageParam], system: str | None = None
+) -> AsyncIterator[str]:
     prompt = _render_transcript(messages)
+    # RAG parity with the primary route: the retrieved context already rides
+    # inside the flattened transcript (injected into the latest user turn
+    # upstream), so only the instruction needs to travel here — as the SDK's
+    # system_prompt, overriding the empty default persona. Plain chat (system is
+    # None) keeps _OPTIONS unchanged.
+    options = _OPTIONS
+    if system is not None:
+        options = dataclasses.replace(_OPTIONS, system_prompt=system)
 
     # With include_partial_messages=True, the SDK emits StreamEvent objects
     # carrying the raw Anthropic API stream events (content_block_delta, etc.)
     # as tokens arrive. The terminal AssistantMessage is the *complete* message
     # — yielding from it lands all-at-once. We forward only the delta text from
     # StreamEvent and ignore the AssistantMessage to get true token streaming.
-    async for message in query(prompt=prompt, options=_OPTIONS):
+    async for message in query(prompt=prompt, options=options):
         if not isinstance(message, StreamEvent):
             continue
         event = message.event
