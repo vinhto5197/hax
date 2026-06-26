@@ -12,13 +12,15 @@ _client = AsyncAnthropic()
 
 
 async def stream_completion(
-    messages: list[MessageParam], model: str = DEFAULT_MODEL
+    messages: list[MessageParam],
+    system: str | None = None,
+    model: str = DEFAULT_MODEL,
 ) -> AsyncIterator[str]:
-    async with _client.messages.stream(
-        model=model,
-        max_tokens=MAX_TOKENS,
-        # thinking={"type": "adaptive"},
-        messages=messages,
-    ) as stream:
+    # system carries the RAG instructions when context was retrieved; omitted
+    # (not passed as None) for plain chat so the request stays minimal.
+    kwargs: dict = {"model": model, "max_tokens": MAX_TOKENS, "messages": messages}
+    if system is not None:
+        kwargs["system"] = system
+    async with _client.messages.stream(**kwargs) as stream:
         async for text in stream.text_stream:
             yield text

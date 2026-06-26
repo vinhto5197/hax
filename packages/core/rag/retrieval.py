@@ -1,0 +1,64 @@
+import logging
+from dataclasses import dataclass
+
+from sqlalchemy import select
+
+from packages.core.rag.embeddings import embed_query
+from packages.db import AsyncSessionLocal
+from packages.db.models import Chunk
+
+logger = logging.getLogger(__name__)
+
+# top-k: how many chunks to retrieve and inject. k=5 to start.
+TOP_K = 5
+
+
+# Named return type for retrieve(): callers use chunk.filename / chunk.content
+# (see prompt.py) instead of unpacking opaque tuples. `distance` is captured for
+# slice-2 tuning (log it to pick k / a max-distance cutoff) and future citations
+# — it is NOT rendered into the prompt yet.
+@dataclass
+class RetrievedChunk:
+    content: str
+    filename: str
+    distance: float  # cosine distance: 0 = identical direction, 2 = opposite
+
+
+async def retrieve(query: str, k: int = TOP_K) -> list[RetrievedChunk]:
+    """Embed the query and return its k nearest chunks by cosine distance.
+
+    Degrades to [] on ANY fault so chat never hard-fails on the retrieval path —
+    the whole body (corpus check, embedding, vector search, materialization) is
+    guarded. Causes: no chunks ingested yet (the embed call is skipped to avoid a
+    paid request before any data exists); VOYAGE_API_KEY unset / Voyage down;
+    a DB/search error. The traceback is logged (exc_info) so a real bug — e.g. a
+    dimension mismatch from embeddings._check_dim — is visible, not silent.
+    No user filter yet — added in M2.5 (`WHERE user_id = :uid`).
+    """
+    try:
+        async with AsyncSessionLocal() as session:
+            if await session.scalar(select(Chunk.id).limit(1)) is None:
+                return []
+            qvec = await embed_query(query)
+
+            # A lazy SQL expression (embedding <=> qvec), not a computed value —
+            # Postgres evaluates it per row at execute time. Reused in both the
+            # select (.label names the result column "distance") and the order_by
+            # (the HNSW index serves the nearest-k ordering).
+            distance = Chunk.embedding.cosine_distance(qvec)
+            rows = await session.execute(
+                select(Chunk.content, Chunk.chunk_metadata, distance.label("distance"))
+                .order_by(distance)
+                .limit(k)
+            )
+            return [
+                RetrievedChunk(
+                    content=content,
+                    filename=(meta or {}).get("filename", "unknown"),
+                    distance=float(dist),
+                )
+                for content, meta, dist in rows
+            ]
+    except Exception:
+        logger.warning("retrieval failed; serving chat without RAG", exc_info=True)
+        return []

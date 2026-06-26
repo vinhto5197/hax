@@ -64,8 +64,19 @@ async def upload_document(
     await session.refresh(doc)
 
     # Slice 1: ingest inline (chunk -> embed -> store), driving status to
-    # ready|failed before responding. Slice 2 moves this onto Celery so the
-    # upload returns immediately at 'pending'.
+    # ready|failed before responding. Slice 2 moves this onto Celery.
+    #
+    # SIGNPOST for the Celery slice: "just await it" is async, not a background
+    # job. Async takes the work off the EVENT LOOP (other requests keep being
+    # served while this awaits) — but it's still inside THIS request: the
+    # uploader waits the full chunk+embed+store time, which on a large file can
+    # exceed the load balancer's request timeout (~60s) and is lost entirely on a
+    # crash or a client disconnect (hard reload / closed tab). Celery takes it
+    # off the REQUEST: return 'pending' immediately, run ingestion in a worker
+    # process (durable in the Redis broker, retried with backoff), UI polls for
+    # status. Bonus: a worker process has its own GIL, so any CPU-bound step
+    # added later (PDF parse, OCR) gets real parallelism a thread couldn't.
+    # ingest_document is already self-contained (own session) for exactly this.
     await ingest_document(doc.id, text, filename)
     await session.refresh(doc)  # pick up the status/error written by ingestion
     return DocumentOut.model_validate(doc)
