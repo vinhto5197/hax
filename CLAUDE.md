@@ -4,7 +4,7 @@
 Build **hax**: an AI-first product where the primary interface is a **chat experience** that answers user questions using the user's own data + context.
 
 ## Repo intent
-This repo is v0 — an **open-source skeleton** that ships the complete vertical slice. When v0 is done, no more code is added here. A private repo forks from it for v1+ (domain agents, advanced UI, proprietary features).
+This repo is v0 — an **open-source skeleton** that ships the complete vertical slice. When v0 is done, no more code is added here. A private repo forks from it for v1+ (domain agents, advanced UI, proprietary features, and **rigorous/advanced RAG** — hybrid keyword+vector search, rerankers (Voyage ships one), web-search-as-a-tool, eval-driven tuning — over a **dev-curated domain corpus** rather than user uploads). v0 deliberately stays at naive single-vector retrieval; the advanced RAG is where v1's domain value concentrates, so it's tracked here but built there.
 
 ## Build milestones (v0)
 
@@ -19,24 +19,39 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
    - User data upload (files at minimum)
    - Ingestion pipeline: chunking, embedding (Voyage AI), store in pgvector — sync first, Celery from slice 2
    - RAG retrieval wired into chat flow
-   - Slice 3: retrieval becomes a model-invoked tool (simple agent + harness)
+   - Slice 3: retrieval becomes a model-invoked tool (simple agent + harness);
+     spot-check the agent by hand while building (small corpus + ~10
+     question/expected pairs — dev testing, not a deliverable). The **eval
+     harness** itself is an M5 deliverable.
 
 2.5. **Milestone 2.5 — Auth + background titles** *(deferred from M1; done after M2)*
    - Basic auth / session; `users` table; conversations + documents scoped to a user
    - Background chat title generation (Celery + Redis — worker exists from M2)
 
-3. **Milestone 3 — Structured outputs + polish**
+3. **Milestone 3 — AWS deploy + CI/CD** *(brought forward — deploy early, then continuous)*
+   - Provision cloud infra with Terraform (ECS Fargate for the streaming
+     backend, ALB path-routing `/api/*`, RDS Postgres + pgvector, ElastiCache
+     Redis). Streaming rules out Lambda — see the deploy ADR when written.
+   - CI/CD pipeline so every later milestone **auto-deploys** — the value of
+     CI/CD is a running pipeline, not a one-off deploy.
+   - Why here, not last: deploying early surfaces infra issues (SSE-through-ALB,
+     secrets, networking) before a big-bang at the end, keeps a live demo URL
+     from M3 on, and yields the AWS/CI-CD/observability portfolio narrative.
+     M4 + M5 then ride the pipeline.
+
+4. **Milestone 4 — Structured outputs + polish** *(built against live infra, auto-deployed)*
    - Table / structured view for results (not only free-form text)
    - Citation/source display (what data the answer used)
    - Cohesive UI — feels like a product, not a demo collection
 
-4. **Milestone 4 — AWS deploy**
-   - Provision cloud infrastructure with Terraform
-   - Deploy all services to AWS
-
-5. **Milestone 5 — Cleanup + hardening** *(final pass before v0 is "done")*
+5. **Milestone 5 — Cleanup + hardening + eval** *(final pass before v0 is "done")*
    - Test infrastructure: stand up pytest (+ async DB/API fixtures), backfill
      coverage for the chat + RAG paths that were verified by hand during M1/M2
+   - **Eval infrastructure**: a measurable harness for RAG/agent quality
+     (Q/A dataset → run → score via exact-match or LLM-as-judge) so retrieval
+     and agent changes are tuned and regression-checked by **number, not vibes**.
+     A minimal eval rides along with M2 slice 3; M5 makes it systematic.
+     Rigorous/eval-driven RAG tuning → v1.
    - Drain the remaining dev + QOL backlogs (`local/*BACKLOG*.local.md`)
    - Tighten foot-guns deferred during feature work (input validation, error
      surfaces, anything flagged "fix in cleanup")
