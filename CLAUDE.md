@@ -4,7 +4,7 @@
 Build **hax**: an AI-first product where the primary interface is a **chat experience** that answers user questions using the user's own data + context.
 
 ## Repo intent
-This repo is v0 — an **open-source skeleton** that ships the complete vertical slice. When v0 is done, no more code is added here. A private repo forks from it for v1+ (domain agents, advanced UI, proprietary features, and **rigorous/advanced RAG** — hybrid keyword+vector search, rerankers (Voyage ships one), web-search-as-a-tool, eval-driven tuning — over a **dev-curated domain corpus** rather than user uploads). v0 deliberately stays at naive single-vector retrieval; the advanced RAG is where v1's domain value concentrates, so it's tracked here but built there.
+This repo is v0 — an **open-source skeleton** that ships the complete vertical slice. When v0 is done, no more code is added here; a **private repo forks from it for v1**, the proprietary, domain-specific version. v0 deliberately stays at **naive single-vector retrieval** — the domain value is built in the private fork, not here.
 
 ## Build milestones (v0)
 
@@ -25,7 +25,9 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
      harness** itself is an M5 deliverable.
 
 2.5. **Milestone 2.5 — Auth + background titles** *(deferred from M1; done after M2)*
-   - Basic auth / session; `users` table; conversations + documents scoped to a user
+   - Auth via **NextAuth/Auth.js** (self-hosted, no per-user cost) — email/password
+     + Google, sessions, `users` table, FastAPI verifies the NextAuth JWT;
+     conversations + documents scoped to a user. Own ADR.
    - Background chat title generation (Celery + Redis — worker exists from M2)
 
 3. **Milestone 3 — AWS deploy + CI/CD** *(brought forward — deploy early, then continuous)*
@@ -51,7 +53,7 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
      (Q/A dataset → run → score via exact-match or LLM-as-judge) so retrieval
      and agent changes are tuned and regression-checked by **number, not vibes**.
      A minimal eval rides along with M2 slice 3; M5 makes it systematic.
-     Rigorous/eval-driven RAG tuning → v1.
+     (Rigorous eval-driven tuning is beyond v0 scope.)
    - Drain the remaining dev + QOL backlogs (`local/*BACKLOG*.local.md`)
    - Tighten foot-guns deferred during feature work (input validation, error
      surfaces, anything flagged "fix in cleanup")

@@ -88,8 +88,8 @@ agent orchestration — are deliberately not used here.
 - If `langchain-core`'s transitive weight or churn becomes a recurring problem,
   hand-roll the recursive splitter (~80 lines) and drop LangChain entirely —
   which would supersede this ADR back to ADR 0004's "no LangChain in v0."
-- v1+ (private fork): heavier multi-agent orchestration is where LangGraph
-  could earn a real evaluation — out of scope for v0.
+- If heavier agent orchestration is ever needed, re-evaluate a workflow
+  framework (e.g. LangGraph) then — out of scope for v0.
 
 ## Related
 

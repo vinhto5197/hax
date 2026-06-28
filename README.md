@@ -1,6 +1,6 @@
 # hax
 
-AI-first product: primary interface is a **chat experience** that answers user questions using the user's own data and context. This repo is **v0** — an open-source skeleton that ships the full vertical slice. When v0 is done, no further code is added here; a private repo forks from it for v1+ (domain agents, advanced UI, proprietary features).
+AI-first product: primary interface is a **chat experience** that answers user questions using the user's own data and context. This repo is **v0** — an open-source skeleton that ships the full vertical slice. When v0 is done, no further code is added here; a private repo forks from it for v1, the proprietary domain-specific version.
 
 ## Goal (v0)
 
