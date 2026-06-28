@@ -77,8 +77,8 @@ LangChain types do not leak out of `packages/core/rag/`.
 - We own prompt assembly and retrieval code (small, but ours to maintain).
 - Two LangChain integration packages to track (`langchain-text-splitters`,
   `langchain-voyageai`).
-- If v1 wants LangChain's higher-level agent/runnable machinery, this ADR
-  gets revisited rather than extended silently.
+- If future needs call for LangChain's higher-level agent/runnable machinery,
+  this ADR gets revisited rather than extended silently.
 
 ## Related
 
