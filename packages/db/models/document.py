@@ -39,6 +39,10 @@ class Document(Base):
     filename: Mapped[str]
     mime_type: Mapped[str]
     size_bytes: Mapped[int]
+    # Object-storage key for the raw uploaded bytes (S3/MinIO). Nullable: docs
+    # ingested before slice 2a (inline, no stored file) have none; every new
+    # upload sets it, and the Celery worker reads the file back by this key.
+    storage_key: Mapped[str | None] = mapped_column(nullable=True)
     status: Mapped[str] = mapped_column(server_default="pending")
     error: Mapped[str | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(
