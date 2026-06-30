@@ -1,8 +1,11 @@
+import asyncio
+
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.deps import get_session
+from packages.core import storage
 from packages.core.rag.ingest import ingest_document
 from packages.core.schemas.document import DocumentOut
 from packages.db.models import Document
@@ -60,6 +63,15 @@ async def upload_document(
         status="pending",
     )
     session.add(doc)
+    await session.flush()  # populate the server-default id so we can key the file
+
+    # Write the raw bytes to object storage (S3/MinIO) BEFORE committing, so a
+    # 'pending' row never exists without its file — if the put fails, the flushed
+    # row rolls back. storage.put is blocking (boto3) → offload from the event
+    # loop. The id-scoped key keeps each upload's object isolated.
+    storage_key = f"documents/{doc.id}/{filename}"
+    await asyncio.to_thread(storage.put, storage_key, content, doc.mime_type)
+    doc.storage_key = storage_key
     await session.commit()
     await session.refresh(doc)
 
