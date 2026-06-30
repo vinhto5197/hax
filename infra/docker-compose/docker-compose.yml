@@ -35,6 +35,31 @@ services:
       timeout: 3s
       retries: 5
 
+  minio:
+    # S3-compatible object storage for raw uploaded files (slice 2a). boto3
+    # talks to this in dev and real AWS S3 in prod — same client, swapped
+    # endpoint (the Postgres↔RDS dev/prod-parity pattern).
+    image: minio/minio
+    container_name: hax-minio
+    environment:
+      # Dev root creds — must match AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY in
+      # .env. MinIO requires the password to be >=8 chars.
+      MINIO_ROOT_USER: hax
+      MINIO_ROOT_PASSWORD: haxhaxhax
+    ports:
+      # Loopback only — dev object storage, no LAN exposure.
+      - "127.0.0.1:9000:9000" # S3 API
+      - "127.0.0.1:9001:9001" # web console (http://localhost:9001)
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD-SHELL", "mc ready local || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
 volumes:
   postgres_data:
   redis_data:
+  minio_data:

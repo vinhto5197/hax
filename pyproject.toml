@@ -35,6 +35,9 @@ dependencies = [
   "pydantic-settings>=2.6.0",
   "python-dotenv>=1.0.0",
   "httpx>=0.27.0",
+  # Object storage (raw uploaded files): S3 in prod, MinIO in dev — one boto3
+  # client, endpoint swapped by env (slice 2a).
+  "boto3>=1.35.0",
 ]
 
 [project.optional-dependencies]
