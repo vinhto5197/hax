@@ -185,3 +185,17 @@ graph TB
 - Chat responses stream (SSE) directly from FastAPI to the browser; they are not queued through Celery.
 - Celery + Redis handle background work: title generation, data ingestion, embedding, index rebuilds.
 - pgvector lives in Postgres; no separate vector DB.
+
+## Built with Claude Code + community skills
+
+This project was developed with [Claude Code](https://www.anthropic.com/claude-code)
+(Anthropic's agentic CLI), augmented by a couple of community skill plugins:
+
+- **[Superpowers](https://github.com/obra/superpowers)** — Jesse Vincent's
+  agentic skills framework. Its **brainstorming** skill drove the design specs
+  for the RAG and agentic slices (one question at a time → sectioned design →
+  written spec before any code).
+- **[andrej-karpathy-skills](https://github.com/forrestchang/andrej-karpathy-skills)**
+  — Forrest Chang's Karpathy-derived guidelines that curb common LLM coding
+  pitfalls: think before coding, simplicity first, surgical changes, and
+  verifiable success criteria.

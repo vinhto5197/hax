@@ -31,15 +31,22 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
    - Background chat title generation (Celery + Redis — worker exists from M2)
 
 3. **Milestone 3 — AWS deploy + CI/CD** *(brought forward — deploy early, then continuous)*
-   - Provision cloud infra with Terraform (ECS Fargate for the streaming
-     backend, ALB path-routing `/api/*`, RDS Postgres + pgvector, ElastiCache
-     Redis). Streaming rules out Lambda — see the deploy ADR when written.
+   - **Hybrid deploy for alpha** (product > portfolio now; near-zero, gated
+     traffic): a **free-tier EC2 app box** (public subnet) runs the FastAPI /
+     Next / Celery-worker containers, pointed at managed **RDS Postgres +
+     pgvector**, **ElastiCache Redis**, and **S3** (all free-tier for 12 months).
+     **No Fargate / NAT / ALB cost yet** (the EC2 box is public-subnet → direct
+     IGW, secured by security groups). Provisioned with Terraform.
    - CI/CD pipeline so every later milestone **auto-deploys** — the value of
      CI/CD is a running pipeline, not a one-off deploy.
-   - Why here, not last: deploying early surfaces infra issues (SSE-through-ALB,
-     secrets, networking) before a big-bang at the end, keeps a live demo URL
-     from M3 on, and yields the AWS/CI-CD/observability portfolio narrative.
-     M4 + M5 then ride the pipeline.
+   - **Fargate deferred to post-alpha** (see `local/V1_CHECKLIST.local.md`): the
+     dev/prod-parity design (boto3↔S3, `DATABASE_URL`↔RDS, `REDIS_URL`↔
+     ElastiCache) makes the EC2→Fargate switch a **config + data migration, not a
+     code change** — so there's no reason to pay for Fargate/NAT/ALB during a
+     quiet alpha.
+   - Why deploy here, not last: surfaces infra issues (SSE, secrets, networking)
+     early and keeps a live demo URL from M3 on. M4 + M5 ride the pipeline. The
+     deploy ADR records the hybrid + the Fargate-later rationale.
 
 4. **Milestone 4 — Structured outputs + polish** *(built against live infra, auto-deployed)*
    - Table / structured view for results (not only free-form text)
