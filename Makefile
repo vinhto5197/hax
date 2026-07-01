@@ -58,6 +58,14 @@ migration:
 api:
 	uvicorn apps.api.main:app --reload --port 8000
 
+# ── Worker (Celery) ───────────────────────────────────────────
+.PHONY: worker
+
+# Background-job worker (slice 2a: document ingestion). Needs infra (Redis) up —
+# run `make infra-up` or `make dev` first. Separate process from the API.
+worker:
+	celery -A apps.worker.celery_app worker --loglevel=info
+
 # ── Frontend (Next.js) ────────────────────────────────────────
 .PHONY: web
 
@@ -93,12 +101,14 @@ sync-web:
 
 dev: infra-up types
 	@echo "Starting API and Web servers..."
+	@echo "For document ingestion, run 'make worker' in a separate terminal."
 	@$(MAKE) -j2 api web
 
 dev-stop:
 	@echo "Stopping dev services..."
 	@pkill -f "uvicorn apps.api.main:app" || true
 	@pkill -f "next dev" || true
+	@pkill -f "celery -A apps.worker.celery_app" || true
 
 # Like `make dev` but WITHOUT the API: the VS Code debugger (F5, see
 # .vscode/launch.json) launches uvicorn itself, so :8000 must stay free.
@@ -117,11 +127,15 @@ debug: infra-up types
 status:
 	@printf "%-10s %-6s %s\n" "service" "port" "status"
 	@printf "%-10s %-6s %s\n" "-------" "----" "------"
-	@for svc in "postgres 5432" "redis 6379" "api 8000" "web 3000"; do \
+	@for svc in "postgres 5432" "redis 6379" "minio 9000" "api 8000" "web 3000"; do \
 	  set -- $$svc; name=$$1; port=$$2; \
 	  if nc -z -G1 localhost $$port >/dev/null 2>&1; then st="UP"; else st="down"; fi; \
 	  printf "%-10s %-6s %s\n" "$$name" "$$port" "$$st"; \
 	done
+	@# The Celery worker listens on no port (it consumes from Redis), so probe the
+	@# process instead of a port.
+	@if pgrep -f "celery -A apps.worker.celery_app" >/dev/null 2>&1; then st="UP"; else st="down"; fi; \
+	  printf "%-10s %-6s %s\n" "worker" "-" "$$st"
 
 # ── Lint ─────────────────────────────────────────────────────
 .PHONY: lint
