@@ -14,6 +14,24 @@
       "console": "integratedTerminal"
     },
     {
+      "name": "Worker: Celery (debugpy)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "celery",
+      "args": [
+        "-A",
+        "apps.worker.celery_app",
+        "worker",
+        "--pool=solo",
+        "--loglevel=info"
+      ],
+      "cwd": "${workspaceFolder}",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "envFile": "${workspaceFolder}/.env",
+      "justMyCode": true,
+      "console": "integratedTerminal"
+    },
+    {
       "name": "Web: Chrome (frontend)",
       "type": "chrome",
       "request": "launch",
@@ -27,6 +45,15 @@
     {
       "name": "Full stack (API + Web)",
       "configurations": ["API: FastAPI (debugpy)", "Web: Chrome (frontend)"],
+      "stopAll": true
+    },
+    {
+      "name": "Full stack + Worker",
+      "configurations": [
+        "API: FastAPI (debugpy)",
+        "Web: Chrome (frontend)",
+        "Worker: Celery (debugpy)"
+      ],
       "stopAll": true
     }
   ]
