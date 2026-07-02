@@ -5,16 +5,16 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.deps import get_session
+from apps.worker.tasks import ingest_document
 from packages.core import storage
-from packages.core.rag.ingest import ingest_document
 from packages.core.schemas.document import DocumentOut
 from packages.db.models import Document
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
-# Slice 1 caps uploads small because ingestion runs synchronously in the request
-# (the whole file is read into memory). Raised once Celery owns ingestion
-# (M2 slice 2). A general request-body limit is an M5 item.
+# Cap uploads small: the whole file is read into memory here (and again on the
+# worker). Large files (streaming/multipart upload) are a v1 concern; a general
+# request-body limit is an M5 item.
 MAX_BYTES = 256 * 1024
 # Allowed suffixes -> the mime we persist. We derive mime from the validated
 # suffix rather than trusting the client's content_type.
@@ -52,7 +52,9 @@ async def upload_document(
     if not content.strip():
         raise HTTPException(status_code=400, detail="file is empty")
     try:
-        text = content.decode("utf-8")
+        # Validate UTF-8 at the edge for a fast 400; the worker re-decodes the
+        # bytes from storage, so we don't keep the decoded text here.
+        content.decode("utf-8")
     except UnicodeDecodeError:
         raise HTTPException(status_code=400, detail="file must be UTF-8 text")
 
@@ -75,20 +77,10 @@ async def upload_document(
     await session.commit()
     await session.refresh(doc)
 
-    # Slice 1: ingest inline (chunk -> embed -> store), driving status to
-    # ready|failed before responding. Slice 2 moves this onto Celery.
-    #
-    # SIGNPOST for the Celery slice: "just await it" is async, not a background
-    # job. Async takes the work off the EVENT LOOP (other requests keep being
-    # served while this awaits) — but it's still inside THIS request: the
-    # uploader waits the full chunk+embed+store time, which on a large file can
-    # exceed the load balancer's request timeout (~60s) and is lost entirely on a
-    # crash or a client disconnect (hard reload / closed tab). Celery takes it
-    # off the REQUEST: return 'pending' immediately, run ingestion in a worker
-    # process (durable in the Redis broker, retried with backoff), UI polls for
-    # status. Bonus: a worker process has its own GIL, so any CPU-bound step
-    # added later (PDF parse, OCR) gets real parallelism a thread couldn't.
-    # ingest_document is already self-contained (own session) for exactly this.
-    await ingest_document(doc.id, text, filename)
-    await session.refresh(doc)  # pick up the status/error written by ingestion
+    # Hand ingestion to the Celery worker (durable in the Redis broker, retried,
+    # off the request) and return immediately at 'pending'. The worker reads the
+    # raw bytes back from storage by storage_key, so the task needs only the id —
+    # passed as a str because the JSON broker can't carry a UUID. The UI polls
+    # GET /api/documents for the status flip (pending -> processing -> ready|failed).
+    ingest_document.delay(str(doc.id))
     return DocumentOut.model_validate(doc)

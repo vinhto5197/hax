@@ -1,6 +1,10 @@
+import asyncio
 import logging
 from uuid import UUID
 
+from sqlalchemy import delete
+
+from packages.core import storage
 from packages.core.rag.embeddings import embed_documents
 from packages.core.rag.splitter import split_text
 from packages.db import AsyncSessionLocal
@@ -9,41 +13,52 @@ from packages.db.models import Chunk, Document
 logger = logging.getLogger(__name__)
 
 
-async def ingest_document(document_id: UUID, text: str, filename: str) -> Document:
-    """Chunk -> embed -> store the chunks for an already-created document.
+async def ingest_document_async(document_id: UUID) -> None:
+    """Read a document's raw file from object storage, then chunk -> embed -> store.
 
-    Drives the document's status: processing -> ready, or -> failed (with the
-    error recorded) on any exception. The failure recovery is itself guarded so a
-    secondary DB error can't leave the row stuck in 'processing' or 500 the
-    caller. Self-contained (own session) so M2 slice 2 can call it from a Celery
-    task unchanged; slice 1 awaits it inline in the upload request.
+    Runs in the Celery worker (slice 2a), off the upload request. Reads the bytes
+    by the doc's `storage_key` (set at upload), so it needs no text/filename
+    args — everything is reconstructed from the row + storage. Drives status
+    processing -> ready, or -> failed (error recorded) on any exception.
+
+    Idempotent: the chunk write is delete-then-insert in one transaction, so a
+    Celery retry or broker redelivery (acks_late) re-runs cleanly without
+    duplicating chunks. Invariant: status=ready => a complete, current chunk set.
+
+    Re-raises on failure (after recording 'failed') so the calling task can act on
+    it — step 3b adds transient-vs-permanent retry on top.
     """
     async with AsyncSessionLocal() as session:
         doc = await session.get(Document, document_id)
         if doc is None:
             raise ValueError(f"document {document_id} not found")
+        if doc.storage_key is None:
+            raise ValueError(f"document {document_id} has no storage_key")
+        storage_key = doc.storage_key
+        filename = doc.filename
         doc.status = "processing"
-        # Commit 'processing' now rather than holding one transaction across the
-        # whole ingest. Independent of UI visibility (slice-1 uploads ingest
-        # synchronously, so the client only ever sees the final status): commit
-        # returns the pooled connection so the multi-second embed below doesn't
-        # pin it, and leaves a durable 'processing' row a crashed run can be
-        # recovered from. Concurrent-reader visibility starts mattering in
-        # slice 2 (Celery + polling).
+        # Commit 'processing' immediately rather than holding one transaction
+        # across the whole ingest: it returns the pooled connection so the
+        # multi-second embed below doesn't pin it, makes the status visible to the
+        # polling UI, and leaves a durable marker a crashed run can be recovered
+        # from.
         await session.commit()
 
         try:
+            # storage.get is blocking boto3 -> offload so it doesn't block this
+            # task's event loop (asyncio.run gives each task its own loop).
+            raw = await asyncio.to_thread(storage.get, storage_key)
+            text = raw.decode("utf-8")
             chunks = split_text(text)
             if not chunks:
                 # A 'ready' doc must have >=1 retrievable chunk — otherwise it's
                 # silently un-retrievable. Fail it instead.
                 raise ValueError("document produced no chunks after splitting")
             embeddings = await embed_documents(chunks)
-            # NOT idempotent: re-ingesting appends chunks without clearing prior
-            # ones. Safe in slice 1 (called once inline per upload), but when
-            # Celery retries land (slice 2) a retry after partial success would
-            # duplicate chunks — delete existing `document_id` chunks here first,
-            # or upsert, before this runs more than once.
+            # Idempotent write: clear any existing chunks for this doc, then insert
+            # the fresh set, atomically with status=ready. Safe under retries /
+            # redelivery — a re-run can't duplicate chunks.
+            await session.execute(delete(Chunk).where(Chunk.document_id == document_id))
             session.add_all(
                 Chunk(
                     document_id=document_id,
@@ -59,19 +74,18 @@ async def ingest_document(document_id: UUID, text: str, filename: str) -> Docume
             await session.commit()
         except Exception as exc:
             logger.exception("ingestion failed for document %s", document_id)
-            # Record the failure best-effort; never re-raise from the handler, so
-            # a secondary failure can't leave the row 'processing' or 500 the
-            # upload. (v0 is single-tenant; the raw error is dev-useful. Sanitize
-            # before M2.5 multi-tenancy — backlogged.)
+            # Record 'failed' best-effort, then re-raise. The recovery is itself
+            # guarded so a secondary DB error can't mask the original failure.
+            # (v0 is single-tenant; the raw error is dev-useful. Sanitize before
+            # M2.5 multi-tenancy — backlogged.)
             try:
-                # If the failure came from the commit above, Postgres aborted the
-                # transaction and the session is unusable until rolled back — reset
-                # it so the queries below can run. (No-op if the failure was
-                # upstream, e.g. the embedding call, where no txn was open.)
+                # If the failure came from the commit, Postgres aborted the txn and
+                # the session is unusable until rolled back. (No-op otherwise, e.g.
+                # an embedding failure where no txn was open.)
                 await session.rollback()
-                # Re-fetch on the now-clean session (rollback expired the old doc
-                # object). Returns None if the row was deleted meanwhile —
-                # reachable once delete-document exists (slice 2); guarded here.
+                # Re-fetch on the now-clean session (rollback expired the old doc).
+                # None if the row was deleted meanwhile (reachable once
+                # delete-document exists) — guarded here.
                 doc = await session.get(Document, document_id)
                 if doc is not None:
                     doc.status = "failed"
@@ -81,13 +95,4 @@ async def ingest_document(document_id: UUID, text: str, filename: str) -> Docume
                 logger.exception(
                     "failed to record 'failed' status for document %s", document_id
                 )
-
-        # Best-effort refresh so the returned doc reflects the committed
-        # status/error. Guarded: the session may be degraded in a failure path,
-        # and this handler must never raise — a slightly stale doc beats a 500.
-        if doc is not None:
-            try:
-                await session.refresh(doc)
-            except Exception:
-                logger.exception("failed to refresh document %s", document_id)
-        return doc
+            raise
