@@ -27,6 +27,16 @@ _client = None
 _bucket_ready = False
 
 
+class StorageKeyNotFound(Exception):
+    """The requested object key does not exist in storage (S3 NoSuchKey).
+
+    Distinct from other storage failures (network blips, 5xx, throttling): a
+    missing key is deterministic — S3 is strongly read-after-write consistent, so
+    retrying can't make the object appear. Callers can treat it as a permanent
+    failure while still retrying the transient ones.
+    """
+
+
 def _get_client():
     global _client
     if _client is None:
@@ -72,8 +82,18 @@ def put(key: str, data: bytes, content_type: str = "application/octet-stream") -
 
 
 def get(key: str) -> bytes:
-    """Read the bytes stored under ``key``. Blocking."""
-    return _get_client().get_object(Bucket=S3_BUCKET, Key=key)["Body"].read()
+    """Read the bytes stored under ``key``. Blocking.
+
+    Raises ``StorageKeyNotFound`` if the object is missing; other storage errors
+    (5xx, throttling, network) propagate as botocore ``ClientError`` for the
+    caller to treat as transient.
+    """
+    try:
+        return _get_client().get_object(Bucket=S3_BUCKET, Key=key)["Body"].read()
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") in ("NoSuchKey", "404"):
+            raise StorageKeyNotFound(key) from exc
+        raise
 
 
 def delete(key: str) -> None:
