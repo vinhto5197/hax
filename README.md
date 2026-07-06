@@ -61,13 +61,21 @@ colima start
 # If using Docker Desktop, just open the app
 ```
 
-Start everything (Postgres, Redis, FastAPI, Next.js):
+Start everything (Postgres, Redis, MinIO, FastAPI, Next.js):
 
 ```bash
 make dev
 ```
 
-Stop all services:
+Ingestion runs in a **Celery worker** (a separate process). Run it in a second
+terminal so uploaded documents actually get processed — otherwise an upload just
+sits at `pending` (`make dev` prints this reminder too):
+
+```bash
+make worker
+```
+
+Stop all services (API, web, and the worker):
 
 ```bash
 make dev-stop
@@ -76,7 +84,7 @@ make dev-stop
 Other useful commands:
 
 ```bash
-make infra-logs      # tail Postgres + Redis logs
+make infra-logs      # tail Postgres + Redis + MinIO logs
 make infra-clean     # tear down containers AND delete volumes (full reset)
 make infra-psql      # open a psql shell against postgres
 make infra-redis-cli # open a redis-cli shell against redis
@@ -146,6 +154,7 @@ Check what's running at any time with `make status` (a TCP probe of each service
 | Streaming | SSE (FastAPI `StreamingResponse`) for chat                    |
 | Async     | Celery + Redis (broker + cache)                               |
 | Data      | Postgres + pgvector (embeddings)                              |
+| Storage   | Object storage for uploads — S3 in prod, MinIO in dev (boto3) |
 | Types     | OpenAPI spec → generated TypeScript (e.g. openapi-typescript) |
 | Infra     | Docker, Docker Compose                                        |
 | Deploy    | AWS, provisioned via Terraform                                |
