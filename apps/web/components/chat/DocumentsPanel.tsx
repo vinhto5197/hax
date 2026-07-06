@@ -8,7 +8,9 @@ import {
   uploadDocument,
 } from "@/lib/chatApi";
 
-// Slice-1 "Data" section: upload a .txt/.md file and see ingestion status.
+// "Data" section: upload a .txt/.md file and watch ingestion status. Ingestion
+// runs in the Celery worker (slice 2a), so an upload returns 'pending' and the
+// panel polls until it settles to ready|failed.
 // Local state (not a Context) — only this panel reads documents for now.
 const STATUS_STYLES: Record<string, string> = {
   ready: "text-green-600 dark:text-green-400",
@@ -16,6 +18,11 @@ const STATUS_STYLES: Record<string, string> = {
   pending: "text-black/40 dark:text-white/40",
   processing: "text-black/40 dark:text-white/40",
 };
+
+// Poll cadence while any doc is still ingesting. ~2.5s balances responsiveness
+// against load for a background job that takes seconds.
+const POLL_INTERVAL_MS = 2500;
+const IN_FLIGHT: ReadonlySet<string> = new Set(["pending", "processing"]);
 
 export function DocumentsPanel() {
   const [documents, setDocuments] = useState<DocumentSummary[]>([]);
@@ -31,6 +38,24 @@ export function DocumentsPanel() {
       });
   }, []);
 
+  // Poll while any doc is still ingesting, so its status settles to ready|failed
+  // without a manual refresh. Keyed off `hasPending`: React re-runs this effect
+  // only when that boolean flips, so the interval is created once ingestion
+  // starts and torn down (polling stops) once everything has settled — not reset
+  // on every poll.
+  const hasPending = documents.some((d) => IN_FLIGHT.has(d.status));
+  useEffect(() => {
+    if (!hasPending) return;
+    const id = setInterval(() => {
+      listDocuments()
+        .then(setDocuments)
+        .catch(() => {
+          // Transient list failure; the next tick retries.
+        });
+    }, POLL_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [hasPending]);
+
   async function handleFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -38,13 +63,11 @@ export function DocumentsPanel() {
     setError(null);
     try {
       const doc = await uploadDocument(file);
-      // Prepend the new doc; it already carries its final ingestion status.
+      // Ingestion runs in the worker now, so the upload returns immediately at
+      // 'pending'. Prepend it; the polling effect updates its status to
+      // ready|failed as the worker finishes (a failed doc shows as a red row with
+      // its error on hover).
       setDocuments((prev) => [doc, ...prev]);
-      // A failed ingest still returns 200, so surface its cause in the banner
-      // instead of only as a quiet red row.
-      if (doc.status === "failed") {
-        setError(doc.error ?? "Ingestion failed.");
-      }
     } catch (err) {
       // The other failure channel: uploadDocument throws on a non-2xx/network
       // error (400 wrong type, 413 too big, …) — distinct from the 200-with-
