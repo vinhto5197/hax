@@ -5,7 +5,7 @@ from sqlalchemy import select
 
 from packages.core.rag.embeddings import embed_query
 from packages.db import AsyncSessionLocal
-from packages.db.models import Chunk
+from packages.db.models import Chunk, Document
 
 logger = logging.getLogger(__name__)
 
@@ -33,11 +33,24 @@ async def retrieve(query: str, k: int = TOP_K) -> list[RetrievedChunk]:
     paid request before any data exists); VOYAGE_API_KEY unset / Voyage down;
     a DB/search error. The traceback is logged (exc_info) so a real bug — e.g. a
     dimension mismatch from embeddings._check_dim — is visible, not silent.
-    No user filter yet — added in M2.5 (`WHERE user_id = :uid`).
+
+    Only chunks from documents with status='ready' are searched, so a doc that is
+    pending / processing / re-ingesting / failed never leaks partial or stale
+    chunks into an answer (the atomic delete-then-insert write means 'ready' always
+    implies a complete, current chunk set). No user filter yet — added in M2.5
+    (`WHERE user_id = :uid`).
     """
     try:
         async with AsyncSessionLocal() as session:
-            if await session.scalar(select(Chunk.id).limit(1)) is None:
+            # Skip the (paid) embed unless there's at least one retrievable chunk —
+            # i.e. one belonging to a 'ready' document.
+            ready_chunk = (
+                select(Chunk.id)
+                .join(Chunk.document)
+                .where(Document.status == "ready")
+                .limit(1)
+            )
+            if await session.scalar(ready_chunk) is None:
                 return []
             qvec = await embed_query(query)
 
@@ -48,6 +61,8 @@ async def retrieve(query: str, k: int = TOP_K) -> list[RetrievedChunk]:
             distance = Chunk.embedding.cosine_distance(qvec)
             rows = await session.execute(
                 select(Chunk.content, Chunk.chunk_metadata, distance.label("distance"))
+                .join(Chunk.document)
+                .where(Document.status == "ready")
                 .order_by(distance)
                 .limit(k)
             )
