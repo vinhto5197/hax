@@ -1,14 +1,18 @@
 import logging
+import os
 from dataclasses import dataclass
 
 from sqlalchemy import select
 
-from packages.core.rag.config import TOP_K
 from packages.core.rag.embeddings import embed_query
 from packages.db import AsyncSessionLocal
 from packages.db.models import Chunk, Document
 
 logger = logging.getLogger(__name__)
+
+# Nearest chunks to retrieve and inject into the prompt. Env-tunable (RAG_TOP_K),
+# default 5.
+TOP_K = int(os.getenv("RAG_TOP_K", "5"))
 
 
 # Named return type for retrieve(): callers use chunk.filename / chunk.content
