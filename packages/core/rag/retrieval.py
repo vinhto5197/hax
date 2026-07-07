@@ -49,6 +49,7 @@ async def retrieve(query: str, k: int = TOP_K) -> list[RetrievedChunk]:
                 .limit(1)
             )
             if await session.scalar(ready_chunk) is None:
+                logger.debug("retrieval: no ready chunks yet; skipping embed")
                 return []
             qvec = await embed_query(query)
 
@@ -64,7 +65,7 @@ async def retrieve(query: str, k: int = TOP_K) -> list[RetrievedChunk]:
                 .order_by(distance)
                 .limit(k)
             )
-            return [
+            results = [
                 RetrievedChunk(
                     content=content,
                     filename=(meta or {}).get("filename", "unknown"),
@@ -72,6 +73,18 @@ async def retrieve(query: str, k: int = TOP_K) -> list[RetrievedChunk]:
                 )
                 for content, meta, dist in rows
             ]
+            # Debug observability — NOT a tuning oracle (picking a cutoff needs a
+            # labeled eval set, M5). Logs what came back and how near, so a bad
+            # answer can be diagnosed: retrieved junk? nothing? good chunk ranked
+            # low? Distances are ascending (nearest first).
+            logger.info(
+                "retrieval: query_len=%d k=%d hits=%d distances=%s",
+                len(query),
+                k,
+                len(results),
+                [round(r.distance, 3) for r in results],
+            )
+            return results
     except Exception:
         logger.warning("retrieval failed; serving chat without RAG", exc_info=True)
         return []
