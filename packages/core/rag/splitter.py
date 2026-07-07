@@ -1,13 +1,12 @@
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-# Chunk sizing is in characters (length_function=len). ~1600 chars ≈ 400 tokens,
-# with ~12% overlap so a sentence straddling a boundary isn't orphaned. The
-# recursive splitter tries paragraph -> line -> word -> character separators
-# (LangChain's defaults: "\n\n", "\n", " ", "") so it cuts on structure rather
-# than mid-word where it can. Tuning (size/overlap/k) is an M2 slice-2 concern.
-CHUNK_SIZE = 1600
-CHUNK_OVERLAP = 200
+from packages.core.rag.config import CHUNK_OVERLAP, CHUNK_SIZE
 
+# Chunk sizing is in characters (length_function=len; CHUNK_SIZE/OVERLAP come from
+# rag.config, env-tunable). ~1600 chars ≈ 400 tokens, ~12% overlap so a sentence
+# straddling a boundary isn't orphaned. The recursive splitter tries paragraph ->
+# line -> word -> character separators (LangChain's defaults: "\n\n", "\n", " ",
+# "") so it cuts on structure rather than mid-word where it can.
 _splitter = RecursiveCharacterTextSplitter(
     chunk_size=CHUNK_SIZE,
     chunk_overlap=CHUNK_OVERLAP,
