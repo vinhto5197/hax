@@ -14,6 +14,16 @@ logger = logging.getLogger(__name__)
 # default 5.
 TOP_K = int(os.getenv("RAG_TOP_K", "5"))
 
+# Optional absolute cosine-distance cutoff (env RAG_MAX_DISTANCE): drop chunks
+# farther than this, so an off-topic query returns nothing rather than injecting
+# far, irrelevant chunks. Unset = disabled (keep all top-k — today's behaviour).
+# NOTE: a cosine cutoff only rejects *obviously* far junk, not answer-relevance
+# (an analogous-but-useless chunk can be nearer than a truly relevant one);
+# picking a value / a relative strategy is M5 eval work, and real relevance
+# ranking is the v1 reranker.
+_max_distance = os.getenv("RAG_MAX_DISTANCE")
+MAX_DISTANCE: float | None = float(_max_distance) if _max_distance else None
+
 
 # Named return type for retrieve(): callers use chunk.filename / chunk.content
 # (see prompt.py) instead of unpacking opaque tuples. `distance` is captured for
@@ -41,6 +51,9 @@ async def retrieve(query: str, k: int = TOP_K) -> list[RetrievedChunk]:
     chunks into an answer (the atomic delete-then-insert write means 'ready' always
     implies a complete, current chunk set). No user filter yet — added in M2.5
     (`WHERE user_id = :uid`).
+
+    If RAG_MAX_DISTANCE is set, chunks farther than that cosine distance are
+    dropped (an all-far / off-topic query then returns []); unset = keep all k.
     """
     try:
         async with AsyncSessionLocal() as session:
@@ -62,13 +75,18 @@ async def retrieve(query: str, k: int = TOP_K) -> list[RetrievedChunk]:
             # select (.label names the result column "distance") and the order_by
             # (the HNSW index serves the nearest-k ordering).
             distance = Chunk.embedding.cosine_distance(qvec)
-            rows = await session.execute(
+            stmt = (
                 select(Chunk.content, Chunk.chunk_metadata, distance.label("distance"))
                 .join(Chunk.document)
                 .where(Document.status == "ready")
-                .order_by(distance)
-                .limit(k)
             )
+            if MAX_DISTANCE is not None:
+                # Absolute cutoff (off by default): only chunks within MAX_DISTANCE
+                # qualify, so k is filled from qualifying chunks and an all-far
+                # (off-topic) query returns []. Applied in SQL alongside the
+                # nearest-k ordering.
+                stmt = stmt.where(distance <= MAX_DISTANCE)
+            rows = await session.execute(stmt.order_by(distance).limit(k))
             results = [
                 RetrievedChunk(
                     content=content,
@@ -82,9 +100,10 @@ async def retrieve(query: str, k: int = TOP_K) -> list[RetrievedChunk]:
             # answer can be diagnosed: retrieved junk? nothing? good chunk ranked
             # low? Distances are ascending (nearest first).
             logger.info(
-                "retrieval: query_len=%d k=%d hits=%d distances=%s",
+                "retrieval: query_len=%d k=%d cutoff=%s hits=%d distances=%s",
                 len(query),
                 k,
+                MAX_DISTANCE,
                 len(results),
                 [round(r.distance, 3) for r in results],
             )
