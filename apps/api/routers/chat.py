@@ -9,7 +9,7 @@ from apps.api.chat_service import (
     load_history,
     persist_user_turn,
 )
-from packages.core.llm.client import stream_completion
+from packages.core.llm.client import stream_completion, with_cache_breakpoint
 from packages.core.rag.prompt import augment_messages
 from packages.core.schemas.chat import ChatRequest
 
@@ -30,6 +30,11 @@ async def chat(payload: ChatRequest) -> StreamingResponse:
     # so this is a transparent no-op for plain chat. `system` is bound into the
     # stream fn so chat_event_stream's contract is unchanged.
     system, messages = await augment_messages(payload.prompt, messages)
+    # Prompt caching: mark the last completed turn so the stable prefix (system +
+    # prior history) is cached and re-read next turn at ~0.1x; the volatile RAG +
+    # question tail stays uncached. No-op below Haiku's 4096-token minimum. Scoped
+    # to this route — the agentic route (slice 3) adds its own tools-aware caching.
+    messages = with_cache_breakpoint(messages)
     return StreamingResponse(
         chat_event_stream(
             partial(stream_completion, system=system), messages, conversation_id
