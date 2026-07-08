@@ -4,6 +4,7 @@ import { type ChangeEvent, useEffect, useRef, useState } from "react";
 
 import {
   type DocumentSummary,
+  deleteDocument,
   listDocuments,
   uploadDocument,
 } from "@/lib/chatApi";
@@ -27,6 +28,7 @@ const IN_FLIGHT: ReadonlySet<string> = new Set(["pending", "processing"]);
 export function DocumentsPanel() {
   const [documents, setDocuments] = useState<DocumentSummary[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -55,6 +57,29 @@ export function DocumentsPanel() {
     }, POLL_INTERVAL_MS);
     return () => clearInterval(id);
   }, [hasPending]);
+
+  async function handleDelete(doc: DocumentSummary) {
+    // Deletion is irreversible (drops the stored file + its chunks), so confirm
+    // first. window.confirm blocks synchronously, so no second click lands until
+    // it's dismissed.
+    if (!window.confirm(`Delete "${doc.filename}"? This can't be undone.`)) {
+      return;
+    }
+    setError(null);
+    // Guard against a double-delete (a second click after the confirm returns):
+    // disable this row's button while its request is in flight.
+    setDeletingId(doc.id);
+    try {
+      await deleteDocument(doc.id);
+      // Drop it locally rather than re-fetch — one fewer round-trip, and the list
+      // is authoritative on the next natural refresh (mount / upload / poll).
+      setDocuments((prev) => prev.filter((d) => d.id !== doc.id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Delete failed.");
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   async function handleFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -124,10 +149,10 @@ export function DocumentsPanel() {
             // type is string | undefined, not string | null.
             <li
               key={doc.id}
-              className="flex items-center justify-between gap-2 px-1 text-xs"
+              className="flex items-center gap-2 px-1 text-xs"
               title={doc.error ?? undefined}
             >
-              <span className="truncate text-black/70 dark:text-white/70">
+              <span className="flex-1 truncate text-black/70 dark:text-white/70">
                 {doc.filename}
               </span>
               <span
@@ -138,6 +163,15 @@ export function DocumentsPanel() {
               >
                 {doc.status}
               </span>
+              <button
+                type="button"
+                onClick={() => handleDelete(doc)}
+                disabled={deletingId === doc.id}
+                aria-label={`Delete ${doc.filename}`}
+                className="shrink-0 px-0.5 text-sm leading-none text-black/30 hover:text-red-600 disabled:opacity-50 dark:text-white/30 dark:hover:text-red-400"
+              >
+                ×
+              </button>
             </li>
           ))}
         </ul>

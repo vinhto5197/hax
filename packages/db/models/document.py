@@ -52,6 +52,12 @@ class Document(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
+    # passive_deletes=True: on session.delete(doc), let the DB-level
+    # chunks.document_id ON DELETE CASCADE remove the chunks instead of the ORM
+    # SELECTing every chunk (incl. its 1024-d embedding) just to emit per-row
+    # DELETEs. cascade="all, delete-orphan" still governs in-session orphaning.
     chunks: Mapped[list["Chunk"]] = relationship(
-        back_populates="document", cascade="all, delete-orphan"
+        back_populates="document",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
