@@ -1,6 +1,8 @@
 import asyncio
+import logging
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,6 +11,8 @@ from apps.worker.tasks import ingest_document
 from packages.core import storage
 from packages.core.schemas.document import DocumentOut
 from packages.db.models import Document
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -84,3 +88,42 @@ async def upload_document(
     # GET /api/documents for the status flip (pending -> processing -> ready|failed).
     ingest_document.delay(str(doc.id))
     return DocumentOut.model_validate(doc)
+
+
+@router.delete("/{document_id}", status_code=204)
+async def delete_document(
+    document_id: UUID,
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    # No auth filter yet — any caller can delete any document (M2.5 scopes this
+    # by user_id).
+    doc = await session.get(Document, document_id)
+    if doc is None:
+        raise HTTPException(status_code=404, detail="document not found")
+
+    # Delete the DB row first (the source of truth); its chunks go with it via
+    # the documents.id ON DELETE CASCADE, so the doc is fully gone the moment we
+    # commit. Do this before touching storage so the user-visible delete never
+    # depends on object-store availability.
+    storage_key = doc.storage_key
+    await session.delete(doc)
+    await session.commit()
+
+    # Best-effort object cleanup, AFTER the commit. A failure here only leaks a
+    # harmless orphaned object (no dangling reference — the row is gone — and
+    # storage.delete is idempotent), so we log and still return success rather
+    # than 500 on an already-completed delete. storage_key is None for pre-2a
+    # docs (no stored file). Offload the blocking boto3 call off the event loop.
+    if storage_key:
+        try:
+            await asyncio.to_thread(storage.delete, storage_key)
+        except Exception:
+            logger.warning(
+                "deleted document %s but failed to remove its storage object %s "
+                "(orphaned; safe to sweep later)",
+                document_id,
+                storage_key,
+                exc_info=True,
+            )
+
+    return Response(status_code=204)
