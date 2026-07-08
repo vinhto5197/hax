@@ -44,8 +44,9 @@ export async function getConversation(id: string): Promise<ConversationDetail> {
   return response.json();
 }
 
-// Document upload / listing. The uploaded doc is ingested synchronously, so the
-// returned row already carries its final status (ready | failed).
+// Document upload / listing / deletion. Ingestion runs in the Celery worker
+// (slice 2a), so an upload returns 'pending' and the panel polls until it
+// settles to ready|failed.
 export async function listDocuments(): Promise<DocumentSummary[]> {
   const response = await fetch(`${API_BASE}/api/documents`);
   if (!response.ok) {
@@ -82,6 +83,28 @@ export async function uploadDocument(file: File): Promise<DocumentSummary> {
     throw new Error(detail);
   }
   return response.json();
+}
+
+// Delete a document. The API replies 204 No Content on success (no body to
+// parse; `response.ok` is true for 204). A 404 means the doc was already gone
+// (stale list, another tab) — the caller's goal ("this doc is gone") already
+// holds, so we treat it as success too, and the caller drops the row instead of
+// showing a spurious error. Other failures (5xx / network) throw.
+export async function deleteDocument(id: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/documents/${id}`, {
+    method: "DELETE",
+  });
+  if (response.ok || response.status === 404) return;
+  // Surface FastAPI's `detail` when present — statusText is empty under HTTP/2
+  // behind the ALB, so a bare status is uninformative (mirrors uploadDocument).
+  let detail = `API ${response.status}: ${response.statusText}`;
+  try {
+    const body = (await response.json()) as { detail?: unknown };
+    if (typeof body.detail === "string") detail = body.detail;
+  } catch {
+    // non-JSON error body — keep the status-based message
+  }
+  throw new Error(detail);
 }
 
 // Parsed result of one SSE event — a discriminated union so callers switch on
