@@ -86,7 +86,19 @@ async def upload_document(
     # raw bytes back from storage by storage_key, so the task needs only the id —
     # passed as a str because the JSON broker can't carry a UUID. The UI polls
     # GET /api/documents for the status flip (pending -> processing -> ready|failed).
-    ingest_document.delay(str(doc.id))
+    try:
+        ingest_document.delay(str(doc.id))
+    except Exception:
+        # The row + file are already committed, so a broker (Redis) outage here
+        # would otherwise strand the doc at 'pending' forever with no task ever
+        # enqueued. Mark it 'failed' instead so 'pending' always means a task was
+        # really queued, and the user sees an actionable state (re-upload). v1
+        # re-runs failed docs, so a durable-enqueue (outbox) isn't needed yet.
+        logger.exception("failed to enqueue ingestion for document %s", doc.id)
+        doc.status = "failed"
+        doc.error = "could not start ingestion (task queue unavailable)"
+        await session.commit()
+        await session.refresh(doc)
     return DocumentOut.model_validate(doc)
 
 

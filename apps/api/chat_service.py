@@ -2,6 +2,7 @@ import json
 from collections.abc import AsyncIterator, Callable
 from uuid import UUID
 
+import anyio
 from anthropic.types import MessageParam
 from fastapi import HTTPException
 from sqlalchemy import func, select, update
@@ -123,5 +124,12 @@ async def chat_event_stream(
         # Terminator the frontend looks for to know the stream is over.
         yield "data: [DONE]\n\n"
     finally:
-        # Persist whatever was streamed, even on client disconnect.
-        await persist_assistant_turn(conversation_id, "".join(buffer))
+        # Persist whatever was streamed, even on client disconnect. On disconnect
+        # Starlette cancels the anyio scope wrapping this stream; that cancellation
+        # is level-triggered, so the FIRST await inside persist_assistant_turn
+        # (acquiring a pooled connection / committing) would re-raise CancelledError
+        # and drop the write — silently defeating this exact guarantee. A shielded
+        # scope lets the DB write run to completion before the cancellation
+        # propagates out.
+        with anyio.CancelScope(shield=True):
+            await persist_assistant_turn(conversation_id, "".join(buffer))
