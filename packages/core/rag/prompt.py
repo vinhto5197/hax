@@ -1,3 +1,5 @@
+import re
+
 from anthropic.types import MessageParam
 
 from packages.core.rag.retrieval import RetrievedChunk, retrieve
@@ -13,13 +15,27 @@ RAG_SYSTEM = (
 )
 
 
+_FENCE_RE = re.compile(r"</?context\s*>", re.IGNORECASE)
+
+
+def _defang(text: str) -> str:
+    # Untrusted document text is spliced between <context>…</context> below. A
+    # document containing a literal </context> would otherwise close the fence
+    # early and inject instruction-position text (indirect prompt injection), so
+    # strip any literal fence tokens from chunk content/filename first. Cheap
+    # guard from the whole-project AR finding — matters more now that slice 3
+    # gives the model tools it could be tricked into calling.
+    return _FENCE_RE.sub("", text)
+
+
 def _format_context(chunks: list[RetrievedChunk]) -> str:
     # Fence the chunks in <context> tags: the model is trained to treat tagged
     # blocks as reference material distinct from the instruction, which is what
     # lets us prepend this to the user turn (below) and have it read as "here's
     # context, then my question" rather than an abrupt splice. Each block is
-    # labelled with its source filename so the model can cite it.
-    blocks = [f"[from {c.filename}]\n{c.content}" for c in chunks]
+    # labelled with its source filename so the model can cite it. Content and
+    # filename are defanged so a document can't break out of the fence.
+    blocks = [f"[from {_defang(c.filename)}]\n{_defang(c.content)}" for c in chunks]
     return "<context>\n" + "\n\n".join(blocks) + "\n</context>"
 
 
