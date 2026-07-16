@@ -5,7 +5,7 @@ from fastapi.responses import StreamingResponse
 
 from apps.api.chat_service import (
     SSE_HEADERS,
-    chat_event_stream,
+    event_stream,
     load_history,
     persist_user_turn,
 )
@@ -28,7 +28,7 @@ async def chat(payload: ChatRequest) -> StreamingResponse:
     # RAG: retrieve context for the latest turn and inject it into the prompt.
     # Returns (None, messages) when nothing is retrieved (no docs / Voyage down),
     # so this is a transparent no-op for plain chat. `system` is bound into the
-    # stream fn so chat_event_stream's contract is unchanged.
+    # stream fn so event_stream's contract is unchanged.
     system, messages = await augment_messages(payload.prompt, messages)
     # Prompt caching: mark the last completed turn so the stable prefix (system +
     # prior history) is cached and re-read next turn at ~0.1x; the volatile RAG +
@@ -36,7 +36,7 @@ async def chat(payload: ChatRequest) -> StreamingResponse:
     # to this route — the agentic route (slice 3) adds its own tools-aware caching.
     messages = with_cache_breakpoint(messages)
     return StreamingResponse(
-        chat_event_stream(
+        event_stream(
             partial(stream_completion, system=system), messages, conversation_id
         ),
         media_type="text/event-stream",
