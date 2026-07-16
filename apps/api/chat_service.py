@@ -100,17 +100,23 @@ async def persist_assistant_turn(conversation_id: UUID, content: str) -> None:
         await session.commit()
 
 
-async def chat_event_stream(
-    stream_fn: Callable[[list[MessageParam]], AsyncIterator[str]],
+async def event_stream(
+    stream_fn: Callable[[list[MessageParam]], AsyncIterator[str | dict]],
     messages: list[MessageParam],
     conversation_id: UUID,
 ) -> AsyncIterator[str]:
-    """Wrap an LLM token stream as SSE, persisting the assistant turn at the end.
+    """Wrap an LLM stream as SSE, persisting the assistant turn at the end.
 
-    Shared by both chat routes — they differ only in `stream_fn` (anthropic SDK
-    vs Agent SDK). Emits a conversation-id prelude, one event per token, then
-    [DONE], and persists whatever was streamed in a finally (so a client
-    disconnect still saves the partial turn).
+    Shared by all three chat routes. `stream_fn` may yield either plain text
+    tokens (the /chat + /chat-agent-sdk routes' stream_completion*) or the agentic
+    harness's structured events ({"content": …} text deltas and {"status": …}
+    tool-activity notes) — a bare text token is normalized to a content event, so
+    one wrapper serves both. Emits a conversation-id prelude, forwards each event,
+    then [DONE]. Only content is accumulated and persisted as the assistant turn;
+    status events are forwarded to the client but NOT persisted (transient UI
+    activity, not conversation text). The agentic harness's per-turn tool_use /
+    tool_result blocks are never persisted either — Postgres stays the canonical,
+    replayable *text* history.
     """
     # Prelude: tell the client which conversation this is — essential on the
     # first turn, where the client started without an id.
@@ -118,9 +124,11 @@ async def chat_event_stream(
 
     buffer: list[str] = []
     try:
-        async for chunk in stream_fn(messages):
-            buffer.append(chunk)
-            yield sse_event({"content": chunk})
+        async for item in stream_fn(messages):
+            event = {"content": item} if isinstance(item, str) else item
+            if "content" in event:
+                buffer.append(event["content"])
+            yield sse_event(event)
         # Terminator the frontend looks for to know the stream is over.
         yield "data: [DONE]\n\n"
     finally:

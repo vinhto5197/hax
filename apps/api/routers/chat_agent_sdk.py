@@ -5,7 +5,7 @@ from fastapi.responses import StreamingResponse
 
 from apps.api.chat_service import (
     SSE_HEADERS,
-    chat_event_stream,
+    event_stream,
     load_history,
     persist_user_turn,
 )
@@ -28,10 +28,10 @@ async def chat_agent_sdk(payload: ChatRequest) -> StreamingResponse:
     messages = await load_history(conversation_id)
     # RAG parity with /chat: inject retrieved context into the latest user turn
     # (which flows into the transcript) and carry the instruction via `system`,
-    # bound into the stream fn so chat_event_stream's contract stays unchanged.
+    # bound into the stream fn so event_stream's contract stays unchanged.
     system, messages = await augment_messages(payload.prompt, messages)
     return StreamingResponse(
-        chat_event_stream(
+        event_stream(
             partial(stream_completion_agent, system=system), messages, conversation_id
         ),
         media_type="text/event-stream",
