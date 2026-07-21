@@ -26,9 +26,10 @@ MAX_DISTANCE: float | None = float(_max_distance) if _max_distance else None
 
 
 # Named return type for retrieve(): callers use chunk.filename / chunk.content
-# (see prompt.py) instead of unpacking opaque tuples. `distance` is captured for
-# slice-2 tuning (log it to pick k / a max-distance cutoff) and future citations
-# — it is NOT rendered into the prompt yet.
+# (see the search_documents tool in packages/core/agent/tools.py) instead of
+# unpacking opaque tuples. `distance` is captured for slice-2 tuning (log it to
+# pick k / a max-distance cutoff) and future citations — it is NOT rendered into
+# the prompt yet.
 @dataclass
 class RetrievedChunk:
     content: str

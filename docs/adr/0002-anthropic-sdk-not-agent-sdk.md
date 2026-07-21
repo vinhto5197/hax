@@ -110,3 +110,11 @@ SDK (`packages/core/agent/`). The core decision here — build on the raw
 anthropic SDK, not the Agent SDK — stands and is strengthened: the agentic
 harness needs exactly the low-level control (`tools=…`, streaming events,
 per-call model choice) the Agent SDK hides.
+
+Two costs of the collapse, accepted consciously: (1) a chat turn is now up to
+`MAX_ITERS`+1 model calls (tool loop + no-tools fallback) instead of one, billed
+to `ANTHROPIC_API_KEY` credits; (2) the default chat surface now combines
+untrusted retrieved document content with autonomously-invocable action tools —
+v0 mitigations: `send_email` is mocked with a hardcoded recipient, tool results
+are structured blocks (no prompt fence to escape), and the corpus is
+single-tenant until M2.5 auth lands.

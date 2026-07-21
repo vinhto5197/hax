@@ -31,6 +31,16 @@ _client = AsyncAnthropic()
 # the v1 agent "control policy" (termination) — today just a hard iteration cap.
 MAX_ITERS = 5
 
+# On loop exhaustion the model has only ever stopped at tool_use — it never
+# produced an answer. This instruction drives one final NO-TOOLS call so the turn
+# always ends in prose; defensive by design (the gathered results are incomplete).
+FINAL_ANSWER_PROMPT = (
+    "You have reached the tool-use limit for this turn — no more tool calls are "
+    "available. Answer the user's question now using only what you have gathered "
+    "so far. Be explicit about uncertainty: if the results are incomplete, say "
+    "plainly what you could not verify and that your answer may be wrong."
+)
+
 _EPHEMERAL = {"type": "ephemeral"}  # 5-minute prompt cache
 
 
@@ -84,6 +94,10 @@ async def stream_completion_agentic(
     # NOT persist), so we don't mutate the caller's list.
     messages = list(messages)
     tool_schemas = [t.to_anthropic() for t in TOOLS.values()]
+    # Whether any prior iteration streamed text — used to insert a separator so
+    # per-iteration narration and the final answer don't concatenate into
+    # run-ons ("Let me check.Based on...") in the stream AND the persisted turn.
+    emitted_text = False
 
     for iteration in range(MAX_ITERS):
         kwargs: dict = {
@@ -104,7 +118,12 @@ async def stream_completion_agentic(
         async with _client.messages.stream(**kwargs) as stream:
             # Forward every text delta, including the model's intermediate
             # reasoning before a tool call — we do not suppress it.
+            first_delta = True
             async for text in stream.text_stream:
+                if first_delta and emitted_text:
+                    yield {"content": "\n\n"}  # separate from the prior iteration
+                first_delta = False
+                emitted_text = True
                 yield {"content": text}
             final = await stream.get_final_message()
 
@@ -157,6 +176,36 @@ async def stream_completion_agentic(
             )
         messages.append({"role": "user", "content": tool_results})
 
-    # Fell out of the loop without an end_turn — hit the iteration cap.
+    # Fell out of the loop without an end_turn: every call so far stopped at
+    # tool_use, so the model never produced an answer — without a fallback this
+    # turn would be SILENT (status events aren't persisted, and the frontend may
+    # ignore them). Force one final call with NO tools so a real answer always
+    # streams and persists. The instruction turn is appended to the local copy
+    # only (never persisted); consecutive user turns are fine (the API merges).
     logger.warning("agentic loop hit MAX_ITERS=%d without finishing", MAX_ITERS)
     yield {"status": "Reached the tool-use limit."}
+    messages.append({"role": "user", "content": FINAL_ANSWER_PROMPT})
+    kwargs = {
+        "model": model,
+        "max_tokens": MAX_TOKENS,
+        "messages": _cache_last(messages),
+    }
+    if system is not None:
+        kwargs["system"] = system
+    async with _client.messages.stream(**kwargs) as stream:
+        first_delta = True
+        async for text in stream.text_stream:
+            if first_delta and emitted_text:
+                yield {"content": "\n\n"}
+            first_delta = False
+            emitted_text = True
+            yield {"content": text}
+        final = await stream.get_final_message()
+    usage = final.usage
+    logger.info(
+        "agentic usage: iter=fallback input=%d output=%d cache_read=%d cache_write=%d",
+        usage.input_tokens,
+        usage.output_tokens,
+        usage.cache_read_input_tokens or 0,
+        usage.cache_creation_input_tokens or 0,
+    )
