@@ -107,11 +107,12 @@ async def event_stream(
 ) -> AsyncIterator[str]:
     """Wrap an LLM stream as SSE, persisting the assistant turn at the end.
 
-    Shared by all three chat routes. `stream_fn` may yield either plain text
-    tokens (the /chat + /chat-agent-sdk routes' stream_completion*) or the agentic
-    harness's structured events ({"content": …} text deltas and {"status": …}
-    tool-activity notes) — a bare text token is normalized to a content event, so
-    one wrapper serves both. Emits a conversation-id prelude, forwards each event,
+    `stream_fn` may yield either plain text tokens or the agentic harness's
+    structured events ({"content": …} text deltas and {"status": …} tool-activity
+    notes) — a bare text token is normalized to a content event, so one wrapper
+    serves any stream shape. Today's sole consumer is /api/chat (the agentic
+    harness); the tolerance for plain-text streams is kept so a future non-agentic
+    stream_fn plugs in unchanged. Emits a conversation-id prelude, forwards each event,
     then [DONE]. Only content is accumulated and persisted as the assistant turn;
     status events are forwarded to the client but NOT persisted (transient UI
     activity, not conversation text). The agentic harness's per-turn tool_use /

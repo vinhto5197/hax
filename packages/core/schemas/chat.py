@@ -19,6 +19,6 @@ class ChatRequest(BaseModel):
     # None on the first turn of a new chat — the server lazily creates a
     # conversation and returns its id in the SSE prelude.
     conversation_id: UUID | None = None
-    # Optional model override, read only by the agentic route (UI dropdown:
-    # haiku/sonnet/opus). The other routes ignore it and use DEFAULT_MODEL.
+    # Optional per-request model override (UI dropdown: haiku/sonnet/opus);
+    # None -> the server's DEFAULT_MODEL (env LLM_MODEL).
     model: str | None = None

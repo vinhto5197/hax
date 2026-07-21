@@ -37,7 +37,7 @@ This creates the venv, installs deps, copies `.env.example` to `.env` (if missin
 
 ### Loading the environment
 
-`make dev` needs the Python venv active and `.env` exported into your shell — the API reads `ANTHROPIC_API_KEY` / `CLAUDE_CODE_OAUTH_TOKEN` and the web app reads `NEXT_PUBLIC_API_URL` from the environment.
+`make dev` needs the Python venv active and `.env` exported into your shell — the API reads `ANTHROPIC_API_KEY` and the web app reads `NEXT_PUBLIC_API_URL` from the environment.
 
 - **Recommended — [direnv](https://direnv.net):** the committed `.envrc` activates the venv and loads `.env` automatically on `cd` into the repo. Install direnv, hook it into your shell, then approve this repo once:
 

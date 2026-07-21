@@ -9,36 +9,38 @@ from apps.api.chat_service import (
     load_history,
     persist_user_turn,
 )
-from packages.core.llm.client import stream_completion, with_cache_breakpoint
-from packages.core.rag.prompt import augment_messages
+from packages.core.agent.harness import DEFAULT_MODEL, stream_completion_agentic
 from packages.core.schemas.chat import ChatRequest
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
+# Behaviour prompt for the chat route. BEHAVIOUR only — NOT a tool inventory:
+# the model learns what tools exist and when to use each from the registry (each
+# Tool's `description`, sent via tools=…), so listing them here would be redundant
+# and would drift as tools are added. Kept stable (cache-friendly).
+AGENTIC_SYSTEM = (
+    "You are a helpful assistant. Use the available tools whenever they make your "
+    "answer more accurate, and feel free to use several across turns. When you "
+    "answer from the user's uploaded documents, mention which document(s) you "
+    "used; if they don't contain the answer, say so plainly."
+)
+
 
 @router.post("")
 async def chat(payload: ChatRequest) -> StreamingResponse:
-    # Persist the user turn (resolving or lazily creating the conversation)
-    # before streaming, so the turn survives an LLM error and we have an id to
-    # hand back to the client.
+    # Persist the user turn (resolving or lazily creating the conversation) before
+    # streaming, so the turn survives an error and we have an id for the client.
     conversation_id = await persist_user_turn(payload.prompt, payload.conversation_id)
-    # Replay the full conversation (history + the turn just persisted) so the
-    # LLM sees prior context, not just the latest prompt.
+    # Replay prior turns (de-amnesia). Retrieval is NOT injected here — the model
+    # calls the search_documents tool itself when the corpus looks relevant.
     messages = await load_history(conversation_id)
-    # RAG: retrieve context for the latest turn and inject it into the prompt.
-    # Returns (None, messages) when nothing is retrieved (no docs / Voyage down),
-    # so this is a transparent no-op for plain chat. `system` is bound into the
-    # stream fn so event_stream's contract is unchanged.
-    system, messages = await augment_messages(payload.prompt, messages)
-    # Prompt caching: mark the last completed turn so the stable prefix (system +
-    # prior history) is cached and re-read next turn at ~0.1x; the volatile RAG +
-    # question tail stays uncached. No-op below Haiku's 4096-token minimum. Scoped
-    # to this route — the agentic route (slice 3) adds its own tools-aware caching.
-    messages = with_cache_breakpoint(messages)
+    # Optional per-request model override (UI dropdown); else the default.
+    model = payload.model or DEFAULT_MODEL
+    # Bind system + model into the harness; event_stream drives it and serializes
+    # its {"content"}/{"status"} events to SSE, persisting only the content.
+    event_fn = partial(stream_completion_agentic, system=AGENTIC_SYSTEM, model=model)
     return StreamingResponse(
-        event_stream(
-            partial(stream_completion, system=system), messages, conversation_id
-        ),
+        event_stream(event_fn, messages, conversation_id),
         media_type="text/event-stream",
         headers=SSE_HEADERS,
     )
@@ -47,5 +49,5 @@ async def chat(payload: ChatRequest) -> StreamingResponse:
 """
 curl -N -X POST http://localhost:8000/api/chat \
     -H 'Content-Type: application/json' \
-    -d '{"prompt": "tell me a fable"}'
+    -d '{"prompt": "what is 19381 * 22.5?"}'
 """
