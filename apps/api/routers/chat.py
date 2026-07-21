@@ -20,9 +20,11 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 # and would drift as tools are added. Kept stable (cache-friendly).
 AGENTIC_SYSTEM = (
     "You are a helpful assistant. Use the available tools whenever they make your "
-    "answer more accurate, and feel free to use several across turns. When you "
-    "answer from the user's uploaded documents, mention which document(s) you "
-    "used; if they don't contain the answer, say so plainly."
+    "answer more accurate, and feel free to use several across turns. If the "
+    "question could plausibly be answered from the user's uploaded documents, "
+    "call search_documents before answering. When you answer from the documents, "
+    "mention which document(s) you used; when you answer without checking them, "
+    "or they don't contain the answer, say so plainly."
 )
 
 
