@@ -38,6 +38,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/chat-agentic": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Chat Agentic */
+        post: operations["chat_agentic_api_chat_agentic_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/conversations": {
         parameters: {
             query?: never;
@@ -142,6 +159,8 @@ export interface components {
             prompt: string;
             /** Conversation Id */
             conversation_id?: string | null;
+            /** Model */
+            model?: string | null;
         };
         /** ConversationDetailOut */
         ConversationDetailOut: {
@@ -291,6 +310,39 @@ export interface operations {
         };
     };
     chat_agent_sdk_api_chat_agent_sdk_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    chat_agentic_api_chat_agentic_post: {
         parameters: {
             query?: never;
             header?: never;
