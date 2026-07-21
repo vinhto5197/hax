@@ -8,15 +8,22 @@ route serializes to SSE. Native Anthropic tool use, not MCP.
 """
 
 import logging
+import os
 from collections.abc import AsyncIterator
 
 from anthropic import AsyncAnthropic
 from anthropic.types import MessageParam
 
 from packages.core.agent.tools import TOOLS
-from packages.core.llm.client import DEFAULT_MODEL, MAX_TOKENS
 
 logger = logging.getLogger(__name__)
+
+# Env-tunable (LLM_MODEL / LLM_MAX_TOKENS); central config comes in M5. Haiku is
+# a fine default for grounded, tool-assisted Q&A (cheap + fast; the tools supply
+# facts the model would otherwise lack); switch models per request via
+# ChatRequest.model or globally via LLM_MODEL.
+DEFAULT_MODEL = os.getenv("LLM_MODEL", "claude-haiku-4-5")
+MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "32000"))
 
 _client = AsyncAnthropic()
 

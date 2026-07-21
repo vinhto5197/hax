@@ -99,3 +99,14 @@ Two implications worth knowing:
 - Adding genuine agentic features (file ops, code execution, tool use) where the Agent SDK's machinery earns its keep
 - Production scaling where the subprocess overhead becomes the bottleneck (unlikely; we'd hit other limits first)
 - Anthropic deprecates or merges one of the SDKs into the other
+
+## Addendum (2026-07-21)
+
+The A/B pair this ADR set up — `/api/chat` (anthropic SDK) alongside
+`/api/chat-agent-sdk` (Agent SDK) — served its comparison purpose and was
+collapsed: the Agent SDK route was retired, and `/api/chat` is now the single
+chat route, running the hand-rolled agentic tool-use harness on the anthropic
+SDK (`packages/core/agent/`). The core decision here — build on the raw
+anthropic SDK, not the Agent SDK — stands and is strengthened: the agentic
+harness needs exactly the low-level control (`tools=…`, streaming events,
+per-call model choice) the Agent SDK hides.

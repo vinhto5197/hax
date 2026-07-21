@@ -2,12 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import {
-  type ChatMessage,
-  type ChatBackend,
-  getConversation,
-  streamChat,
-} from "@/lib/chatApi";
+import { type ChatMessage, getConversation, streamChat } from "@/lib/chatApi";
 
 type UseChatResult = {
   messages: ChatMessage[];
@@ -21,7 +16,6 @@ type UseChatResult = {
 // buffer, loading/error, and send. Optional callbacks report lazy-create and
 // turn-completion so the hook stays decoupled from routing/sidebar concerns.
 export function useChat(
-  backend: ChatBackend,
   conversationId: string | null,
   onConversationCreated?: (id: string) => void,
   onTurnComplete?: () => void,
@@ -84,27 +78,22 @@ export function useChat(
         // (state) mirrors this for live rendering, but state is async/batched —
         // fullContent accumulates synchronously so we can commit it below.
         let fullContent = "";
-        await streamChat(
-          prompt,
-          activeId,
-          {
-            onConversationId: (id) => {
-              // Adopt the server-created id, set-once: the functional updater
-              // keeps the current id if we already have one, so a late prelude
-              // can't overwrite activeId after we've navigated to another
-              // conversation (which would misroute the next send).
-              setActiveId((current) => current ?? id);
-              // Fires only on a new chat's first turn (closure activeId is null
-              // only then) — let the caller make the URL linkable + refresh.
-              if (!activeId) onConversationCreated?.(id);
-            },
-            onChunk: (chunk) => {
-              fullContent += chunk;
-              setStreamingContent(fullContent);
-            },
+        await streamChat(prompt, activeId, {
+          onConversationId: (id) => {
+            // Adopt the server-created id, set-once: the functional updater
+            // keeps the current id if we already have one, so a late prelude
+            // can't overwrite activeId after we've navigated to another
+            // conversation (which would misroute the next send).
+            setActiveId((current) => current ?? id);
+            // Fires only on a new chat's first turn (closure activeId is null
+            // only then) — let the caller make the URL linkable + refresh.
+            if (!activeId) onConversationCreated?.(id);
           },
-          backend,
-        );
+          onChunk: (chunk) => {
+            fullContent += chunk;
+            setStreamingContent(fullContent);
+          },
+        });
 
         if (fullContent) {
           setMessages((prev) => [
@@ -125,7 +114,7 @@ export function useChat(
         setStreamingContent("");
       }
     },
-    [isLoading, backend, activeId, onConversationCreated, onTurnComplete],
+    [isLoading, activeId, onConversationCreated, onTurnComplete],
   );
 
   return { messages, isLoading, streamingContent, error, send };

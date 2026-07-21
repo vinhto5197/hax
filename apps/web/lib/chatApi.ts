@@ -12,15 +12,6 @@ export type ConversationSummary = components["schemas"]["ConversationOut"];
 export type ConversationDetail = components["schemas"]["ConversationDetailOut"];
 export type DocumentSummary = components["schemas"]["DocumentOut"];
 
-// Which FastAPI route handles the request. Both speak the same SSE wire
-// format; only the LLM backend differs (see ADR 0002).
-export type ChatBackend = "agent-sdk" | "anthropic";
-
-const BACKEND_PATHS: Record<ChatBackend, string> = {
-  "agent-sdk": "/api/chat-agent-sdk",
-  anthropic: "/api/chat",
-};
-
 // In dev, NEXT_PUBLIC_API_URL points at FastAPI directly (Next's dev rewrite
 // buffers SSE responses and kills streaming). In prod it's unset, requests are
 // same-origin, and the ALB routes /api/* to FastAPI. See ADR 0005.
@@ -157,9 +148,8 @@ export async function streamChat(
   prompt: string,
   conversationId: string | null,
   handlers: StreamHandlers,
-  backend: ChatBackend = "agent-sdk",
 ): Promise<void> {
-  const response = await fetch(`${API_BASE}${BACKEND_PATHS[backend]}`, {
+  const response = await fetch(`${API_BASE}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     // These field names must match the FastAPI `ChatRequest` schema; a mismatch
