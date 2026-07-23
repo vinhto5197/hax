@@ -1,3 +1,5 @@
+"""Document RESPONSE (output) schema — the body FastAPI serializes from ORM rows."""
+
 from datetime import datetime
 from uuid import UUID
 

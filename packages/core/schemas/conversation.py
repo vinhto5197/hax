@@ -1,3 +1,5 @@
+"""Conversation RESPONSE (output) schemas — bodies FastAPI serializes from ORM rows."""
+
 from datetime import datetime
 from uuid import UUID
 
