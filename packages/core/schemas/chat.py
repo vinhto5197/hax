@@ -1,3 +1,5 @@
+"""Chat REQUEST (input) schema — the body POST /api/chat parses."""
+
 from typing import Annotated
 from uuid import UUID
 
