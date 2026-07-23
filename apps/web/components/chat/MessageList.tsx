@@ -5,12 +5,15 @@ interface MessageListProps {
   messages: ChatMessage[];
   isLoading: boolean;
   streamingContent: string;
+  // Live tool-activity note ("Searching documents…"); null when no tool runs.
+  status: string | null;
 }
 
 export function MessageList({
   messages,
   isLoading,
   streamingContent,
+  status,
 }: MessageListProps) {
   return (
     <div className="flex-1 overflow-y-auto rounded-lg border border-black/10 p-4">
@@ -58,11 +61,12 @@ export function MessageList({
           </div>
         ) : null}
 
-        {/* Shown only in the gap between request-sent and first-chunk-arrived.
-            Once chunks arrive, streamingContent is truthy and this hides. */}
-        {isLoading && !streamingContent ? (
-          <p className="text-sm text-black/60 dark:text-white/60">
-            Assistant is thinking...
+        {/* Activity indicator (blinking): a tool-status note whenever one is
+            live — including mid-stream, below the ghost bubble — else the
+            generic "thinking" line in the gap before the first chunk. */}
+        {isLoading && (status || !streamingContent) ? (
+          <p className="animate-pulse text-sm text-black/60 dark:text-white/60">
+            {status ?? "Assistant is thinking..."}
           </p>
         ) : null}
       </div>

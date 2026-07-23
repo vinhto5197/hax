@@ -8,21 +8,27 @@ type UseChatResult = {
   messages: ChatMessage[];
   isLoading: boolean;
   streamingContent: string;
+  // Live tool-activity note from the agentic harness ("Searching documents…"),
+  // or null when no tool is running. Transient — never part of the transcript.
+  status: string | null;
   error: string | null;
   send: (text: string) => Promise<void>;
 };
 
 // Owns all chat state for the current conversation: transcript, streaming
-// buffer, loading/error, and send. Optional callbacks report lazy-create and
-// turn-completion so the hook stays decoupled from routing/sidebar concerns.
+// buffer, tool status, loading/error, and send. Optional callbacks report
+// lazy-create and turn-completion so the hook stays decoupled from routing/
+// sidebar concerns. `model` null -> server default (env LLM_MODEL).
 export function useChat(
   conversationId: string | null,
+  model: string | null,
   onConversationCreated?: (id: string) => void,
   onTurnComplete?: () => void,
 ): UseChatResult {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
+  const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // The id sends target. Starts from the route prop; updated when a lazy-create
   // returns a new id, so follow-up turns hit the same conversation even though
@@ -78,22 +84,32 @@ export function useChat(
         // (state) mirrors this for live rendering, but state is async/batched —
         // fullContent accumulates synchronously so we can commit it below.
         let fullContent = "";
-        await streamChat(prompt, activeId, {
-          onConversationId: (id) => {
-            // Adopt the server-created id, set-once: the functional updater
-            // keeps the current id if we already have one, so a late prelude
-            // can't overwrite activeId after we've navigated to another
-            // conversation (which would misroute the next send).
-            setActiveId((current) => current ?? id);
-            // Fires only on a new chat's first turn (closure activeId is null
-            // only then) — let the caller make the URL linkable + refresh.
-            if (!activeId) onConversationCreated?.(id);
+        await streamChat(
+          prompt,
+          activeId,
+          {
+            onConversationId: (id) => {
+              // Adopt the server-created id, set-once: the functional updater
+              // keeps the current id if we already have one, so a late prelude
+              // can't overwrite activeId after we've navigated to another
+              // conversation (which would misroute the next send).
+              setActiveId((current) => current ?? id);
+              // Fires only on a new chat's first turn (closure activeId is null
+              // only then) — let the caller make the URL linkable + refresh.
+              if (!activeId) onConversationCreated?.(id);
+            },
+            onChunk: (chunk) => {
+              fullContent += chunk;
+              setStreamingContent(fullContent);
+              // Text arriving means the tool the status announced has finished.
+              setStatus(null);
+            },
+            // A new tool call announced — show it until text resumes (a later
+            // tool call in the same turn simply replaces it).
+            onStatus: setStatus,
           },
-          onChunk: (chunk) => {
-            fullContent += chunk;
-            setStreamingContent(fullContent);
-          },
-        });
+          model,
+        );
 
         if (fullContent) {
           setMessages((prev) => [
@@ -112,10 +128,11 @@ export function useChat(
         // streaming buffer must empty or it would render twice.
         setIsLoading(false);
         setStreamingContent("");
+        setStatus(null);
       }
     },
-    [isLoading, activeId, onConversationCreated, onTurnComplete],
+    [isLoading, model, activeId, onConversationCreated, onTurnComplete],
   );
 
-  return { messages, isLoading, streamingContent, error, send };
+  return { messages, isLoading, streamingContent, status, error, send };
 }
