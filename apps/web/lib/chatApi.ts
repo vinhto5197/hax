@@ -99,11 +99,12 @@ export async function deleteDocument(id: string): Promise<void> {
 }
 
 // Parsed result of one SSE event — a discriminated union so callers switch on
-// `type`: prelude (conversation), token (chunk), terminator (done), or
-// unparseable/empty (ignore).
+// `type`: prelude (conversation), token (chunk), tool-activity note (status),
+// terminator (done), or unparseable/empty (ignore).
 type StreamEvent =
   | { type: "conversation"; conversationId: string }
   | { type: "chunk"; content: string }
+  | { type: "status"; status: string }
   | { type: "done" }
   | { type: "ignore" };
 
@@ -122,6 +123,7 @@ function parseStreamEvent(rawEvent: string): StreamEvent {
       const parsed = JSON.parse(data) as {
         content?: unknown;
         conversation_id?: unknown;
+        status?: unknown;
       };
       // Prelude event: the server tells us which conversation this turn belongs
       // to (a freshly created id on the first turn of a new chat).
@@ -130,6 +132,11 @@ function parseStreamEvent(rawEvent: string): StreamEvent {
       }
       if (typeof parsed.content === "string" && parsed.content.length > 0) {
         return { type: "chunk", content: parsed.content };
+      }
+      // Tool-activity note from the agentic harness ("Searching documents…") —
+      // transient UI state, never part of the persisted answer.
+      if (typeof parsed.status === "string" && parsed.status.length > 0) {
+        return { type: "status", status: parsed.status };
       }
     } catch {
       return { type: "ignore" };
@@ -142,19 +149,23 @@ function parseStreamEvent(rawEvent: string): StreamEvent {
 export type StreamHandlers = {
   onConversationId: (id: string) => void;
   onChunk: (content: string) => void;
+  // Optional: tool-activity notes ("Searching documents…") for a live indicator.
+  onStatus?: (status: string) => void;
 };
 
 export async function streamChat(
   prompt: string,
   conversationId: string | null,
   handlers: StreamHandlers,
+  model: string | null = null,
 ): Promise<void> {
   const response = await fetch(`${API_BASE}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     // These field names must match the FastAPI `ChatRequest` schema; a mismatch
     // is a runtime 422, not a compile error (the body is hand-built, not typed).
-    body: JSON.stringify({ prompt, conversation_id: conversationId }),
+    // `model` null -> the server's default (env LLM_MODEL).
+    body: JSON.stringify({ prompt, conversation_id: conversationId, model }),
   });
 
   if (!response.ok) {
@@ -191,6 +202,7 @@ export async function streamChat(
       if (parsed.type === "conversation")
         handlers.onConversationId(parsed.conversationId);
       if (parsed.type === "chunk") handlers.onChunk(parsed.content);
+      if (parsed.type === "status") handlers.onStatus?.(parsed.status);
     }
   }
 

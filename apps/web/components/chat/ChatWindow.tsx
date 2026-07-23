@@ -1,17 +1,30 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 
 import { ChatInput } from "@/components/chat/ChatInput";
 import { useConversations } from "@/components/chat/ConversationsProvider";
 import { MessageList } from "@/components/chat/MessageList";
 import { useChat } from "@/hooks/useChat";
 
+// Model dropdown for the agentic route. "" = let the server pick its default
+// (env LLM_MODEL); explicit ids override per request. The Default label
+// deliberately does NOT name the model — the default is server-owned config,
+// and naming it here would go stale when LLM_MODEL changes (M5: expose it via
+// a read-only config endpoint so the UI can label it truthfully).
+const MODEL_OPTIONS = [
+  { value: "", label: "Default" },
+  { value: "claude-haiku-4-5", label: "Haiku" },
+  { value: "claude-sonnet-4-6", label: "Sonnet" },
+  { value: "claude-opus-4-8", label: "Opus" },
+] as const;
+
 export function ChatWindow({
   conversationId,
 }: {
   conversationId: string | null;
 }) {
+  const [model, setModel] = useState("");
   // From context (see ConversationsProvider); called after a turn to refresh
   // the sidebar.
   const { refresh } = useConversations();
@@ -27,26 +40,41 @@ export function ChatWindow({
   );
 
   // One useChat owns all chat state; children get values via props.
-  const { messages, isLoading, streamingContent, error, send } = useChat(
-    conversationId,
-    handleConversationCreated,
-    refresh,
-  );
+  const { messages, isLoading, streamingContent, status, error, send } =
+    useChat(conversationId, model || null, handleConversationCreated, refresh);
 
   return (
     <div className="mx-auto flex h-full w-full max-w-4xl flex-col gap-4 p-4">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-bold">hax chat</h1>
-        <p className="text-sm text-black/60 dark:text-white/60">
-          Conversations are saved — pick one from the sidebar or start a new
-          chat.
-        </p>
+      <header className="flex items-start justify-between gap-4">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-bold">hax chat</h1>
+          <p className="text-sm text-black/60 dark:text-white/60">
+            Conversations are saved — pick one from the sidebar or start a new
+            chat.
+          </p>
+        </div>
+        <label className="flex flex-col gap-1 text-xs text-black/60 dark:text-white/60">
+          Model
+          <select
+            value={model}
+            onChange={(event) => setModel(event.target.value)}
+            disabled={isLoading}
+            className="rounded-md border border-black/20 bg-transparent px-2 py-1 text-sm text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {MODEL_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
       </header>
 
       <MessageList
         messages={messages}
         isLoading={isLoading}
         streamingContent={streamingContent}
+        status={status}
       />
 
       {error ? (
