@@ -74,8 +74,6 @@ def ingest_document(self, document_id: str) -> None:
     doc_id = UUID(document_id)
     logger.info("ingesting document %s (attempt %d)", doc_id, self.request.retries + 1)
     try:
-        # ingest_document_async(doc_id) builds a coroutine (lazy — nothing runs
-        # yet); _run_async drives it on a fresh loop.
         _run_async(ingest_document_async(doc_id))
     except PermanentIngestError as exc:
         logger.error("permanent ingest failure for %s: %s", doc_id, exc)

@@ -1,13 +1,7 @@
-"""Agentic tool registry: name -> Tool(input schema, description, executor).
+"""Agentic tool registry: name -> Tool.
 
-The hand-rolled tool-use harness (harness.py, slice-3 step 2) uses this registry
-to (a) advertise `tools=[…schemas…]` on the Anthropic Messages API and (b)
-dispatch an incoming `tool_use` block to its executor by name.
-
-These are plain in-process Python functions surfaced via *native Anthropic tool
-use* — NOT MCP: there is no separate tool server and no protocol. MCP would be
-the way to expose these tools for reuse across other apps; a self-contained v0
-doesn't need it.
+harness.py uses it both ways: advertise `tools=[…]` to the Anthropic API
+(to_anthropic) and dispatch incoming tool_use blocks to executors by name.
 """
 
 import ast
@@ -33,15 +27,11 @@ EMAIL_RECIPIENT = os.getenv("EMAIL_RECIPIENT", "you@example.com")
 class Tool:
     """One agent tool.
 
-    - `description`: what the MODEL reads to decide when to call this tool.
-    - `label`: short present-tense status shown to the USER while it runs (e.g.
-      "Searching documents…"). Colocated here — not a parallel map in the harness
-      — so a new tool must supply its own; it's a required field of adding a tool.
-    - `input_model`: a Pydantic model for the tool's arguments; its JSON Schema
-      becomes the Anthropic `input_schema` (and validates the model's tool_use
-      input before we run it).
-    - `run`: async executor taking the validated input model, returning a string
-      that is fed back to the model as the `tool_result` content.
+    - `description`: what the MODEL reads to decide when to call it.
+    - `label`: status line shown to the USER while it runs.
+    - `input_model`: Pydantic model for the arguments — its JSON Schema becomes
+      the Anthropic `input_schema`, and it validates incoming tool_use input.
+    - `run`: async executor (validated input in, `tool_result` string out).
     """
 
     name: str
@@ -51,7 +41,6 @@ class Tool:
     run: Callable[[Any], Awaitable[str]]
 
     def to_anthropic(self) -> dict:
-        # Anthropic tool definition: name + description + JSON-Schema input_schema.
         return {
             "name": self.name,
             "description": self.description,
@@ -71,10 +60,8 @@ async def _run_search_documents(inp: SearchDocumentsInput) -> str:
     chunks = await retrieve(inp.query)
     if not chunks:
         return "No relevant passages were found in the uploaded documents."
-    # Numbered, filename-labelled hits. This is returned as a structured
-    # tool_result block (not spliced into a text fence), so there's no delimiter
-    # for document content to break out of; residual indirect-injection risk is
-    # bounded by the mocked, hardcoded-recipient send_email (slice-3 design).
+    # Returned as a structured tool_result block — no text fence for document
+    # content to break out of (prompt-injection surface).
     return "\n\n".join(
         f"[{i}] from {c.filename}:\n{c.content}" for i, c in enumerate(chunks, 1)
     )
@@ -114,9 +101,8 @@ _MAX_POW_EXP = 1000  # cap the exponent so `2**10**9` can't wedge the process
 
 
 def _eval_expr(node: ast.AST) -> float:
-    # Walk ONLY arithmetic AST nodes. Anything else (names, calls, attributes,
-    # subscripts, …) falls through to the raise, so this can never execute
-    # arbitrary code the way eval() would.
+    # Allowlist walk: only arithmetic nodes are interpreted; anything else
+    # (names, calls, attributes, …) hits the raise. Never eval().
     if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
         return node.value
     if isinstance(node, ast.UnaryOp) and type(node.op) in _UNARY_OPS:
@@ -152,12 +138,10 @@ CALCULATOR = Tool(
 
 # ── get_current_datetime (zero-argument) ─────────────────────────────────────
 class GetCurrentDatetimeInput(BaseModel):
-    pass  # no arguments — the model calls it with {}
+    pass  # zero-argument tool
 
 
 async def _run_get_current_datetime(inp: GetCurrentDatetimeInput) -> str:
-    # Local time + timezone offset, ISO 8601. Fills the "the model doesn't know
-    # *now*" gap.
     return datetime.now().astimezone().isoformat(timespec="seconds")
 
 
@@ -180,11 +164,8 @@ class SendEmailInput(BaseModel):
 
 
 async def _run_send_email(inp: SendEmailInput) -> str:
-    # v0 stub: log the would-be send and return success — exercises the full
-    # action-tool flow (model decides → we "execute" → return a result) with no
-    # Google deps / OAuth; the real Gmail send is v1. The hardcoded EMAIL_RECIPIENT
-    # bounds prompt-injection blast radius: a tricked model can only "email" the
-    # fixed address, and nothing is actually sent.
+    # v0 stub: logs the would-be send, sends nothing (real Gmail is v1). The
+    # hardcoded recipient bounds prompt-injection blast radius.
     logger.info(
         "send_email (MOCKED) → to=%s | subject=%r | body=%r",
         EMAIL_RECIPIENT,
@@ -206,8 +187,6 @@ SEND_EMAIL = Tool(
 )
 
 
-# The registry the harness drives: advertise via `.values()`, dispatch via
-# `TOOLS[name]`.
 TOOLS: dict[str, Tool] = {
     t.name: t for t in (SEARCH_DOCUMENTS, CALCULATOR, GET_CURRENT_DATETIME, SEND_EMAIL)
 }

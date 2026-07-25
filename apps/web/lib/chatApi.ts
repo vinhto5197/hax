@@ -12,13 +12,12 @@ export type ConversationSummary = components["schemas"]["ConversationOut"];
 export type ConversationDetail = components["schemas"]["ConversationDetailOut"];
 export type DocumentSummary = components["schemas"]["DocumentOut"];
 
-// In dev, NEXT_PUBLIC_API_URL points at FastAPI directly (Next's dev rewrite
-// buffers SSE responses and kills streaming). In prod it's unset, requests are
-// same-origin, and the ALB routes /api/* to FastAPI. See ADR 0005.
+// Dev: NEXT_PUBLIC_API_URL hits FastAPI directly (Next's dev rewrite buffers
+// SSE). Prod: unset — same-origin via the reverse proxy. See ADR 0005.
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
-// Conversation fetches. Response bodies are typed from the generated OpenAPI
-// contract but not validated at runtime — we trust the first-party API.
+// Response bodies are typed from the generated OpenAPI contract but not
+// validated at runtime — we trust the first-party API.
 export async function listConversations(): Promise<ConversationSummary[]> {
   const response = await fetch(`${API_BASE}/api/conversations`);
   if (!response.ok) {
@@ -35,9 +34,8 @@ export async function getConversation(id: string): Promise<ConversationDetail> {
   return response.json();
 }
 
-// Document upload / listing / deletion. Ingestion runs in the Celery worker
-// (slice 2a), so an upload returns 'pending' and the panel polls until it
-// settles to ready|failed.
+// Ingestion is async (Celery): an upload returns 'pending' and the panel polls
+// until it settles to ready|failed.
 export async function listDocuments(): Promise<DocumentSummary[]> {
   const response = await fetch(`${API_BASE}/api/documents`);
   if (!response.ok) {
@@ -48,24 +46,20 @@ export async function listDocuments(): Promise<DocumentSummary[]> {
 
 export async function uploadDocument(file: File): Promise<DocumentSummary> {
   const form = new FormData();
-  // The field name "file" must match the FastAPI param (`file: UploadFile`); a
-  // mismatch is a runtime 422, not a compile error — an untyped string contract.
+  // Field name must match the FastAPI param (`file: UploadFile`) — a mismatch
+  // is a runtime 422, not a compile error.
   form.append("file", file);
-  // No Content-Type header on purpose: a FormData body makes the browser set
-  // `multipart/form-data; boundary=…` itself. Setting it by hand omits the
-  // boundary, and the server can't split the parts.
+  // No explicit Content-Type: the browser must set the multipart boundary itself.
   const response = await fetch(`${API_BASE}/api/documents`, {
     method: "POST",
     body: form,
   });
   if (!response.ok) {
-    // Surface FastAPI's `detail` (e.g. "only .txt and .md files are supported")
-    // instead of a bare status, since these errors are user-actionable.
+    // Surface FastAPI's `detail` — these errors are user-actionable.
     let detail = `API ${response.status}: ${response.statusText}`;
     try {
-      // FastAPI's `detail` is a string for HTTPException (400/413) but an array
-      // of error objects for 422 validation failures — typed `unknown` so we
-      // must narrow; the array case falls through to the status message.
+      // `detail` is a string for HTTPException but an array for 422 validation
+      // errors; the array case falls through to the status message.
       const body = (await response.json()) as { detail?: unknown };
       if (typeof body.detail === "string") detail = body.detail;
     } catch {
@@ -76,11 +70,9 @@ export async function uploadDocument(file: File): Promise<DocumentSummary> {
   return response.json();
 }
 
-// Delete a document. The API replies 204 No Content on success (no body to
-// parse; `response.ok` is true for 204). A 404 means the doc was already gone
-// (stale list, another tab) — the caller's goal ("this doc is gone") already
-// holds, so we treat it as success too, and the caller drops the row instead of
-// showing a spurious error. Other failures (5xx / network) throw.
+// 204 on success (no body; response.ok covers it). A 404 means the doc was
+// already gone (stale list, another tab) — the caller's goal holds, so treat it
+// as success rather than surfacing a spurious error.
 export async function deleteDocument(id: string): Promise<void> {
   const response = await fetch(`${API_BASE}/api/documents/${id}`, {
     method: "DELETE",
@@ -125,16 +117,12 @@ function parseStreamEvent(rawEvent: string): StreamEvent {
         conversation_id?: unknown;
         status?: unknown;
       };
-      // Prelude event: the server tells us which conversation this turn belongs
-      // to (a freshly created id on the first turn of a new chat).
       if (typeof parsed.conversation_id === "string") {
         return { type: "conversation", conversationId: parsed.conversation_id };
       }
       if (typeof parsed.content === "string" && parsed.content.length > 0) {
         return { type: "chunk", content: parsed.content };
       }
-      // Tool-activity note from the agentic harness ("Searching documents…") —
-      // transient UI state, never part of the persisted answer.
       if (typeof parsed.status === "string" && parsed.status.length > 0) {
         return { type: "status", status: parsed.status };
       }
@@ -149,7 +137,7 @@ function parseStreamEvent(rawEvent: string): StreamEvent {
 export type StreamHandlers = {
   onConversationId: (id: string) => void;
   onChunk: (content: string) => void;
-  // Optional: tool-activity notes ("Searching documents…") for a live indicator.
+  // Optional — omitting it just drops the tool-activity notes.
   onStatus?: (status: string) => void;
 };
 
@@ -162,9 +150,8 @@ export async function streamChat(
   const response = await fetch(`${API_BASE}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    // These field names must match the FastAPI `ChatRequest` schema; a mismatch
-    // is a runtime 422, not a compile error (the body is hand-built, not typed).
-    // `model` null -> the server's default (env LLM_MODEL).
+    // Field names must match ChatRequest (hand-built body, not typed).
+    // model null -> server default.
     body: JSON.stringify({ prompt, conversation_id: conversationId, model }),
   });
 
@@ -177,19 +164,16 @@ export async function streamChat(
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
-  // Holds the trailing partial event across reads (network reads don't respect
-  // SSE event boundaries).
+  // Trailing partial event across reads (network reads ignore SSE boundaries).
   let buffer = "";
 
   while (true) {
     const { value, done } = await reader.read();
-    // Transport EOF — ends the loop, and the path for an abnormal finish
-    // (disconnect/error with no [DONE]). A clean stream returns via the [DONE]
-    // sentinel below before we ever reach this.
+    // Transport EOF — the abnormal-finish path; a clean stream exits via [DONE].
     if (done) break;
 
-    // `stream: true` defers emitting bytes that may be a partial multi-byte
-    // UTF-8 sequence, until the next read completes them.
+    // stream:true holds back a partial multi-byte UTF-8 sequence until the
+    // next read completes it.
     buffer += decoder.decode(value, { stream: true });
 
     const events = buffer.split("\n\n");
@@ -197,7 +181,6 @@ export async function streamChat(
 
     for (const event of events) {
       const parsed = parseStreamEvent(event);
-      // [DONE] sentinel: clean app-level completion — the normal exit.
       if (parsed.type === "done") return;
       if (parsed.type === "conversation")
         handlers.onConversationId(parsed.conversationId);

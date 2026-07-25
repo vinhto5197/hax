@@ -9,12 +9,9 @@ _RAW_URL = os.getenv("DATABASE_URL", "postgresql://hax:hax@localhost:5432/hax")
 DATABASE_URL_ASYNC = _RAW_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
 
 engine = create_async_engine(DATABASE_URL_ASYNC)
-# expire_on_commit=False: the default (True) expires every attribute on commit so
-# the next read re-SELECTs fresh data — but in async that lazy reload isn't
-# awaited and raises MissingGreenlet, and it adds needless SELECTs when we just
-# want to serialize the row we committed. Trade-off: objects keep their pre-commit
-# values, so we refresh() explicitly when we need DB-computed state (see
-# upload_document).
+# expire_on_commit=False: the default's post-commit lazy reload isn't awaited in
+# async and raises MissingGreenlet. Trade-off: objects keep pre-commit values,
+# so refresh() explicitly where DB-computed state is needed.
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 

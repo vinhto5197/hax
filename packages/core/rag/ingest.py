@@ -24,20 +24,14 @@ class PermanentIngestError(Exception):
 async def ingest_document_async(document_id: UUID) -> None:
     """Read a document's raw file from object storage, then chunk -> embed -> store.
 
-    Runs in the Celery worker (slice 2a), off the upload request. Reads the bytes
-    by the doc's `storage_key` (set at upload), so it needs no text/filename
-    args — everything is reconstructed from the row + storage.
-
-    Drives status pending/processing -> ready. It does **not** record 'failed'
-    itself: on any exception it just propagates (the `async with` rolls back the
-    open transaction), and the calling task owns the terminal 'failed' status —
-    immediately for `PermanentIngestError`, or after retries exhaust for transient
-    errors. Leaving the row at 'processing' through retries keeps the polling UI
-    waiting instead of prematurely showing 'failed'.
+    Drives status pending/processing -> ready but never records 'failed' itself —
+    it raises, and the calling Celery task owns the terminal status (immediately
+    for PermanentIngestError, after retries exhaust otherwise), so the row stays
+    'processing' while retries are pending.
 
     Idempotent: the chunk write is delete-then-insert in one transaction, so a
-    Celery retry or broker redelivery (acks_late) re-runs cleanly without
-    duplicating chunks. Invariant: status=ready => a complete, current chunk set.
+    retry or broker redelivery (acks_late) re-runs cleanly. Invariant:
+    status=ready => a complete, current chunk set.
     """
     async with AsyncSessionLocal() as session:
         doc = await session.get(Document, document_id)
@@ -48,15 +42,13 @@ async def ingest_document_async(document_id: UUID) -> None:
         storage_key = doc.storage_key
         filename = doc.filename
         doc.status = "processing"
-        # Commit 'processing' immediately rather than holding one transaction across
-        # the whole ingest: it returns the pooled connection so the multi-second
-        # embed below doesn't pin it, and makes the status visible to the polling UI.
+        # Commit now rather than holding one transaction across the whole ingest:
+        # frees the pooled connection during the multi-second embed and makes the
+        # status visible to the polling UI.
         await session.commit()
 
-        # storage.get is blocking boto3 -> offload so it doesn't block this task's
-        # event loop (asyncio.run gives each task its own loop). A missing object
-        # is deterministic (S3 is read-after-write consistent) -> permanent; other
-        # storage errors propagate natively -> transient.
+        # Blocking boto3 -> off the loop. A missing object is deterministic
+        # (S3 is read-after-write consistent) -> permanent.
         try:
             raw = await asyncio.to_thread(storage.get, storage_key)
         except storage.StorageKeyNotFound as exc:
@@ -71,13 +63,10 @@ async def ingest_document_async(document_id: UUID) -> None:
             ) from exc
         chunks = split_text(text)
         if not chunks:
-            # A 'ready' doc must have >=1 retrievable chunk — otherwise it's
-            # silently un-retrievable. Deterministic, so permanent.
             raise PermanentIngestError("document produced no chunks after splitting")
         embeddings = await embed_documents(chunks)
-        # Idempotent write: clear any existing chunks for this doc, then insert the
-        # fresh set, atomically with status=ready. Safe under retries / redelivery —
-        # a re-run can't duplicate chunks.
+        # Delete-then-insert atomically with status=ready — a re-run can't
+        # duplicate chunks.
         await session.execute(delete(Chunk).where(Chunk.document_id == document_id))
         session.add_all(
             Chunk(
@@ -95,13 +84,10 @@ async def ingest_document_async(document_id: UUID) -> None:
 
 
 async def mark_document_failed(document_id: UUID, error: str) -> None:
-    """Record a terminal 'failed' status + error on a document (best-effort).
+    """Record a terminal 'failed' status + error — the one place it is written.
 
-    Called by the Celery task for a permanent failure or after transient retries
-    exhaust — the one place terminal 'failed' is written. No-op if the row is gone
-    (reachable once delete-document exists). The error is truncated; v0 is
-    single-tenant so the raw message is dev-useful — sanitize before M2.5
-    multi-tenancy (backlogged).
+    No-op if the row is gone (deleted mid-ingest). Raw error text is dev-useful
+    while single-tenant; sanitize before M2.5 multi-tenancy.
     """
     async with AsyncSessionLocal() as session:
         doc = await session.get(Document, document_id)

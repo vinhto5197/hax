@@ -1,14 +1,8 @@
 """Object storage (S3 / MinIO) for raw uploaded files.
 
-One boto3 client, configured by env: ``S3_ENDPOINT_URL`` points at MinIO in dev
-(``http://localhost:9000``) and is unset in prod, where boto3 uses real AWS S3.
-Same dev/prod-parity pattern as Postgres↔RDS — one code path, swapped endpoint.
-
-Shared by the API (writes the raw bytes on upload) and the Celery worker (reads
-them on ingest). boto3 is **synchronous**, so async callers (the API routes)
-must offload with ``asyncio.to_thread`` — fine here because storage ops are
-infrequent (one put per upload), unlike the per-query Voyage embed that earned a
-native async client.
+``S3_ENDPOINT_URL`` points at MinIO in dev and is unset in prod (real AWS S3) —
+one code path, swapped endpoint. boto3 is synchronous: async callers must
+offload with ``asyncio.to_thread``.
 """
 
 import os
@@ -28,13 +22,8 @@ _bucket_ready = False
 
 
 class StorageKeyNotFound(Exception):
-    """The requested object key does not exist in storage (S3 NoSuchKey).
-
-    Distinct from other storage failures (network blips, 5xx, throttling): a
-    missing key is deterministic — S3 is strongly read-after-write consistent, so
-    retrying can't make the object appear. Callers can treat it as a permanent
-    failure while still retrying the transient ones.
-    """
+    """Object key absent (S3 NoSuchKey) — deterministic, unlike transient
+    storage failures, so callers can treat it as permanent."""
 
 
 def _get_client():
@@ -57,17 +46,12 @@ def _ensure_bucket() -> None:
     try:
         client.head_bucket(Bucket=S3_BUCKET)
     except ClientError as e:
-        # Only a 404 (bucket absent) means "create it". A 403 (bad creds / no
-        # permission) or any other error must propagate — masking it as "missing"
-        # would blindly attempt a create on, e.g., an auth failure.
+        # Only a 404 means "create it"; a 403 (bad creds) must propagate.
         if e.response["ResponseMetadata"]["HTTPStatusCode"] != 404:
             raise
-        # NOTE (M3): no CreateBucketConfiguration here, so this create only works
-        # for us-east-1 + MinIO. us-east-1 is the S3 API's *default* region (you
-        # MUST omit LocationConstraint there); any OTHER region REQUIRES
-        # CreateBucketConfiguration={"LocationConstraint": _REGION} or it 400s —
-        # it does NOT fall back to us-east-1. Harmless today: prod's bucket is
-        # Terraform-provisioned, so head_bucket succeeds and this never runs.
+        # No CreateBucketConfiguration -> only valid for us-east-1/MinIO (other
+        # regions 400 without a LocationConstraint). Fine: prod buckets are
+        # Terraform-provisioned, so this create never runs there.
         client.create_bucket(Bucket=S3_BUCKET)
     _bucket_ready = True
 

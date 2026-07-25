@@ -2,12 +2,9 @@ import os
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-# Chunk sizing is in characters (length_function=len). ~1600 chars ≈ 400 tokens,
-# ~12% overlap so a sentence straddling a boundary isn't orphaned. Env-tunable
-# (RAG_CHUNK_SIZE / RAG_CHUNK_OVERLAP), defaults reproduce prior behaviour;
-# re-ingest to apply a change. The recursive splitter tries paragraph -> line ->
-# word -> character separators (LangChain's defaults: "\n\n", "\n", " ", "") so it
-# cuts on structure rather than mid-word where it can.
+# Sizes are in characters (~1600 ≈ 400 tokens), ~12% overlap so a sentence
+# straddling a boundary isn't orphaned. Changing them requires re-ingest. The
+# recursive splitter cuts on structure (paragraph -> line -> word -> char).
 CHUNK_SIZE = int(os.getenv("RAG_CHUNK_SIZE", "1600"))
 CHUNK_OVERLAP = int(os.getenv("RAG_CHUNK_OVERLAP", "200"))
 
