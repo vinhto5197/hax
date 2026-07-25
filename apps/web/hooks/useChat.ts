@@ -35,17 +35,16 @@ export function useChat(
   // the route prop stayed null (the URL was updated shallowly, not navigated).
   const [activeId, setActiveId] = useState<string | null>(conversationId);
 
-  // Load history when the route's conversation changes (opening an existing
-  // conversation, or a page refresh). A new chat (null) starts empty.
+  // Load history when the route's conversation changes; a new chat (null)
+  // starts empty.
   useEffect(() => {
     setActiveId(conversationId);
     if (!conversationId) {
       setMessages([]);
       return;
     }
-    // Race guard: each effect run owns this flag; the cleanup below flips it
-    // when the route changes, so a slower earlier fetch can't land last and
-    // overwrite the conversation we've since navigated to.
+    // Race guard: each run owns this flag; cleanup flips it on navigation so a
+    // slower earlier fetch can't overwrite the conversation we moved to.
     let cancelled = false;
     getConversation(conversationId)
       .then((conv) => {
@@ -79,44 +78,33 @@ export function useChat(
       setStreamingContent("");
       setError(null);
 
+      // Source of truth for the final assistant message. streamingContent
+      // (state) mirrors this for live rendering, but state is async/batched —
+      // fullContent accumulates synchronously so the finally can commit it.
+      let fullContent = "";
       try {
-        // Source of truth for the final assistant message. streamingContent
-        // (state) mirrors this for live rendering, but state is async/batched —
-        // fullContent accumulates synchronously so we can commit it below.
-        let fullContent = "";
         await streamChat(
           prompt,
           activeId,
           {
             onConversationId: (id) => {
-              // Adopt the server-created id, set-once: the functional updater
-              // keeps the current id if we already have one, so a late prelude
-              // can't overwrite activeId after we've navigated to another
-              // conversation (which would misroute the next send).
+              // Set-once: a late prelude can't overwrite activeId after we've
+              // navigated elsewhere (which would misroute the next send).
               setActiveId((current) => current ?? id);
-              // Fires only on a new chat's first turn (closure activeId is null
-              // only then) — let the caller make the URL linkable + refresh.
+              // Only fires on a new chat's first turn (activeId null only then).
               if (!activeId) onConversationCreated?.(id);
             },
             onChunk: (chunk) => {
               fullContent += chunk;
               setStreamingContent(fullContent);
-              // Text arriving means the tool the status announced has finished.
+              // Text arriving means the announced tool has finished.
               setStatus(null);
             },
-            // A new tool call announced — show it until text resumes (a later
-            // tool call in the same turn simply replaces it).
             onStatus: setStatus,
           },
           model,
         );
 
-        if (fullContent) {
-          setMessages((prev) => [
-            ...prev,
-            { role: "assistant", content: fullContent },
-          ]);
-        }
         // Let the caller refresh the sidebar (new conversation / updated order).
         onTurnComplete?.();
       } catch (err) {
@@ -124,8 +112,15 @@ export function useChat(
           err instanceof Error ? err.message : "Unable to get response.";
         setError(errMessage);
       } finally {
-        // Always clear: the assistant text now lives in messages, so the
-        // streaming buffer must empty or it would render twice.
+        // Commit whatever streamed — on success AND error — so the client view
+        // matches the server, which persists partial turns too. Then clear the
+        // streaming buffer or the text would render twice.
+        if (fullContent) {
+          setMessages((prev) => [
+            ...prev,
+            { role: "assistant", content: fullContent },
+          ]);
+        }
         setIsLoading(false);
         setStreamingContent("");
         setStatus(null);
