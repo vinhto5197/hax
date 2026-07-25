@@ -12,9 +12,8 @@ from packages.db.session import Base
 if TYPE_CHECKING:
     from packages.db.models.document import Document
 
-# Frozen into the schema: must match the embedding model's output dimension
-# (Voyage default is 1024 — ADR 0007/0009). Changing it means a migration AND
-# re-embedding the whole corpus.
+# Must match the embedding model's output dimension; changing it means a
+# migration AND re-embedding the corpus (ADR 0007).
 EMBEDDING_DIM = 1024
 
 
@@ -42,12 +41,12 @@ class Chunk(Base):
     )
     # Denormalized from documents for the M2.5 per-user retrieval filter.
     user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
-    # chunk's position within its source document
+    # Position within the source document.
     idx: Mapped[int]
     content: Mapped[str]
-    # 'metadata' is reserved on the Declarative Base, so the Python attribute is
-    # chunk_metadata while the column stays 'metadata'. Carries the source
-    # filename for retrieval-time labelling / M3 citations — no join needed.
+    # 'metadata' is reserved on the Declarative Base, so the attribute is
+    # chunk_metadata while the column stays 'metadata'. Carries the filename for
+    # retrieval-time labelling without a join.
     chunk_metadata: Mapped[dict] = mapped_column(
         "metadata", JSONB, server_default=text("'{}'::jsonb")
     )

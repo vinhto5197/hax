@@ -7,9 +7,8 @@ from apps.api.routers.documents import router as documents_router
 
 app = FastAPI()
 
-# Browser talks to FastAPI via Next's dev rewrites (in dev) or the ALB (in
-# prod) — never directly cross-origin. CORS is left as a defensive backstop
-# for one-off direct calls (curl, tests, etc.).
+# CORS is a defensive backstop: normal traffic is same-origin (dev rewrites /
+# prod reverse proxy), not cross-origin.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
@@ -17,9 +16,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Namespace all backend routes under /api so the ALB can route on path prefix
-# without colliding with Next's pages (e.g., Next's /chat page vs this /api/chat
-# endpoint).
+# /api prefix lets the reverse proxy route by path without colliding with
+# Next's pages (Next's /chat page vs this /api/chat endpoint).
 app.include_router(chat_router, prefix="/api")
 app.include_router(conversations_router, prefix="/api")
 app.include_router(documents_router, prefix="/api")

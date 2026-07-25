@@ -82,6 +82,17 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
 - Working software > perfect abstractions
 - Prefer minimal, testable vertical slices
 - Treat user data as sensitive by default
+
+## Code comments
+Comments serve two readers: future devs and the AI pair-assistant working in
+this repo. Write prod-level comments only:
+- **Invariants, constraints, and WHYs the code cannot express** — safety
+  boundaries, required ordering, deliberate trade-offs, known traps.
+- **Cross-module contracts, stated at the boundary** ("the worker re-decodes
+  from storage", "status events are never persisted") — so a reader, human or
+  AI, can grasp a file's purpose without reading the rest of the repo.
+- **Never:** tutorials, language-feature explanations, milestone/session
+  history, or narration of what the next line visibly does.
 # Tech stack
 - Frontend: Next.js (SSR + routing) + React + TypeScript
 - Backend: FastAPI + LangChain

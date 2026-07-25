@@ -1,10 +1,9 @@
-"""Hand-rolled Anthropic tool-use loop for the agentic route (M2 slice 3).
+"""Hand-rolled Anthropic tool-use loop behind /api/chat.
 
-Drives `messages.stream(tools=…)` in a loop: forward text deltas, run any tools
-the model requests from the registry, feed the results back, and repeat until the
-model stops asking for tools (or MAX_ITERS is hit). Yields structured events —
-`{"content": …}` text deltas and `{"status": …}` tool-activity notes — that the
-route serializes to SSE. Native Anthropic tool use, not MCP.
+Streams `messages.stream(tools=…)` in a loop: forward text deltas, run requested
+tools from the registry, feed results back, repeat until the model stops asking
+(or MAX_ITERS). Yields structured events — `{"content": …}` deltas and
+`{"status": …}` tool-activity notes — that the route serializes to SSE.
 """
 
 import logging
@@ -18,22 +17,16 @@ from packages.core.agent.tools import TOOLS
 
 logger = logging.getLogger(__name__)
 
-# Env-tunable (LLM_MODEL / LLM_MAX_TOKENS); central config comes in M5. Haiku is
-# a fine default for grounded, tool-assisted Q&A (cheap + fast; the tools supply
-# facts the model would otherwise lack); switch models per request via
-# ChatRequest.model or globally via LLM_MODEL.
 DEFAULT_MODEL = os.getenv("LLM_MODEL", "claude-haiku-4-5")
 MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "32000"))
 
 _client = AsyncAnthropic()
 
-# Cap the tool-use loop so a misbehaving model can't spin forever. The seed of
-# the v1 agent "control policy" (termination) — today just a hard iteration cap.
+# Hard cap on tool-use iterations per turn.
 MAX_ITERS = 5
 
-# On loop exhaustion the model has only ever stopped at tool_use — it never
-# produced an answer. This instruction drives one final NO-TOOLS call so the turn
-# always ends in prose; defensive by design (the gathered results are incomplete).
+# On exhaustion every call so far stopped at tool_use — no answer was ever
+# produced. This drives one final NO-TOOLS call so the turn always ends in prose.
 FINAL_ANSWER_PROMPT = (
     "You have reached the tool-use limit for this turn — no more tool calls are "
     "available. Answer the user's question now using only what you have gathered "
@@ -45,14 +38,10 @@ _EPHEMERAL = {"type": "ephemeral"}  # 5-minute prompt cache
 
 
 def _cache_last(messages: list[MessageParam]) -> list[MessageParam]:
-    """Put a cache breakpoint on the last message's last content block, so each
-    loop iteration re-reads the growing conversation prefix at ~0.1x instead of
-    re-sending it whole. Shallow copy; the caller's list is unchanged.
-
-    Unlike /api/chat (which marks messages[-2] because its RAG-augmented last turn
-    never recurs), the agentic loop injects nothing per-request into messages —
-    every message recurs next iteration — so we mark the last one.
-    """
+    """Prompt-cache breakpoint on the last message's last content block: one
+    marker caches everything before it (tools + system + conversation), so each
+    call re-reads the growing prefix at ~0.1x. Returns a shallow copy; the
+    caller's list is never mutated."""
     if not messages:
         return messages
     last = dict(messages[-1])
@@ -90,25 +79,17 @@ async def stream_completion_agentic(
     model: str = DEFAULT_MODEL,
 ) -> AsyncIterator[dict]:
     """Run the tool-use loop, yielding {"content": …} / {"status": …} events."""
-    # Local copy — we append the intermediate tool turns (which the route does
-    # NOT persist), so we don't mutate the caller's list.
+    # Local copy — the intermediate tool turns appended below are never persisted.
     messages = list(messages)
     tool_schemas = [t.to_anthropic() for t in TOOLS.values()]
-    # Whether any prior iteration streamed text — used to insert a separator so
-    # per-iteration narration and the final answer don't concatenate into
-    # run-ons ("Let me check.Based on...") in the stream AND the persisted turn.
+    # Tracks whether any iteration streamed text, so a new iteration's text gets
+    # a separator instead of concatenating into run-ons.
     emitted_text = False
 
     for iteration in range(MAX_ITERS):
         kwargs: dict = {
             "model": model,
             "max_tokens": MAX_TOKENS,
-            # One breakpoint on the last message caches EVERYTHING before it —
-            # tools + system + the whole conversation-so-far — so each loop
-            # iteration re-reads that growing prefix at ~0.1x instead of re-sending
-            # it whole. A separate tools+system breakpoint would only add
-            # cross-conversation cache sharing (many distinct chats reusing one
-            # tools+system entry) — a scale optimisation, deferred to v1.
             "messages": _cache_last(messages),
             "tools": tool_schemas,
         }
@@ -116,19 +97,16 @@ async def stream_completion_agentic(
             kwargs["system"] = system
 
         async with _client.messages.stream(**kwargs) as stream:
-            # Forward every text delta, including the model's intermediate
-            # reasoning before a tool call — we do not suppress it.
+            # Forward every text delta, including pre-tool-call narration.
             first_delta = True
             async for text in stream.text_stream:
                 if first_delta and emitted_text:
-                    yield {"content": "\n\n"}  # separate from the prior iteration
+                    yield {"content": "\n\n"}
                 first_delta = False
                 emitted_text = True
                 yield {"content": text}
             final = await stream.get_final_message()
 
-        # Cache observability (like /api/chat): reads ~0.1x, writes ~1.25x; input
-        # is the uncached remainder. Expect cache_read>0 from iteration 1 onward.
         usage = final.usage
         logger.info(
             "agentic usage: iter=%d input=%d output=%d cache_read=%d cache_write=%d",
@@ -140,17 +118,16 @@ async def stream_completion_agentic(
         )
 
         if final.stop_reason != "tool_use":
-            return  # end_turn (or max_tokens) — the final answer already streamed
+            return  # end_turn — the answer already streamed
 
-        # The model requested one or more tools. Replay its assistant turn (the
-        # tool_use blocks), run each tool, feed the results back as a user turn.
+        # Replay the model's tool_use turn, run each tool, feed results back.
         messages.append({"role": "assistant", "content": final.content})
         tool_results: list[dict] = []
         for block in final.content:
             if block.type != "tool_use":
                 continue
-            # `TOOLS.get` (not [name]) so a hallucinated tool name still yields a
-            # status; _run_tool then turns the bad name into an is_error result.
+            # .get, not [name]: a hallucinated tool name still yields a status;
+            # _run_tool turns it into an is_error result.
             tool = TOOLS.get(block.name)
             yield {"status": tool.label if tool else "Working…"}
             logger.info(
@@ -176,12 +153,9 @@ async def stream_completion_agentic(
             )
         messages.append({"role": "user", "content": tool_results})
 
-    # Fell out of the loop without an end_turn: every call so far stopped at
-    # tool_use, so the model never produced an answer — without a fallback this
-    # turn would be SILENT (status events aren't persisted, and the frontend may
-    # ignore them). Force one final call with NO tools so a real answer always
-    # streams and persists. The instruction turn is appended to the local copy
-    # only (never persisted); consecutive user turns are fine (the API merges).
+    # Loop exhausted with the model still requesting tools — it never answered.
+    # Without a fallback the turn would be silent (status events aren't
+    # persisted), so force one final NO-TOOLS call that must produce prose.
     logger.warning("agentic loop hit MAX_ITERS=%d without finishing", MAX_ITERS)
     yield {"status": "Reached the tool-use limit."}
     messages.append({"role": "user", "content": FINAL_ANSWER_PROMPT})

@@ -11,13 +11,12 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
   const [input, setInput] = useState("");
 
   async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
-    // Stop the browser's default form submit (which would reload the page).
     event.preventDefault();
 
     const prompt = input.trim();
     if (!prompt || disabled) return;
 
-    // Clear optimistically so the input empties immediately, before the stream.
+    // Clear optimistically — the input empties before the stream starts.
     setInput("");
     await onSend(prompt);
   }

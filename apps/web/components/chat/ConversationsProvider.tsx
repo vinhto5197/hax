@@ -10,13 +10,11 @@ import {
 
 import { type ConversationSummary, listConversations } from "@/lib/chatApi";
 
-// Shares the conversation list + refresh() with the Sidebar and ChatWindow via
-// Context. Mounted once in the chat layout (a persistent common ancestor), so
-// the list is fetched once and shared — not refetched on every navigation.
+// Shares the conversation list + refresh() between Sidebar and ChatWindow via
+// context, mounted once in the chat layout so navigation doesn't refetch.
 type ConversationsContextValue = {
   conversations: ConversationSummary[];
-  // Re-fetch the list (e.g. after a new conversation is created or a turn
-  // bumps its updated_at). Stable identity, safe as an effect/callback dep.
+  // Stable identity — safe as an effect/callback dep.
   refresh: () => void;
 };
 
@@ -40,7 +38,7 @@ export function ConversationsProvider({
       });
   }, []);
 
-  // load conversations initially 1 time since conversations state is set to [] on mount
+  // Initial load; refresh is stable so this runs once.
   useEffect(() => {
     refresh();
   }, [refresh]);

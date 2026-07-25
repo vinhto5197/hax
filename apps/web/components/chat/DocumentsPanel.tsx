@@ -9,10 +9,8 @@ import {
   uploadDocument,
 } from "@/lib/chatApi";
 
-// "Data" section: upload a .txt/.md file and watch ingestion status. Ingestion
-// runs in the Celery worker (slice 2a), so an upload returns 'pending' and the
-// panel polls until it settles to ready|failed.
-// Local state (not a Context) — only this panel reads documents for now.
+// Upload a .txt/.md file and watch ingestion status: uploads return 'pending'
+// and the panel polls until ready|failed. Local state — only this panel reads it.
 const STATUS_STYLES: Record<string, string> = {
   ready: "text-green-600 dark:text-green-400",
   failed: "text-red-600 dark:text-red-400",
@@ -20,8 +18,6 @@ const STATUS_STYLES: Record<string, string> = {
   processing: "text-black/40 dark:text-white/40",
 };
 
-// Poll cadence while any doc is still ingesting. ~2.5s balances responsiveness
-// against load for a background job that takes seconds.
 const POLL_INTERVAL_MS = 2500;
 const IN_FLIGHT: ReadonlySet<string> = new Set(["pending", "processing"]);
 
@@ -40,11 +36,9 @@ export function DocumentsPanel() {
       });
   }, []);
 
-  // Poll while any doc is still ingesting, so its status settles to ready|failed
-  // without a manual refresh. Keyed off `hasPending`: React re-runs this effect
-  // only when that boolean flips, so the interval is created once ingestion
-  // starts and torn down (polling stops) once everything has settled — not reset
-  // on every poll.
+  // Poll while any doc is ingesting. Keyed off the boolean so the interval is
+  // created when ingestion starts and torn down when everything settles — not
+  // reset on every poll.
   const hasPending = documents.some((d) => IN_FLIGHT.has(d.status));
   useEffect(() => {
     if (!hasPending) return;
@@ -59,20 +53,16 @@ export function DocumentsPanel() {
   }, [hasPending]);
 
   async function handleDelete(doc: DocumentSummary) {
-    // Deletion is irreversible (drops the stored file + its chunks), so confirm
-    // first. window.confirm blocks synchronously, so no second click lands until
-    // it's dismissed.
+    // Irreversible (drops the stored file + chunks) — confirm first.
     if (!window.confirm(`Delete "${doc.filename}"? This can't be undone.`)) {
       return;
     }
     setError(null);
-    // Guard against a double-delete (a second click after the confirm returns):
-    // disable this row's button while its request is in flight.
     setDeletingId(doc.id);
     try {
       await deleteDocument(doc.id);
-      // Drop it locally rather than re-fetch — one fewer round-trip, and the list
-      // is authoritative on the next natural refresh (mount / upload / poll).
+      // Drop locally rather than re-fetch; the list is authoritative on the
+      // next natural refresh.
       setDocuments((prev) => prev.filter((d) => d.id !== doc.id));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Delete failed.");
@@ -88,20 +78,14 @@ export function DocumentsPanel() {
     setError(null);
     try {
       const doc = await uploadDocument(file);
-      // Ingestion runs in the worker now, so the upload returns immediately at
-      // 'pending'. Prepend it; the polling effect updates its status to
-      // ready|failed as the worker finishes (a failed doc shows as a red row with
-      // its error on hover).
+      // Upload returns at 'pending'; the polling effect settles the status.
       setDocuments((prev) => [doc, ...prev]);
     } catch (err) {
-      // The other failure channel: uploadDocument throws on a non-2xx/network
-      // error (400 wrong type, 413 too big, …) — distinct from the 200-with-
-      // failed-status case handled just above.
       setError(err instanceof Error ? err.message : "Upload failed.");
     } finally {
       setUploading(false);
-      // A file input fires onChange only when its value changes, so clear it —
-      // otherwise re-selecting the same file (e.g. to retry) is a silent no-op.
+      // A file input fires onChange only on value change — clear it so
+      // re-selecting the same file isn't a silent no-op.
       if (inputRef.current) inputRef.current.value = "";
     }
   }
@@ -121,10 +105,7 @@ export function DocumentsPanel() {
           {uploading ? "Uploading…" : "+ Upload"}
         </button>
       </div>
-      {/* The real file control is hidden; the styled button above proxies to it
-          via inputRef.current.click(). The arrow wrapper on that onClick matters:
-          a bare `inputRef.current?.click` reads .current at render time (null
-          before mount) — the arrow defers the lookup until the click fires. */}
+      {/* Hidden file control; the styled button above proxies to it. */}
       <input
         ref={inputRef}
         type="file"
@@ -144,9 +125,8 @@ export function DocumentsPanel() {
       ) : (
         <ul className="flex max-h-40 flex-col gap-1 overflow-y-auto">
           {documents.map((doc) => (
-            // `title` shows doc.error on hover. `?? undefined` (not null): React
-            // omits the attribute when the value is undefined, and the title prop
-            // type is string | undefined, not string | null.
+            // `title` shows the ingest error on hover; `?? undefined` because
+            // React omits the attribute for undefined (title isn't nullable).
             <li
               key={doc.id}
               className="flex items-center gap-2 px-1 text-xs"

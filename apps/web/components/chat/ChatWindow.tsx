@@ -7,11 +7,8 @@ import { useConversations } from "@/components/chat/ConversationsProvider";
 import { MessageList } from "@/components/chat/MessageList";
 import { useChat } from "@/hooks/useChat";
 
-// Model dropdown for the agentic route. "" = let the server pick its default
-// (env LLM_MODEL); explicit ids override per request. The Default label
-// deliberately does NOT name the model — the default is server-owned config,
-// and naming it here would go stale when LLM_MODEL changes (M5: expose it via
-// a read-only config endpoint so the UI can label it truthfully).
+// "" = server default (env LLM_MODEL). The Default label deliberately names no
+// model — that's server-owned config and a name here would go stale.
 const MODEL_OPTIONS = [
   { value: "", label: "Default" },
   { value: "claude-haiku-4-5", label: "Haiku" },
@@ -31,8 +28,8 @@ export function ChatWindow({
 
   const handleConversationCreated = useCallback(
     (id: string) => {
-      // Shallow URL update: linkable without remounting. router.replace would
-      // cross the route segment and kill the in-flight stream.
+      // Shallow URL update — router.replace would cross the route segment and
+      // kill the in-flight stream.
       window.history.replaceState(null, "", `/chat/${id}`);
       refresh();
     },

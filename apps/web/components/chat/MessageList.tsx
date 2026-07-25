@@ -50,9 +50,8 @@ export function MessageList({
           );
         })}
 
-        {/* Live "ghost" bubble while streaming. When the stream finishes,
-            useChat commits the content into `messages` and clears
-            streamingContent — visually seamless transition. */}
+        {/* Live bubble while streaming; on finish useChat commits the content
+            into `messages` and clears this — a seamless swap. */}
         {streamingContent ? (
           <div className="flex justify-start">
             <div className="max-w-[85%] rounded-lg bg-black/5 px-3 py-2 text-sm text-foreground dark:bg-white/10">
@@ -61,9 +60,8 @@ export function MessageList({
           </div>
         ) : null}
 
-        {/* Activity indicator (blinking): a tool-status note whenever one is
-            live — including mid-stream, below the ghost bubble — else the
-            generic "thinking" line in the gap before the first chunk. */}
+        {/* Activity indicator: the live tool status (even mid-stream), else the
+            generic line in the gap before the first chunk. */}
         {isLoading && (status || !streamingContent) ? (
           <p className="animate-pulse text-sm text-black/60 dark:text-white/60">
             {status ?? "Assistant is thinking..."}
