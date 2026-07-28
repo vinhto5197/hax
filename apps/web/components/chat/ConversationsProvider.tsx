@@ -16,6 +16,13 @@ type ConversationsContextValue = {
   conversations: ConversationSummary[];
   // Stable identity — safe as an effect/callback dep.
   refresh: () => void;
+  // Bumped by "+ New chat". A lazy-created conversation updates the URL via
+  // history.replaceState, which Next's router never sees — so clicking
+  // "+ New chat" from that state is a same-route navigation with NO prop
+  // change. The nonce is the reset signal routing can't provide: ChatWindow
+  // keys the session on it, forcing a clean remount.
+  newChatNonce: number;
+  startNewChat: () => void;
 };
 
 // null when read with no Provider above — useConversations() guards on it.
@@ -29,6 +36,7 @@ export function ConversationsProvider({
   children: React.ReactNode;
 }) {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  const [newChatNonce, setNewChatNonce] = useState(0);
 
   const refresh = useCallback(() => {
     listConversations()
@@ -38,13 +46,19 @@ export function ConversationsProvider({
       });
   }, []);
 
+  const startNewChat = useCallback(() => {
+    setNewChatNonce((n) => n + 1);
+  }, []);
+
   // Initial load; refresh is stable so this runs once.
   useEffect(() => {
     refresh();
   }, [refresh]);
 
   return (
-    <ConversationsContext.Provider value={{ conversations, refresh }}>
+    <ConversationsContext.Provider
+      value={{ conversations, refresh, newChatNonce, startNewChat }}
+    >
       {children}
     </ConversationsContext.Provider>
   );
