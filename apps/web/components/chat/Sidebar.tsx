@@ -8,13 +8,16 @@ import { DocumentsPanel } from "@/components/chat/DocumentsPanel";
 
 export function Sidebar() {
   // Shared list from context (see ConversationsProvider), not a prop.
-  const { conversations } = useConversations();
+  const { conversations, startNewChat } = useConversations();
   const pathname = usePathname();
 
   return (
     <aside className="flex h-screen w-64 shrink-0 flex-col gap-3 border-r border-black/10 p-3 dark:border-white/10">
+      {/* onClick bumps the session nonce: navigation alone can't reset a chat
+          whose URL came from history.replaceState (same-route, no prop change). */}
       <Link
         href="/chat"
+        onClick={startNewChat}
         className="rounded-md bg-foreground px-3 py-2 text-center text-sm text-background"
       >
         + New chat

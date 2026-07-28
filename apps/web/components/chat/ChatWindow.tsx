@@ -21,6 +21,21 @@ export function ChatWindow({
 }: {
   conversationId: string | null;
 }) {
+  // Session identity = (conversationId, newChatNonce). The key forces a clean
+  // remount when either changes — covering "+ New chat" from a lazy-created
+  // conversation (same route, no prop change; the nonce is the only signal) —
+  // and detaches any in-flight stream's closures so a stale send can't write
+  // into the fresh session.
+  const { newChatNonce } = useConversations();
+  return (
+    <ChatSession
+      key={`${conversationId ?? "new"}:${newChatNonce}`}
+      conversationId={conversationId}
+    />
+  );
+}
+
+function ChatSession({ conversationId }: { conversationId: string | null }) {
   const [model, setModel] = useState("");
   // From context (see ConversationsProvider); called after a turn to refresh
   // the sidebar.
