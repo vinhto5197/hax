@@ -41,12 +41,19 @@ step "5/8 redis ping"
 [ "$(docker exec hax-redis redis-cli PING)" = "PONG" ] || fail "redis did not respond PONG"
 ok "redis responded PONG"
 
-step "6/8 host-side connection via venv sqlalchemy"
+step "6/8 host-side connection via venv sqlalchemy (asyncpg, same driver as the app)"
 .venv/bin/python -c "
-from sqlalchemy import create_engine, text
-e = create_engine('postgresql://hax:hax@localhost:5432/hax')
-with e.connect() as c:
-    assert c.execute(text('SELECT 1')).scalar() == 1
+import asyncio
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import create_async_engine
+
+async def check():
+    e = create_async_engine('postgresql+asyncpg://hax:hax@localhost:5432/hax')
+    async with e.connect() as c:
+        assert (await c.execute(text('SELECT 1'))).scalar() == 1
+    await e.dispose()
+
+asyncio.run(check())
 " || fail "host could not reach postgres on localhost:5432"
 ok "host->postgres conn ok"
 
@@ -67,3 +74,6 @@ ok "containers down, volumes kept"
 
 echo
 echo "infra verify: all 8 steps passed"
+echo
+echo "NOTE: step 1 wiped all volumes (fresh-boot check). The database is EMPTY:"
+echo "  make infra-up && make migrate   # restore schema before running the app"
