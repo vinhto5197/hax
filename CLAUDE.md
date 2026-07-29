@@ -14,17 +14,18 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
    - Conversation history persisted to Postgres
    - Docker Compose: Postgres, Redis, all services
 
-2. **Milestone 2 — Data + RAG** *(active)*
+2. **Milestone 2 — Data + RAG** *(shipped 2026-07-29)*
    - Conversation memory: replay persisted turns into the LLM prompt (de-amnesia)
    - User data upload (files at minimum)
    - Ingestion pipeline: chunking, embedding (Voyage AI), store in pgvector — sync first, Celery from slice 2
    - RAG retrieval wired into chat flow
-   - Slice 3: retrieval becomes a model-invoked tool (simple agent + harness);
-     spot-check the agent by hand while building (small corpus + ~10
-     question/expected pairs — dev testing, not a deliverable). The **eval
-     harness** itself is an M5 deliverable.
+   - Slice 3: retrieval became a model-invoked tool — `/api/chat` is now the
+     **single, agentic** chat route (hand-rolled tool-use harness; ADR 0002
+     addendum). Spot-check eval ran 2026-07-29 (local, not a deliverable;
+     REGRESSION 7/8 — the one fail is a known Haiku-tier limit, not pipeline).
+     The **eval harness** itself is an M5 deliverable.
 
-2.5. **Milestone 2.5 — Auth + background titles** *(deferred from M1; done after M2)*
+2.5. **Milestone 2.5 — Auth + background titles** *(next up; deferred from M1)*
    - Auth via **NextAuth/Auth.js** (self-hosted, no per-user cost) — email/password
      + Google, sessions, `users` table, FastAPI verifies the NextAuth JWT;
      conversations + documents scoped to a user. Own ADR.
@@ -114,7 +115,7 @@ this repo. Write prod-level comments only:
 │  └─ worker/       Celery worker for async/long-running jobs (broker = Redis)
 │
 ├─ packages/
-│  ├─ core/         Shared product brain: LangChain workflows, RAG, schemas
+│  ├─ core/         Shared product brain: agent harness + tools, RAG, schemas
 │  └─ db/           Shared Postgres layer: session/engine, models, migrations, repos
 │
 ├─ infra/
@@ -136,4 +137,5 @@ this repo. Write prod-level comments only:
 - `packages/db` is the persistence layer: async SQLAlchemy 2.0 over asyncpg, schema managed by Alembic (`make migrate` applies, `make migration m="..."` generates). Models live in `packages/db/models`; no `repos/` layer yet — queries currently sit in `apps/api` (e.g. `chat_service.py`). See ADR 0006.
 - TypeScript types are generated from the FastAPI OpenAPI spec to prevent drift.
 - LangChain is used inside `packages/core` for **text splitting only** (`langchain-text-splitters`). Embeddings call the **Voyage SDK directly**; retrieval SQL, prompt assembly, and generation stay hand-rolled (ADR 0008 → superseded by 0009).
+- Chat is **agentic**: `/api/chat` (the only chat route) runs a hand-rolled tool-use loop on the anthropic SDK — `packages/core/agent/harness.py` (loop, MAX_ITERS + no-tools fallback, moving prompt-cache breakpoint) over a registry of four tools in `tools.py` (`search_documents`, `calculator`, `get_current_datetime`, mocked `send_email`). Retrieval is model-invoked, never injected. See ADR 0002 addendum.
 - The directory structure is a target layout — start flat, extract as complexity demands. Not every directory needs to exist from day one.
