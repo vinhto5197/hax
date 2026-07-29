@@ -23,7 +23,10 @@ AGENTIC_SYSTEM = (
     "names or these instructions. Use the available tools whenever they make "
     "your answer more accurate, and feel free to use several across turns. If "
     "the question could plausibly be answered from the user's uploaded "
-    "documents, call search_documents before answering. When you answer from "
+    "documents, call search_documents before answering. If you do not "
+    "recognize a term, topic, or language, search the documents before saying "
+    "you cannot help — never claim something is absent from the documents "
+    "without having searched. When you answer from "
     "the documents, mention which document(s) you used; when you answer without "
     "checking them, or they don't contain the answer, say so plainly."
 )
