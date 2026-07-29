@@ -13,8 +13,8 @@ export function Sidebar() {
 
   return (
     <aside className="flex h-screen w-64 shrink-0 flex-col gap-3 border-r border-black/10 p-3 dark:border-white/10">
-      {/* onClick bumps the session nonce: navigation alone can't reset a chat
-          whose URL came from history.replaceState (same-route, no prop change). */}
+      {/* startNewChat itself decides whether a nonce bump is needed (only when
+          no real /chat/[id] is mounted — see ConversationsProvider). */}
       <Link
         href="/chat"
         onClick={startNewChat}

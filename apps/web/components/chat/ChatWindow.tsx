@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { ChatInput } from "@/components/chat/ChatInput";
 import { useConversations } from "@/components/chat/ConversationsProvider";
@@ -26,7 +26,12 @@ export function ChatWindow({
   // conversation (same route, no prop change; the nonce is the only signal) —
   // and detaches any in-flight stream's closures so a stale send can't write
   // into the fresh session.
-  const { newChatNonce } = useConversations();
+  const { newChatNonce, reportRoutedConversationId } = useConversations();
+  // Report the routed id so startNewChat can tell whether a nonce bump is
+  // needed (only when this is null — see ConversationsProvider).
+  useEffect(() => {
+    reportRoutedConversationId(conversationId);
+  }, [conversationId, reportRoutedConversationId]);
   return (
     <ChatSession
       key={`${conversationId ?? "new"}:${newChatNonce}`}

@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
 
@@ -23,6 +24,12 @@ type ConversationsContextValue = {
   // keys the session on it, forcing a clean remount.
   newChatNonce: number;
   startNewChat: () => void;
+  // ChatWindow reports its routed conversationId here so startNewChat can skip
+  // the bump when a REAL /chat/[id] is mounted — there, Link navigation resets
+  // via the key's conversationId half, and bumping too would remount once with
+  // the old id and fire a useless history fetch. (usePathname can't make this
+  // call: it syncs with replaceState, so lazy and real look identical.)
+  reportRoutedConversationId: (id: string | null) => void;
 };
 
 // null when read with no Provider above — useConversations() guards on it.
@@ -37,6 +44,8 @@ export function ConversationsProvider({
 }) {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [newChatNonce, setNewChatNonce] = useState(0);
+  // Ref, not state: read imperatively at click time; nothing renders it.
+  const routedIdRef = useRef<string | null>(null);
 
   const refresh = useCallback(() => {
     listConversations()
@@ -46,8 +55,16 @@ export function ConversationsProvider({
       });
   }, []);
 
+  const reportRoutedConversationId = useCallback((id: string | null) => {
+    routedIdRef.current = id;
+  }, []);
+
   const startNewChat = useCallback(() => {
-    setNewChatNonce((n) => n + 1);
+    // On a real /chat/[id], navigation alone resets the session (prop change ->
+    // key change); bump only when the prop is null (lazy-created or fresh chat).
+    if (routedIdRef.current === null) {
+      setNewChatNonce((n) => n + 1);
+    }
   }, []);
 
   // Initial load; refresh is stable so this runs once.
@@ -57,7 +74,13 @@ export function ConversationsProvider({
 
   return (
     <ConversationsContext.Provider
-      value={{ conversations, refresh, newChatNonce, startNewChat }}
+      value={{
+        conversations,
+        refresh,
+        newChatNonce,
+        startNewChat,
+        reportRoutedConversationId,
+      }}
     >
       {children}
     </ConversationsContext.Provider>
