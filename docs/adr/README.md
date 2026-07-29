@@ -40,3 +40,4 @@ Each ADR is a single markdown file: `NNNN-kebab-case-title.md` with a numeric pr
 | [0007](0007-voyage-ai-for-embeddings.md) | Voyage AI for embeddings | accepted |
 | [0008](0008-langchain-boundaries-for-rag.md) | LangChain boundaries for RAG | superseded by 0009 |
 | [0009](0009-voyage-sdk-direct-langchain-splitter-only.md) | Voyage SDK directly; LangChain only for text splitting | accepted |
+| [0010](0010-celery-for-ingestion.md) | Celery for ingestion | accepted |

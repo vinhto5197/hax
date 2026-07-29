@@ -147,24 +147,26 @@ Check what's running at any time with `make status` (a TCP probe of each service
 
 ## Stack
 
-| Layer     | Tech                                                          |
-| --------- | ------------------------------------------------------------- |
-| Frontend  | Next.js (SSR + routing), React, TypeScript                    |
-| Backend   | FastAPI, LangChain                                            |
-| Streaming | SSE (FastAPI `StreamingResponse`) for chat                    |
-| Async     | Celery + Redis (broker + cache)                               |
-| Data      | Postgres + pgvector (embeddings)                              |
-| Storage   | Object storage for uploads — S3 in prod, MinIO in dev (boto3) |
-| Types     | OpenAPI spec → generated TypeScript (e.g. openapi-typescript) |
-| Infra     | Docker, Docker Compose                                        |
-| Deploy    | AWS, provisioned via Terraform                                |
+| Layer      | Tech                                                               |
+| ---------- | ------------------------------------------------------------------ |
+| Frontend   | Next.js (SSR + routing), React, TypeScript                         |
+| Backend    | FastAPI                                                            |
+| LLM        | Anthropic SDK — hand-rolled agentic tool-use loop (ADR 0002)       |
+| Embeddings | Voyage AI (ADR 0007); LangChain for text splitting only (ADR 0009) |
+| Streaming  | SSE (FastAPI `StreamingResponse`) for chat                         |
+| Async      | Celery + Redis (broker + cache)                                    |
+| Data       | Postgres + pgvector (embeddings)                                   |
+| Storage    | Object storage for uploads — S3 in prod, MinIO in dev (boto3)      |
+| Types      | OpenAPI spec → generated TypeScript (e.g. openapi-typescript)      |
+| Infra      | Docker, Docker Compose                                             |
+| Deploy     | AWS, provisioned via Terraform                                     |
 
 ## Build milestones (v0)
 
 1. **Streaming chat** *(shipped)* — Next.js + FastAPI + SSE, conversation history in Postgres, Docker Compose (Postgres, Redis, all services). Auth + background titles deferred to M2.5.
-2. **Data + RAG** *(active)* — User data upload (files), ingestion (chunk → embed → pgvector; sync first, Celery from slice 2), RAG in chat, conversation memory with user data context.
-2.5. **Auth + background titles** — basic auth/session, `users` table, conversations + documents scoped to a user; background chat title generation (Celery + Redis).
-3. **AWS deploy + CI/CD** *(brought forward — deploy early, then continuous)* — provision with Terraform (ECS Fargate, ALB, RDS + pgvector, ElastiCache); CI/CD pipeline so later milestones auto-deploy.
+2. **Data + RAG** *(shipped)* — User data upload (files), Celery ingestion (chunk → embed → pgvector), conversation memory, and chat as a single **agentic** route: retrieval is a model-invoked tool (`search_documents`, alongside a calculator, datetime, and a mocked email send) behind a hand-rolled tool-use harness with prompt caching and a model selector.
+2.5. **Auth + background titles** *(next)* — email/password + Google via NextAuth/Auth.js, `users` table, conversations + documents scoped to a user; background chat title generation (Celery + Redis).
+3. **AWS deploy + CI/CD** *(brought forward — deploy early, then continuous)* — hybrid alpha deploy provisioned with Terraform: a free-tier EC2 app box running the containers against managed RDS (Postgres + pgvector), ElastiCache Redis, and S3; Fargate/ALB deferred to post-alpha. CI/CD pipeline so later milestones auto-deploy.
 4. **Structured outputs + polish** — table/structured view for results, citation/source display, cohesive UI.
 5. **Cleanup + hardening + eval** — test + eval infrastructure, drain backlogs, tighten deferred foot-guns.
 
@@ -191,6 +193,7 @@ graph TB
   end
 ```
 
+- `/api/chat` is the single, **agentic** chat route: the model invokes tools in a loop (document search over pgvector, calculator, datetime, mocked email) — retrieval is never injected, always model-invoked.
 - Chat responses stream (SSE) directly from FastAPI to the browser; they are not queued through Celery.
 - Celery + Redis handle background work: title generation, data ingestion, embedding, index rebuilds.
 - pgvector lives in Postgres; no separate vector DB.
