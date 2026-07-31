@@ -90,6 +90,24 @@ export async function deleteDocument(id: string): Promise<void> {
   throw new Error(detail);
 }
 
+// 204 on success. A 404 means the conversation was already gone (stale
+// sidebar, another tab) — the caller's goal holds, so treat it as success
+// (mirrors deleteDocument).
+export async function deleteConversation(id: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/conversations/${id}`, {
+    method: "DELETE",
+  });
+  if (response.ok || response.status === 404) return;
+  let detail = `API ${response.status}: ${response.statusText}`;
+  try {
+    const body = (await response.json()) as { detail?: unknown };
+    if (typeof body.detail === "string") detail = body.detail;
+  } catch {
+    // non-JSON error body — keep the status-based message
+  }
+  throw new Error(detail);
+}
+
 // Parsed result of one SSE event — a discriminated union so callers switch on
 // `type`: prelude (conversation), token (chunk), tool-activity note (status),
 // terminator (done), or unparseable/empty (ignore).
