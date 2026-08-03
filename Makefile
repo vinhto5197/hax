@@ -142,3 +142,9 @@ status:
 
 lint:
 	ruff check . && ruff format --check .
+
+# ── Test ─────────────────────────────────────────────────────
+.PHONY: test
+
+test:
+	.venv/bin/pytest
