@@ -28,6 +28,7 @@ class Chunk(Base):
             postgresql_using="hnsw",
             postgresql_ops={"embedding": "vector_cosine_ops"},
         ),
+        Index("chunks_user_id_idx", "user_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -39,8 +40,10 @@ class Chunk(Base):
         UUID(as_uuid=True),
         ForeignKey("documents.id", ondelete="CASCADE"),
     )
-    # Denormalized from documents for the M2.5 per-user retrieval filter.
-    user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    # Denormalized from documents so the per-user retrieval filter needs no join.
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE")
+    )
     # Position within the source document.
     idx: Mapped[int]
     content: Mapped[str]

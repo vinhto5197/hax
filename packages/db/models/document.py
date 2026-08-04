@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import CheckConstraint, DateTime, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -24,6 +24,7 @@ class Document(Base):
             "status IN (" + ", ".join(f"'{s}'" for s in DOCUMENT_STATUSES) + ")",
             name="documents_status_check",
         ),
+        Index("documents_user_id_idx", "user_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -31,8 +32,9 @@ class Document(Base):
         primary_key=True,
         server_default=func.gen_random_uuid(),
     )
-    # Nullable until M2.5 adds auth + backfills.
-    user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE")
+    )
     filename: Mapped[str]
     mime_type: Mapped[str]
     size_bytes: Mapped[int]
