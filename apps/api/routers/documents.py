@@ -2,7 +2,15 @@ import asyncio
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile,
+)
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,6 +43,7 @@ async def list_documents(
 
 @router.post("")
 async def upload_document(
+    request: Request,
     file: UploadFile = File(...),
     session: AsyncSession = Depends(get_session),
 ) -> DocumentOut:
@@ -45,7 +54,15 @@ async def upload_document(
             status_code=400, detail="only .txt and .md files are supported"
         )
 
-    content = await file.read()
+    # Reject on the declared length BEFORE buffering anything — an honest large
+    # client costs zero reads. (A lying/absent Content-Length is caught below.)
+    declared = request.headers.get("content-length")
+    if declared is not None and declared.isdigit() and int(declared) > MAX_BYTES:
+        raise HTTPException(status_code=413, detail=f"file exceeds {MAX_BYTES} bytes")
+
+    # Bounded read caps RAM at MAX_BYTES+1 even when the header lies; the deeper
+    # multipart disk-spool is the reverse proxy's client_max_body_size job (M3).
+    content = await file.read(MAX_BYTES + 1)
     if len(content) > MAX_BYTES:
         raise HTTPException(status_code=413, detail=f"file exceeds {MAX_BYTES} bytes")
     if not content.strip():
