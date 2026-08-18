@@ -20,16 +20,19 @@ def sse_event(data: dict) -> str:
     return f"data: {json.dumps(data)}\n\n"
 
 
-async def persist_user_turn(prompt: str, conversation_id: UUID | None) -> UUID:
+async def persist_user_turn(
+    prompt: str, conversation_id: UUID | None, user_id: UUID
+) -> UUID:
     """Resolve or lazily create the conversation, persist the user message,
     and return the conversation id.
 
     Runs before the LLM call so the user turn survives a model error. Raises
-    404 if a conversation_id is supplied but doesn't exist.
+    404 if a conversation_id is supplied but doesn't exist. user_id stamps
+    ownership on lazy-create only — reads are scoped in slice 2.
     """
     async with AsyncSessionLocal() as session:
         if conversation_id is None:
-            conversation = Conversation()
+            conversation = Conversation(user_id=user_id)
             session.add(conversation)
             # flush, not commit: fills the server-default id while keeping
             # conversation + message in one atomic transaction.

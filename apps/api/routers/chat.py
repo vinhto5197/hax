@@ -1,8 +1,9 @@
 from functools import partial
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
+from apps.api.auth import CurrentUser, current_user
 from apps.api.chat_service import (
     SSE_HEADERS,
     event_stream,
@@ -33,10 +34,14 @@ AGENTIC_SYSTEM = (
 
 
 @router.post("")
-async def chat(payload: ChatRequest) -> StreamingResponse:
+async def chat(
+    payload: ChatRequest, user: CurrentUser = Depends(current_user)
+) -> StreamingResponse:
     # Persist the user turn before streaming, so it survives an LLM error and we
     # have a conversation id for the SSE prelude.
-    conversation_id = await persist_user_turn(payload.prompt, payload.conversation_id)
+    conversation_id = await persist_user_turn(
+        payload.prompt, payload.conversation_id, user.id
+    )
     # Replay prior turns. Retrieval is NOT injected here — the model invokes the
     # search_documents tool itself when the corpus looks relevant.
     messages = await load_history(conversation_id)
