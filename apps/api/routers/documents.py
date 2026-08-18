@@ -14,6 +14,7 @@ from fastapi import (
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from apps.api.auth import CurrentUser, current_user
 from apps.api.deps import get_session
 from apps.worker.tasks import ingest_document
 from packages.core import storage
@@ -33,6 +34,7 @@ SUFFIX_MIME = {".txt": "text/plain", ".md": "text/markdown"}
 @router.get("")
 async def list_documents(
     session: AsyncSession = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
 ) -> list[DocumentOut]:
     # Most-recent first. No auth filter yet — returns every document.
     result = await session.scalars(
@@ -46,6 +48,7 @@ async def upload_document(
     request: Request,
     file: UploadFile = File(...),
     session: AsyncSession = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
 ) -> DocumentOut:
     filename = file.filename or "upload"
     suffix = next((s for s in SUFFIX_MIME if filename.lower().endswith(s)), None)
@@ -78,6 +81,7 @@ async def upload_document(
         mime_type=SUFFIX_MIME[suffix],
         size_bytes=len(content),
         status="pending",
+        user_id=user.id,
     )
     session.add(doc)
     await session.flush()  # populate the server-default id so we can key the file
@@ -111,6 +115,7 @@ async def upload_document(
 async def delete_document(
     document_id: UUID,
     session: AsyncSession = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
 ) -> Response:
     # No auth filter yet — M2.5 scopes deletes by user_id.
     doc = await session.get(Document, document_id)

@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from apps.api.auth import CurrentUser, current_user
 from apps.api.deps import get_session
 from packages.core.schemas.conversation import ConversationDetailOut, ConversationOut
 from packages.db.models import Conversation
@@ -15,6 +16,7 @@ router = APIRouter(prefix="/conversations", tags=["conversations"])
 @router.get("")
 async def list_conversations(
     session: AsyncSession = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
 ) -> list[ConversationOut]:
     # Most-recently-active first — matches sidebar ordering. No auth filter
     # yet, so this returns every conversation.
@@ -28,6 +30,7 @@ async def list_conversations(
 async def get_conversation(
     conversation_id: UUID,
     session: AsyncSession = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
 ) -> ConversationDetailOut:
     # selectinload eager-loads messages in a second query (the relationship is
     # ordered by created_at), avoiding a lazy load in async context.
@@ -46,6 +49,7 @@ async def get_conversation(
 async def delete_conversation(
     conversation_id: UUID,
     session: AsyncSession = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
 ) -> Response:
     # No auth filter yet — M2.5 scopes deletes by user_id.
     conversation = await session.get(Conversation, conversation_id)

@@ -2,6 +2,7 @@ import asyncio
 from uuid import UUID
 
 from sqlalchemy import delete
+from sqlalchemy.exc import IntegrityError
 
 from packages.core import storage
 from packages.core.rag.embeddings import embed_documents
@@ -41,6 +42,7 @@ async def ingest_document_async(document_id: UUID) -> None:
             raise PermanentIngestError(f"document {document_id} has no storage_key")
         storage_key = doc.storage_key
         filename = doc.filename
+        user_id = doc.user_id
         doc.status = "processing"
         # Commit now rather than holding one transaction across the whole ingest:
         # frees the pooled connection during the multi-second embed and makes the
@@ -75,12 +77,20 @@ async def ingest_document_async(document_id: UUID) -> None:
                 content=content,
                 chunk_metadata={"filename": filename},
                 embedding=embedding,
+                user_id=user_id,
             )
             for i, (content, embedding) in enumerate(zip(chunks, embeddings))
         )
         doc.status = "ready"
         doc.error = None
-        await session.commit()
+        # A constraint violation here is schema/code drift, not a transient fault
+        # — fail permanent on attempt 1 instead of re-paying the embed on retries.
+        try:
+            await session.commit()
+        except IntegrityError as exc:
+            raise PermanentIngestError(
+                f"chunk insert violated a constraint: {exc}"
+            ) from exc
 
 
 async def mark_document_failed(document_id: UUID, error: str) -> None:
