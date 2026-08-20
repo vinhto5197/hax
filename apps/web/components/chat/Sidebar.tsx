@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
+import { signOut, useSession } from "next-auth/react";
 
 import { useConversations } from "@/components/chat/ConversationsProvider";
 import { DocumentsPanel } from "@/components/chat/DocumentsPanel";
@@ -11,6 +12,7 @@ import { type ConversationSummary, deleteConversation } from "@/lib/chatApi";
 export function Sidebar() {
   // Shared list from context (see ConversationsProvider), not a prop.
   const { conversations, startNewChat, refresh } = useConversations();
+  const { data: session } = useSession();
   const pathname = usePathname();
   const router = useRouter();
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -100,6 +102,21 @@ export function Sidebar() {
           })
         )}
       </nav>
+
+      {session?.user?.email && (
+        <div className="flex items-center justify-between gap-2 border-t border-black/10 pt-3 text-xs text-black/60 dark:border-white/10 dark:text-white/60">
+          <span className="truncate" title={session.user.email}>
+            {session.user.email}
+          </span>
+          <button
+            type="button"
+            onClick={() => signOut({ callbackUrl: "/login" })}
+            className="shrink-0 hover:text-foreground"
+          >
+            Sign out
+          </button>
+        </div>
+      )}
 
       <DocumentsPanel />
     </aside>

@@ -30,6 +30,14 @@ const PUBLIC_PREFIXES = [
 //   session still gets page shells — every data fetch behind them 401s.
 export default auth((req) => {
   const { pathname } = req.nextUrl;
+  // Logged-in visits to the auth screens bounce into the app — checked before
+  // the public-prefix pass, which would otherwise let them through.
+  if (
+    req.auth &&
+    (pathname.startsWith("/login") || pathname.startsWith("/signup"))
+  ) {
+    return NextResponse.redirect(new URL("/", req.nextUrl.origin));
+  }
   if (req.auth || PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) {
     return NextResponse.next();
   }

@@ -1,3 +1,5 @@
+import { signOut } from "next-auth/react";
+
 import type { components } from "@/lib/openapi";
 
 type ChatRole = "user" | "assistant";
@@ -16,10 +18,40 @@ export type DocumentSummary = components["schemas"]["DocumentOut"];
 // SSE). Prod: unset — same-origin via the reverse proxy. See ADR 0005.
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
+// A 401 from FastAPI means the session cookie is dead (expired, revoked, or
+// tampered) even though middleware's crypto-only check may still pass — sign
+// out client-side so the cookie is cleared and the no-cookie redirect lands on
+// /login.
+//
+// evictingSession lives in this browser tab's module scope; its whole job is
+// the few hundred ms between the first 401 and signOut's navigation, when
+// parallel fetches (conversations + documents + session UI) can all 401 at
+// once — only the first may fire the signOut round-trip. No reset on success:
+// the navigation tears down this JS world, and the fresh page re-imports the
+// module with the flag false. The .catch re-arms it on the one path with no
+// navigation — signOut itself failing — so a later 401 can retry eviction.
+let evictingSession = false;
+
+// Every FastAPI call goes through here: the session cookie is always attached
+// (no route this client calls is public; spread order makes the credentials
+// un-droppable — dev hits :8000 cross-origin per ADR 0005, pairing with
+// allow_credentials=True in FastAPI's CORS) and 401 eviction stays central,
+// not per-callsite.
+async function apiFetch(input: string, init?: RequestInit): Promise<Response> {
+  const response = await fetch(input, { ...init, credentials: "include" });
+  if (response.status === 401 && !evictingSession) {
+    evictingSession = true;
+    void signOut({ callbackUrl: "/login" }).catch(() => {
+      evictingSession = false;
+    });
+  }
+  return response;
+}
+
 // Response bodies are typed from the generated OpenAPI contract but not
 // validated at runtime — we trust the first-party API.
 export async function listConversations(): Promise<ConversationSummary[]> {
-  const response = await fetch(`${API_BASE}/api/conversations`);
+  const response = await apiFetch(`${API_BASE}/api/conversations`);
   if (!response.ok) {
     throw new Error(`API ${response.status}: ${response.statusText}`);
   }
@@ -27,7 +59,7 @@ export async function listConversations(): Promise<ConversationSummary[]> {
 }
 
 export async function getConversation(id: string): Promise<ConversationDetail> {
-  const response = await fetch(`${API_BASE}/api/conversations/${id}`);
+  const response = await apiFetch(`${API_BASE}/api/conversations/${id}`);
   if (!response.ok) {
     throw new Error(`API ${response.status}: ${response.statusText}`);
   }
@@ -37,7 +69,7 @@ export async function getConversation(id: string): Promise<ConversationDetail> {
 // Ingestion is async (Celery): an upload returns 'pending' and the panel polls
 // until it settles to ready|failed.
 export async function listDocuments(): Promise<DocumentSummary[]> {
-  const response = await fetch(`${API_BASE}/api/documents`);
+  const response = await apiFetch(`${API_BASE}/api/documents`);
   if (!response.ok) {
     throw new Error(`API ${response.status}: ${response.statusText}`);
   }
@@ -50,7 +82,7 @@ export async function uploadDocument(file: File): Promise<DocumentSummary> {
   // is a runtime 422, not a compile error.
   form.append("file", file);
   // No explicit Content-Type: the browser must set the multipart boundary itself.
-  const response = await fetch(`${API_BASE}/api/documents`, {
+  const response = await apiFetch(`${API_BASE}/api/documents`, {
     method: "POST",
     body: form,
   });
@@ -74,7 +106,7 @@ export async function uploadDocument(file: File): Promise<DocumentSummary> {
 // already gone (stale list, another tab) — the caller's goal holds, so treat it
 // as success rather than surfacing a spurious error.
 export async function deleteDocument(id: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/api/documents/${id}`, {
+  const response = await apiFetch(`${API_BASE}/api/documents/${id}`, {
     method: "DELETE",
   });
   if (response.ok || response.status === 404) return;
@@ -94,7 +126,7 @@ export async function deleteDocument(id: string): Promise<void> {
 // sidebar, another tab) — the caller's goal holds, so treat it as success
 // (mirrors deleteDocument).
 export async function deleteConversation(id: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/api/conversations/${id}`, {
+  const response = await apiFetch(`${API_BASE}/api/conversations/${id}`, {
     method: "DELETE",
   });
   if (response.ok || response.status === 404) return;
@@ -165,7 +197,7 @@ export async function streamChat(
   handlers: StreamHandlers,
   model: string | null = null,
 ): Promise<void> {
-  const response = await fetch(`${API_BASE}/api/chat`, {
+  const response = await apiFetch(`${API_BASE}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     // Field names must match ChatRequest (hand-built body, not typed).
