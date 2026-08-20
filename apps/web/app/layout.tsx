@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { SessionProvider } from "next-auth/react";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -13,7 +14,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        {/* basePath must match auth.ts ("/auth") or the client helpers call
+            the wrong endpoints. */}
+        <SessionProvider basePath="/auth">{children}</SessionProvider>
+      </body>
     </html>
   );
 }
