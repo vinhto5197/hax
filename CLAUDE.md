@@ -134,8 +134,9 @@ this repo. Write prod-level comments only:
 - Chat responses are streamed (SSE) directly from FastAPI — never queued through Celery.
 - Celery handles background work: title generation, data ingestion, embedding, index rebuilds.
 - pgvector keeps vector search inside Postgres (no extra vector DB service).
-- `packages/db` is the persistence layer: async SQLAlchemy 2.0 over asyncpg, schema managed by Alembic (`make migrate` applies, `make migration m="..."` generates). Models live in `packages/db/models`; no `repos/` layer yet — queries currently sit in `apps/api` (e.g. `chat_service.py`). See ADR 0006.
+- `packages/db` is the persistence layer: async SQLAlchemy 2.0 over asyncpg, schema managed by Alembic (`make migrate` applies, `make migration m="..."` generates). Models live in `packages/db/models`; most queries still sit in `apps/api` (e.g. `chat_service.py`). See ADR 0006.
 - TypeScript types are generated from the FastAPI OpenAPI spec to prevent drift.
 - LangChain is used inside `packages/core` for **text splitting only** (`langchain-text-splitters`). Embeddings call the **Voyage SDK directly**; retrieval SQL, prompt assembly, and generation stay hand-rolled (ADR 0008 → superseded by 0009).
 - Chat is **agentic**: `/api/chat` (the only chat route) runs a hand-rolled tool-use loop on the anthropic SDK — `packages/core/agent/harness.py` (loop, MAX_ITERS + no-tools fallback, moving prompt-cache breakpoint) over a registry of four tools in `tools.py` (`search_documents`, `calculator`, `get_current_datetime`, mocked `send_email`). Retrieval is model-invoked, never injected. See ADR 0002 addendum.
+- Auth is **NextAuth/Auth.js v5** (web front door, `/auth/*`) + FastAPI identity endpoints (`/api/auth/*` public, `/internal/auth/*` secret-gated) bridged by a standard HS256 JWT (`packages/core/auth/`); `packages/db/repos/` is the start of the repo layer (M2.5).
 - The directory structure is a target layout — start flat, extract as complexity demands. Not every directory needs to exist from day one.

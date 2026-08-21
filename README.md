@@ -124,6 +124,28 @@ make migrate-down              # roll back the most recent migration
 - **After changing a model:** run `make migration m="..."`, then **review the generated file** before committing — autogenerate misses some changes (e.g. constraint/type edits) and can emit an empty migration. Apply it with `make migrate`.
 - **`make migrate-down`** reverses the schema change and steps the version pointer back one; it does **not** delete the migration file (migrations are version-controlled history — to undo further, write a new migration forward).
 
+### Auth setup
+
+All API routes require login (M2.5) — the app is unusable without these steps.
+
+1. **Generate secrets** in `.env`:
+
+   ```bash
+   openssl rand -base64 32   # run twice: once for AUTH_SECRET, once for INTERNAL_API_SECRET
+   ```
+
+   `AUTH_SECRET` is the JWT secret shared between Auth.js (web) and FastAPI; `INTERNAL_API_SECRET` gates the server-to-server `/internal/auth/*` routes. They must be **different values**.
+
+2. **Set `BOOTSTRAP_USER_EMAIL` before your first `make migrate`** — only relevant if your database predates auth (has unowned conversations/documents). The auth migration assigns those legacy rows to a user created with this email; on a fresh empty database it's unused and can stay blank.
+
+3. **Claim the bootstrap account** (it's created without a password):
+
+   ```bash
+   .venv/bin/python scripts/set_password.py you@example.com
+   ```
+
+   Then log in via the web UI with that email + password. New users can just sign up on `/signup` — no script needed.
+
 ### Debugging (VS Code)
 
 Full-stack debugging launches the **API under a debugger** plus a **debuggable Chrome** for the frontend, via [.vscode/launch.json](.vscode/launch.json). Requires the Python extension (`ms-python.python`); the JS/Chrome debugger is built into VS Code.
