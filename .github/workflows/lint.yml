@@ -23,3 +23,23 @@ jobs:
 
       - name: Ruff
         run: ruff check . && ruff format --check .
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          # Match local dev (.venv is 3.14): the suite must run on the same
+          # interpreter it develops on, not lint's floor version.
+          python-version: "3.14"
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      # No services: the suite is self-contained by design — fakeredis stands
+      # in for Redis, no test touches Postgres, and conftest.py hard-assigns
+      # the auth secrets.
+      - name: Pytest
+        run: python -m pytest -W error
