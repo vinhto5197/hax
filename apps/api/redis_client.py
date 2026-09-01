@@ -15,5 +15,12 @@ def get_redis() -> Redis:
         _client = Redis.from_url(
             os.getenv("REDIS_URL", "redis://localhost:6379/0"),
             decode_responses=True,
+            # Bounded waits are what make the callers' `except RedisError` fail-open
+            # branches reachable: a stalled (not dead) Redis answers nothing and
+            # raises nothing, so an unbounded await would hang every authenticated
+            # request on the revocation check. redis-py raises TimeoutError, a
+            # RedisError subclass, so the existing handling applies unchanged.
+            socket_timeout=2,
+            socket_connect_timeout=1,
         )
     return _client
