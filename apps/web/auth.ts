@@ -1,6 +1,13 @@
-import NextAuth from "next-auth";
+import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { SignJWT, jwtVerify } from "jose";
+
+// Rate-limiting leaks nothing (unlike 401's anti-enumeration), so it surfaces
+// distinctly. `code` rides the Auth.js redirect as ?code=rate_limited and is
+// returned to the client as signIn()'s result.code (redirect:false path).
+class RateLimit extends CredentialsSignin {
+  code = "rate_limited";
+}
 
 // The minting half of the JWT bridge. Cross-module contract with
 // packages/core/auth/tokens.py (the verifying half): HS256, iss/aud below,
@@ -36,7 +43,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             }),
           },
         );
-        // Any failure -> null -> one generic UI message (anti-enumeration).
+        // Rate-limited is safe to distinguish (no account-existence leak).
+        if (res.status === 429) throw new RateLimit();
+        // Any other failure (401/403/500) -> null -> one generic UI message,
+        // keeping wrong-password and no-account deliberately indistinguishable.
         if (!res.ok) return null;
         return (await res.json()) as {
           id: string;

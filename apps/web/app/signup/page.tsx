@@ -9,6 +9,20 @@ import { AuthCard, buttonClass, fieldClass } from "@/components/auth/AuthCard";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
+// A FastAPI 422 detail is an array of { loc: [...] } items; loc names the
+// failing field (["body","email"] | ["body","password"]). Narrow from unknown.
+function pydanticEmailFailed(detail: unknown): boolean {
+  if (!Array.isArray(detail)) return false;
+  return detail.some(
+    (item) =>
+      typeof item === "object" &&
+      item !== null &&
+      "loc" in item &&
+      Array.isArray((item as { loc: unknown }).loc) &&
+      (item as { loc: unknown[] }).loc.includes("email"),
+  );
+}
+
 export default function SignupPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -29,9 +43,15 @@ export default function SignupPage() {
       let detail = "Signup failed.";
       try {
         const body = (await response.json()) as { detail?: unknown };
+        // FastAPI shapes: string detail for HTTPExceptions (e.g. duplicate
+        // email 400, signup 429); array of Pydantic errors for a 422. A 422
+        // fires for a bad EMAIL too (server EmailStr > browser type=email), so
+        // read which field actually failed instead of always blaming password.
         if (typeof body.detail === "string") detail = body.detail;
         else if (response.status === 422)
-          detail = "Password must be 8–128 characters.";
+          detail = pydanticEmailFailed(body.detail)
+            ? "Please enter a valid email address."
+            : "Password must be 8–128 characters.";
       } catch {
         // keep the generic message
       }
