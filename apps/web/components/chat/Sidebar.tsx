@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { signOut, useSession } from "next-auth/react";
 
 import { useConversations } from "@/components/chat/ConversationsProvider";
@@ -17,6 +17,17 @@ export function Sidebar() {
   const router = useRouter();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Sticky, never cleared: SessionProvider broadcasts a sign-out from another
+  // tab, so the live session can flip to null under a still-mounted shell.
+  // Rendering off the live value would unmount just this block and leave the
+  // shell half-dissolved. Eviction is owned elsewhere — apiFetch's 401 handler
+  // (lib/chatApi.ts) signs out and middleware redirects, as does a reload.
+  const [accountEmail, setAccountEmail] = useState<string | null>(null);
+  const liveEmail = session?.user?.email ?? null;
+  useEffect(() => {
+    if (liveEmail) setAccountEmail(liveEmail);
+  }, [liveEmail]);
 
   async function handleDelete(conversation: ConversationSummary) {
     // Irreversible (drops the conversation + all its messages) — confirm first.
@@ -103,10 +114,10 @@ export function Sidebar() {
         )}
       </nav>
 
-      {session?.user?.email && (
+      {accountEmail && (
         <div className="flex items-center justify-between gap-2 border-t border-black/10 pt-3 text-xs text-black/60 dark:border-white/10 dark:text-white/60">
-          <span className="truncate" title={session.user.email}>
-            {session.user.email}
+          <span className="truncate" title={accountEmail}>
+            {accountEmail}
           </span>
           <button
             type="button"
