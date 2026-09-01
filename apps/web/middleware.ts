@@ -14,20 +14,10 @@ const PUBLIC_PREFIXES = [
   "/auth",
 ];
 
-// PRIMER (dev note — trim for prod). How this file executes:
-// - Next calls the DEFAULT EXPORT once per matcher-matched request, BEFORE
-//   routing to any page/route handler. `auth(cb)` is a higher-order call:
-//   Auth.js returns a wrapped middleware that (1) reads the session cookie,
-//   (2) verifies it with our custom decode (auth.ts — HS256, iss/aud), and
-//   (3) attaches the verdict as `req.auth` (session object | null), THEN
-//   invokes our callback. Auth.js does the crypto; the callback is policy.
-// - Return values: NextResponse.next() = proceed to the destination;
-//   NextResponse.redirect() = answer now, destination never runs.
-// - Redirect targets must be PUBLIC_PREFIXES members or requests loop.
-// - Scope: guards Next pages/routes ONLY. Browser->FastAPI calls never pass
-//   through Next; the API's current_user (crypto + revocation) is the real
-//   security boundary. This check is crypto-only: a revoked-but-unexpired
-//   session still gets page shells — every data fetch behind them 401s.
+// Gates Next pages only, and crypto-only (req.auth comes from auth.ts's
+// decode): a revoked-but-unexpired session still gets page shells. The API's
+// current_user is the real boundary — every data fetch behind them 401s.
+// Redirect targets must stay in PUBLIC_PREFIXES or requests loop.
 export default auth((req) => {
   const { pathname } = req.nextUrl;
   // Logged-in visits to the auth screens bounce into the app — checked before

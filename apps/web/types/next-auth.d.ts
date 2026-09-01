@@ -1,10 +1,8 @@
 import type { DefaultSession } from "next-auth";
 
-// Auth.js ships Session.user as optional with all-optional fields
-// (user?: { id?, email?, ... }). Our session callback in auth.ts always sets
-// id (the token's sub — the UUID FastAPI scopes every query by) and email,
-// so tighten the types to that runtime guarantee: no null-checks at every
-// session.user.id read. Intersection keeps the default fields (name, image).
+// auth.ts's session callback always sets id (the token's sub — the UUID
+// FastAPI scopes by) and email, so tighten Auth.js's all-optional defaults to
+// that guarantee. The intersection keeps its remaining fields.
 declare module "next-auth" {
   interface Session {
     user: { id: string; email: string } & DefaultSession["user"];
