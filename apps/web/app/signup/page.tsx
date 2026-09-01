@@ -43,10 +43,9 @@ export default function SignupPage() {
       let detail = "Signup failed.";
       try {
         const body = (await response.json()) as { detail?: unknown };
-        // FastAPI shapes: string detail for HTTPExceptions (e.g. duplicate
-        // email 400, signup 429); array of Pydantic errors for a 422. A 422
-        // fires for a bad EMAIL too (server EmailStr > browser type=email), so
-        // read which field actually failed instead of always blaming password.
+        // String detail = our HTTPExceptions (400 duplicate, 429); array = a
+        // 422, which fires for a bad EMAIL too (server EmailStr is stricter
+        // than the browser's type=email), so attribute it to the real field.
         if (typeof body.detail === "string") detail = body.detail;
         else if (response.status === 422)
           detail = pydanticEmailFailed(body.detail)

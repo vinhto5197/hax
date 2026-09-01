@@ -18,25 +18,15 @@ export type DocumentSummary = components["schemas"]["DocumentOut"];
 // SSE). Prod: unset — same-origin via the reverse proxy. See ADR 0005.
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
-// A 401 from FastAPI means the session cookie is dead (expired, revoked, or
-// tampered) even though middleware's crypto-only check may still pass — sign
-// out client-side so the cookie is cleared and the no-cookie redirect lands on
-// /login.
-//
-// evictingSession lives in this browser tab's module scope; its whole job is
-// the few hundred ms between the first 401 and signOut's navigation, when
-// parallel fetches (conversations + documents + session UI) can all 401 at
-// once — only the first may fire the signOut round-trip. No reset on success:
-// the navigation tears down this JS world, and the fresh page re-imports the
-// module with the flag false. The .catch re-arms it on the one path with no
-// navigation — signOut itself failing — so a later 401 can retry eviction.
+// Collapses the parallel 401s of one eviction into a single signOut. Never
+// reset on success (the navigation discards module state); the .catch re-arms
+// it on the one path without navigation, so a later 401 can retry.
 let evictingSession = false;
 
-// Every FastAPI call goes through here: the session cookie is always attached
-// (no route this client calls is public; spread order makes the credentials
-// un-droppable — dev hits :8000 cross-origin per ADR 0005, pairing with
-// allow_credentials=True in FastAPI's CORS) and 401 eviction stays central,
-// not per-callsite.
+// Single entry point for FastAPI calls: credentials are attached here so no
+// callsite can drop them (dev is cross-origin — ADR 0005, pairs with
+// allow_credentials=True), and a 401 (cookie expired, revoked, or tampered —
+// middleware's crypto-only check can still pass one) evicts centrally.
 async function apiFetch(input: string, init?: RequestInit): Promise<Response> {
   const response = await fetch(input, { ...init, credentials: "include" });
   if (response.status === 401 && !evictingSession) {
