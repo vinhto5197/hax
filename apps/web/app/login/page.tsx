@@ -26,7 +26,13 @@ export default function LoginPage() {
       redirect: false,
     });
     if (result?.error) {
-      setError("Invalid email or password.");
+      // authorize() throws RateLimit (code "rate_limited") on 429; all other
+      // failures collapse to the generic anti-enumeration message.
+      setError(
+        result.code === "rate_limited"
+          ? "Too many attempts — try again in a few minutes."
+          : "Invalid email or password.",
+      );
       setSubmitting(false);
       return;
     }
