@@ -19,9 +19,12 @@ config = context.config
 config.set_main_option("sqlalchemy.url", MIGRATIONS_DATABASE_URL_ASYNC)
 
 # Interpret the config file for Python logging.
-# This line sets up loggers basically.
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers=False: this module also runs in-process from
+    # tests/api/conftest.py's test_database fixture (migrating hax_test), by
+    # which point app/test loggers already exist. fileConfig's default would
+    # silently disable every one of them for the rest of the pytest session.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 

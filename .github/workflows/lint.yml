@@ -26,6 +26,22 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    services:
+      # Same image as dev compose. The suite creates the hax_test DB, the
+      # hax_app role, and runs migrations itself (tests/api/conftest.py).
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: hax
+          POSTGRES_PASSWORD: hax
+          POSTGRES_DB: hax
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hax -d hax"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
 
@@ -38,8 +54,7 @@ jobs:
       - name: Install dependencies
         run: pip install -e ".[dev]"
 
-      # No services: the suite is self-contained by design — fakeredis stands
-      # in for Redis, no test touches Postgres, and conftest.py hard-assigns
-      # the auth secrets.
+      # fakeredis stands in for Redis; Postgres is the service above (the authz
+      # suite needs real RLS/pgvector); conftest.py hard-assigns env secrets.
       - name: Pytest
         run: python -m pytest -W error
