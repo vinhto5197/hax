@@ -19,17 +19,5 @@
   },
   "python.terminal.activateEnvironment": false,
   "python.terminal.useEnvFile": true,
-  "python.envFile": "${workspaceFolder}/.env",
-  "sqltools.connections": [
-    {
-      "ssh": "Disabled",
-      "previewLimit": 50,
-      "server": "localhost",
-      "port": 5432,
-      "driver": "PostgreSQL",
-      "name": "test",
-      "database": "hax",
-      "username": "hax"
-    }
-  ]
+  "python.envFile": "${workspaceFolder}/.env"
 }
