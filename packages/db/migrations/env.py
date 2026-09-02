@@ -9,14 +9,14 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from packages.db.models import *  # noqa: F401, F403
 
 # Import Base and all models so autogenerate sees the tables.
-from packages.db.session import DATABASE_URL_ASYNC, Base
+from packages.db.session import MIGRATIONS_DATABASE_URL_ASYNC, Base
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
 
-# Inject the runtime DB URL so alembic.ini doesn't need to hard-code it.
-config.set_main_option("sqlalchemy.url", DATABASE_URL_ASYNC)
+# Migrations run as the OWNER role — URL policy lives in packages/db/session.py.
+config.set_main_option("sqlalchemy.url", MIGRATIONS_DATABASE_URL_ASYNC)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
