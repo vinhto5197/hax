@@ -33,6 +33,11 @@ def _bootstrap() -> None:
             key, _, val = line.partition("=")
             os.environ.setdefault(key.strip(), val.strip().strip("\"'"))
 
+    # Inspection needs the all-rows view: under RLS (slice 2) the app role with
+    # no announced identity sees zero rows — correct for the app, useless here.
+    if os.environ.get("MIGRATIONS_DATABASE_URL"):
+        os.environ["DATABASE_URL"] = os.environ["MIGRATIONS_DATABASE_URL"]
+
 
 async def list_documents() -> None:
     from sqlalchemy import func, select
