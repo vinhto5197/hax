@@ -1,14 +1,12 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from apps.api.auth import CurrentUser, current_user
 from apps.api.deps import get_session
 from packages.core.schemas.conversation import ConversationDetailOut, ConversationOut
-from packages.db.models import Conversation
+from packages.db.repos import conversations as conversations_repo
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
 
@@ -18,12 +16,9 @@ async def list_conversations(
     session: AsyncSession = Depends(get_session),
     user: CurrentUser = Depends(current_user),
 ) -> list[ConversationOut]:
-    # Most-recently-active first — matches sidebar ordering. No auth filter
-    # yet, so this returns every conversation.
-    result = await session.scalars(
-        select(Conversation).order_by(Conversation.updated_at.desc())
-    )
-    return [ConversationOut.model_validate(c) for c in result]
+    # Most-recently-active first — matches sidebar ordering.
+    conversations = await conversations_repo.list_for_user(session, user.id)
+    return [ConversationOut.model_validate(c) for c in conversations]
 
 
 @router.get("/{conversation_id}")
@@ -32,15 +27,11 @@ async def get_conversation(
     session: AsyncSession = Depends(get_session),
     user: CurrentUser = Depends(current_user),
 ) -> ConversationDetailOut:
-    # selectinload eager-loads messages in a second query (the relationship is
-    # ordered by created_at), avoiding a lazy load in async context.
-    result = await session.scalars(
-        select(Conversation)
-        .where(Conversation.id == conversation_id)
-        .options(selectinload(Conversation.messages))
+    conversation = await conversations_repo.get_owned(
+        session, user.id, conversation_id, with_messages=True
     )
-    conversation = result.first()
     if conversation is None:
+        # Ownership miss == nonexistent id, deliberately indistinguishable.
         raise HTTPException(status_code=404, detail="conversation not found")
     return ConversationDetailOut.model_validate(conversation)
 
@@ -51,13 +42,7 @@ async def delete_conversation(
     session: AsyncSession = Depends(get_session),
     user: CurrentUser = Depends(current_user),
 ) -> Response:
-    # No auth filter yet — M2.5 scopes deletes by user_id.
-    conversation = await session.get(Conversation, conversation_id)
-    if conversation is None:
+    if not await conversations_repo.delete_owned(session, user.id, conversation_id):
         raise HTTPException(status_code=404, detail="conversation not found")
-
-    # Messages go via the DB's ON DELETE CASCADE (passive_deletes on the model),
-    # so this stays two statements regardless of conversation length.
-    await session.delete(conversation)
     await session.commit()
     return Response(status_code=204)

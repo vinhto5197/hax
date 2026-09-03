@@ -44,7 +44,7 @@ async def chat(
     )
     # Replay prior turns. Retrieval is NOT injected here — the model invokes the
     # search_documents tool itself when the corpus looks relevant.
-    messages = await load_history(conversation_id)
+    messages = await load_history(conversation_id, user.id)
     model = payload.model or DEFAULT_MODEL
     event_fn = partial(stream_completion_agentic, system=AGENTIC_SYSTEM, model=model)
     return StreamingResponse(

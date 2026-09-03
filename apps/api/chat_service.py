@@ -5,10 +5,9 @@ from uuid import UUID
 import anyio
 from anthropic.types import MessageParam
 from fastapi import HTTPException
-from sqlalchemy import func, select, update
 
 from packages.db import AsyncSessionLocal
-from packages.db.models import Conversation, Message
+from packages.db.repos import conversations as conversations_repo
 
 # no-cache: SSE must not be cached/buffered by intermediaries.
 SSE_HEADERS = {"Cache-Control": "no-cache", "Connection": "keep-alive"}
@@ -23,68 +22,56 @@ def sse_event(data: dict) -> str:
 async def persist_user_turn(
     prompt: str, conversation_id: UUID | None, user_id: UUID
 ) -> UUID:
-    """Resolve or lazily create the conversation, persist the user message,
-    and return the conversation id.
+    """Resolve or lazily create the caller's conversation, persist the user
+    message, and return the conversation id.
 
-    Runs before the LLM call so the user turn survives a model error. Raises
-    404 if a conversation_id is supplied but doesn't exist. user_id stamps
-    ownership on lazy-create only — reads are scoped in slice 2.
+    Runs before the LLM call so the user turn survives a model error. 404 if
+    conversation_id isn't owned by user_id — the write-path ownership gate
+    (a foreign id and a nonexistent one are indistinguishable).
     """
     async with AsyncSessionLocal() as session:
         if conversation_id is None:
-            conversation = Conversation(user_id=user_id)
-            session.add(conversation)
-            # flush, not commit: fills the server-default id while keeping
-            # conversation + message in one atomic transaction.
-            await session.flush()
+            conversation = await conversations_repo.create(session, user_id)
             conversation_id = conversation.id
-        elif await session.get(Conversation, conversation_id) is None:
+        elif (
+            await conversations_repo.get_owned(session, user_id, conversation_id)
+            is None
+        ):
             raise HTTPException(status_code=404, detail="conversation not found")
 
-        session.add(
-            Message(conversation_id=conversation_id, role="user", content=prompt)
-        )
+        await conversations_repo.add_message(session, conversation_id, "user", prompt)
         await session.commit()
 
     return conversation_id
 
 
-async def load_history(conversation_id: UUID) -> list[MessageParam]:
+async def load_history(conversation_id: UUID, user_id: UUID) -> list[MessageParam]:
     """Replay the conversation's persisted turns as Anthropic `messages`.
 
-    Called after persist_user_turn, so the just-sent user message is already in
-    the table and lands last — the array is ready to send as-is. Consecutive
-    same-role turns can occur (an errored turn saves no assistant reply); the
-    API merges them. Full history every turn — no windowing in v0.
+    Called after persist_user_turn (which owns the ownership check), so the
+    just-sent user message lands last. Consecutive same-role turns can occur
+    (an errored turn saves no assistant reply); the API merges them. Full
+    history every turn — no windowing in v0.
     """
     async with AsyncSessionLocal() as session:
-        rows = await session.execute(
-            select(Message.role, Message.content)
-            .where(Message.conversation_id == conversation_id)
-            .order_by(Message.created_at)
-        )
-        return [{"role": role, "content": content} for role, content in rows]
+        rows = await conversations_repo.load_history(session, user_id, conversation_id)
+    return [{"role": role, "content": content} for role, content in rows]
 
 
 async def persist_assistant_turn(conversation_id: UUID, content: str) -> None:
     """Persist the assistant message and bump the conversation's updated_at.
 
     Runs from the stream's finally, so completion AND disconnect both save
-    whatever streamed. No-ops if nothing was streamed.
+    whatever streamed. No user_id: ownership was proven by persist_user_turn
+    in this same request. No-ops if nothing was streamed.
     """
     if not content:
         return
     async with AsyncSessionLocal() as session:
-        session.add(
-            Message(conversation_id=conversation_id, role="assistant", content=content)
+        await conversations_repo.add_message(
+            session, conversation_id, "assistant", content
         )
-        # updated_at drives sidebar ordering; a child insert doesn't touch the
-        # parent row, so bump it explicitly.
-        await session.execute(
-            update(Conversation)
-            .where(Conversation.id == conversation_id)
-            .values(updated_at=func.now())
-        )
+        await conversations_repo.touch(session, conversation_id)
         await session.commit()
 
 
