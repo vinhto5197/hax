@@ -11,7 +11,6 @@ from fastapi import (
     Response,
     UploadFile,
 )
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.auth import CurrentUser, current_user
@@ -19,7 +18,7 @@ from apps.api.deps import get_session
 from apps.worker.tasks import ingest_document
 from packages.core import storage
 from packages.core.schemas.document import DocumentOut
-from packages.db.models import Document
+from packages.db.repos import documents as documents_repo
 
 logger = logging.getLogger(__name__)
 
@@ -36,11 +35,9 @@ async def list_documents(
     session: AsyncSession = Depends(get_session),
     user: CurrentUser = Depends(current_user),
 ) -> list[DocumentOut]:
-    # Most-recent first. No auth filter yet — returns every document.
-    result = await session.scalars(
-        select(Document).order_by(Document.created_at.desc())
-    )
-    return [DocumentOut.model_validate(d) for d in result]
+    # Most-recent first.
+    documents = await documents_repo.list_for_user(session, user.id)
+    return [DocumentOut.model_validate(d) for d in documents]
 
 
 @router.post("")
@@ -76,15 +73,13 @@ async def upload_document(
     except UnicodeDecodeError:
         raise HTTPException(status_code=400, detail="file must be UTF-8 text")
 
-    doc = Document(
+    doc = await documents_repo.create(
+        session,
+        user.id,
         filename=filename,
         mime_type=SUFFIX_MIME[suffix],
         size_bytes=len(content),
-        status="pending",
-        user_id=user.id,
     )
-    session.add(doc)
-    await session.flush()  # populate the server-default id so we can key the file
 
     # Store the file BEFORE committing, so a 'pending' row never exists without
     # its bytes (a failed put rolls the flushed row back). Blocking boto3 →
@@ -117,17 +112,14 @@ async def delete_document(
     session: AsyncSession = Depends(get_session),
     user: CurrentUser = Depends(current_user),
 ) -> Response:
-    # No auth filter yet — M2.5 scopes deletes by user_id.
-    doc = await session.get(Document, document_id)
+    doc = await documents_repo.delete_owned(session, user.id, document_id)
     if doc is None:
         raise HTTPException(status_code=404, detail="document not found")
 
-    # DB row first (source of truth; chunks go via ON DELETE CASCADE), storage
-    # second and best-effort: a storage failure after the commit only leaks an
-    # orphaned object, so log it rather than 500 an already-completed delete.
+    # DB row first (source of truth), storage second and best-effort: a storage
+    # failure after commit only leaks an orphaned object — log, don't 500.
     # storage_key is None for docs ingested before object storage existed.
     storage_key = doc.storage_key
-    await session.delete(doc)
     await session.commit()
 
     if storage_key:

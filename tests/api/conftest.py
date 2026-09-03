@@ -96,12 +96,18 @@ def admin_engine():
 @pytest.fixture(autouse=True)
 async def clean_db(admin_engine, test_database):
     async with admin_engine.begin() as conn:
-        await conn.execute(
+        rows = await conn.execute(
             text(
-                "TRUNCATE conversations, messages, documents, chunks, "
-                "email_tokens, accounts, users CASCADE"
+                "SELECT tablename FROM pg_tables"
+                " WHERE schemaname = 'public' AND tablename <> 'alembic_version'"
             )
         )
+        tables = ", ".join(row[0] for row in rows)
+        # f-string, not bound params: identifiers can't be bound, and the names
+        # come from pg_tables, not from any user input. alembic_version is
+        # excluded or the next run would re-apply every migration.
+        if tables:
+            await conn.execute(text(f"TRUNCATE {tables} CASCADE"))
     yield
     # pytest-asyncio gives each test its own event loop; the APP engine's
     # pooled asyncpg connections are loop-bound, so drop them or the next
