@@ -8,6 +8,7 @@ import ast
 import logging
 import operator
 import os
+import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
@@ -21,6 +22,17 @@ logger = logging.getLogger(__name__)
 
 # Recipient for the MOCKED send_email tool (v0 stub — logged, not really sent).
 EMAIL_RECIPIENT = os.getenv("EMAIL_RECIPIENT", "you@example.com")
+
+
+@dataclass(frozen=True)
+class ToolContext:
+    """Per-request identity for tool executors.
+
+    user_id comes from the verified session (routers/chat.py), NOT from the
+    model: a tool must never let the prompt choose whose data it touches.
+    """
+
+    user_id: uuid.UUID
 
 
 @dataclass(frozen=True)
@@ -38,7 +50,7 @@ class Tool:
     description: str
     label: str
     input_model: type[BaseModel]
-    run: Callable[[Any], Awaitable[str]]
+    run: Callable[[Any, ToolContext], Awaitable[str]]
 
     def to_anthropic(self) -> dict:
         return {
@@ -56,8 +68,8 @@ class SearchDocumentsInput(BaseModel):
     )
 
 
-async def _run_search_documents(inp: SearchDocumentsInput) -> str:
-    chunks = await retrieve(inp.query)
+async def _run_search_documents(inp: SearchDocumentsInput, ctx: ToolContext) -> str:
+    chunks = await retrieve(inp.query, ctx.user_id)
     if not chunks:
         return "No relevant passages were found in the uploaded documents."
     # Returned as a structured tool_result block — no text fence for document
@@ -115,7 +127,7 @@ def _eval_expr(node: ast.AST) -> float:
     raise ValueError(f"unsupported expression element: {type(node).__name__}")
 
 
-async def _run_calculator(inp: CalculatorInput) -> str:
+async def _run_calculator(inp: CalculatorInput, ctx: ToolContext) -> str:  # ctx unused
     try:
         result = _eval_expr(ast.parse(inp.expression, mode="eval").body)
     except (ValueError, SyntaxError, TypeError, ZeroDivisionError) as exc:
@@ -141,7 +153,9 @@ class GetCurrentDatetimeInput(BaseModel):
     pass  # zero-argument tool
 
 
-async def _run_get_current_datetime(inp: GetCurrentDatetimeInput) -> str:
+async def _run_get_current_datetime(
+    inp: GetCurrentDatetimeInput, ctx: ToolContext
+) -> str:  # ctx unused
     return datetime.now().astimezone().isoformat(timespec="seconds")
 
 
@@ -163,7 +177,7 @@ class SendEmailInput(BaseModel):
     body: str = Field(description="The email body text.")
 
 
-async def _run_send_email(inp: SendEmailInput) -> str:
+async def _run_send_email(inp: SendEmailInput, ctx: ToolContext) -> str:  # ctx unused
     # v0 stub: logs the would-be send, sends nothing (real Gmail is v1). The
     # hardcoded recipient bounds prompt-injection blast radius.
     logger.info(

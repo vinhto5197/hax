@@ -11,6 +11,7 @@ from apps.api.chat_service import (
     persist_user_turn,
 )
 from packages.core.agent.harness import DEFAULT_MODEL, stream_completion_agentic
+from packages.core.agent.tools import ToolContext
 from packages.core.schemas.chat import ChatRequest
 
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -46,7 +47,12 @@ async def chat(
     # search_documents tool itself when the corpus looks relevant.
     messages = await load_history(conversation_id, user.id)
     model = payload.model or DEFAULT_MODEL
-    event_fn = partial(stream_completion_agentic, system=AGENTIC_SYSTEM, model=model)
+    event_fn = partial(
+        stream_completion_agentic,
+        system=AGENTIC_SYSTEM,
+        model=model,
+        ctx=ToolContext(user_id=user.id),
+    )
     return StreamingResponse(
         event_stream(event_fn, messages, conversation_id),
         media_type="text/event-stream",

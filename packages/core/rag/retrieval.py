@@ -1,5 +1,6 @@
 import logging
 import os
+import uuid
 from dataclasses import dataclass
 
 from sqlalchemy import select
@@ -26,15 +27,18 @@ class RetrievedChunk:
     distance: float  # cosine distance: 0 = identical direction, 2 = opposite
 
 
-async def retrieve(query: str, k: int = TOP_K) -> list[RetrievedChunk]:
+async def retrieve(
+    query: str, user_id: uuid.UUID, k: int = TOP_K
+) -> list[RetrievedChunk]:
     """Embed the query and return its k nearest chunks by cosine distance.
 
     Degrades to [] on ANY fault (no corpus, Voyage down, DB error) so chat never
     hard-fails on retrieval; the traceback is logged so real bugs stay visible.
     Only chunks of status='ready' documents are searched — in-flight or failed
     ingests never leak partial chunks (delete-then-insert makes 'ready' imply a
-    complete chunk set). No user filter yet (M2.5). RAG_MAX_DISTANCE, if set,
-    drops chunks farther than the cutoff.
+    complete chunk set). Scoped to user_id's chunks (required — identity comes
+    from the request, never from the model). RAG_MAX_DISTANCE, if set, drops
+    chunks farther than the cutoff.
     """
     try:
         async with AsyncSessionLocal() as session:
@@ -42,7 +46,7 @@ async def retrieve(query: str, k: int = TOP_K) -> list[RetrievedChunk]:
             ready_chunk = (
                 select(Chunk.id)
                 .join(Chunk.document)
-                .where(Document.status == "ready")
+                .where(Document.status == "ready", Chunk.user_id == user_id)
                 .limit(1)
             )
             if await session.scalar(ready_chunk) is None:
@@ -56,7 +60,7 @@ async def retrieve(query: str, k: int = TOP_K) -> list[RetrievedChunk]:
             stmt = (
                 select(Chunk.content, Chunk.chunk_metadata, distance.label("distance"))
                 .join(Chunk.document)
-                .where(Document.status == "ready")
+                .where(Document.status == "ready", Chunk.user_id == user_id)
             )
             if MAX_DISTANCE is not None:
                 stmt = stmt.where(distance <= MAX_DISTANCE)

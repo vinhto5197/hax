@@ -1,6 +1,19 @@
-import voyageai
+import warnings
 
 from packages.db.models.chunk import EMBEDDING_DIM
+
+# voyageai -> langchain_core -> pydantic's own v1-compat shim warns at import
+# time under Python 3.14 (upstream dependency issue, not app code — pydantic
+# itself flags its v1 shim as broken there). CI runs pytest -W error, so this
+# is scoped to the one import that triggers it; nothing else is silenced.
+with warnings.catch_warnings():
+    warnings.filterwarnings(
+        "ignore",
+        message="Core Pydantic V1 functionality isn't compatible with Python 3.14 "
+        "or greater",
+        category=UserWarning,
+    )
+    import voyageai
 
 # voyage-3.5: 1024-dim (matches EMBEDDING_DIM); documents and queries use
 # asymmetric input_type values. Always pass model= explicitly — the SDK's own

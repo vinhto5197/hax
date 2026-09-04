@@ -13,7 +13,7 @@ from collections.abc import AsyncIterator
 from anthropic import AsyncAnthropic
 from anthropic.types import MessageParam
 
-from packages.core.agent.tools import TOOLS
+from packages.core.agent.tools import TOOLS, ToolContext
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +57,7 @@ def _cache_last(messages: list[MessageParam]) -> list[MessageParam]:
     return [*messages[:-1], last]
 
 
-async def _run_tool(name: str, raw_input: dict) -> tuple[str, bool]:
+async def _run_tool(name: str, raw_input: dict, ctx: ToolContext) -> tuple[str, bool]:
     """Dispatch one tool_use to its executor; return (result_text, is_error).
 
     A bad tool name, invalid input, or an executor exception becomes an error
@@ -67,7 +67,7 @@ async def _run_tool(name: str, raw_input: dict) -> tuple[str, bool]:
     try:
         tool = TOOLS[name]
         parsed = tool.input_model.model_validate(raw_input)
-        return await tool.run(parsed), False
+        return await tool.run(parsed, ctx), False
     except Exception as exc:  # noqa: BLE001 — tool faults must not crash the loop
         logger.warning("agentic tool %s failed: %s", name, exc, exc_info=True)
         return f"Error running {name}: {exc}", True
@@ -77,6 +77,8 @@ async def stream_completion_agentic(
     messages: list[MessageParam],
     system: str | None = None,
     model: str = DEFAULT_MODEL,
+    *,
+    ctx: ToolContext,
 ) -> AsyncIterator[dict]:
     """Run the tool-use loop, yielding {"content": …} / {"status": …} events."""
     # Local copy — the intermediate tool turns appended below are never persisted.
@@ -136,7 +138,7 @@ async def stream_completion_agentic(
                 block.name,
                 block.input,
             )
-            out, is_error = await _run_tool(block.name, block.input)
+            out, is_error = await _run_tool(block.name, block.input, ctx)
             logger.info(
                 "agentic tool_result: name=%s is_error=%s out=%r",
                 block.name,
