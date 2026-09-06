@@ -24,6 +24,7 @@ from sqlalchemy.pool import NullPool
 
 import apps.api.redis_client as redis_client
 from packages.db import engine
+from packages.db.user_context import current_user_id
 
 ROOT = Path(__file__).resolve().parents[2]
 ADMIN_DSN = "postgresql://hax:hax@localhost:5432"
@@ -120,6 +121,17 @@ def fake_redis(monkeypatch):
     client = fakeredis.aioredis.FakeRedis(decode_responses=True)
     monkeypatch.setattr(redis_client, "_client", client)
     return client
+
+
+@pytest.fixture(autouse=True)
+def reset_identity():
+    # ASGITransport runs the app inline, so a client-driven request sets
+    # current_user_id inside the test's own task context; without a reset,
+    # a later assert in the same test (or a differently-scoped session use)
+    # could inherit an already-announced identity from a prior request.
+    token = current_user_id.set(None)
+    yield
+    current_user_id.reset(token)
 
 
 @pytest.fixture

@@ -11,6 +11,7 @@ from packages.core.rag.ingest import (
     mark_document_failed,
 )
 from packages.db import engine
+from packages.db.user_context import current_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,17 @@ logger = logging.getLogger(__name__)
 # attempt (matches the task's max_retries).
 MAX_RETRIES = 3
 RETRY_BACKOFF_BASE = 5  # seconds
+
+# doc.error is user-visible (DocumentOut.error). Permanent errors carry
+# messages we authored; anything else is raw SDK/driver text that can leak
+# endpoints, keys, or paths — log the raw form, store the generic line.
+GENERIC_INGEST_ERROR = (
+    "ingestion failed after retries (temporary service error); re-upload to retry"
+)
+
+
+def _public_error(exc: BaseException) -> str:
+    return str(exc) if isinstance(exc, PermanentIngestError) else GENERIC_INGEST_ERROR
 
 
 def _run_async(coro) -> None:
@@ -56,7 +68,7 @@ def _record_failed(doc_id: UUID, error: str) -> None:
 
 
 @celery_app.task(bind=True, name="ingest_document", max_retries=MAX_RETRIES)
-def ingest_document(self, document_id: str) -> None:
+def ingest_document(self, document_id: str, user_id: str) -> None:
     """Sync Celery entrypoint: run the async pipeline and own retry + terminal status.
 
     ``ingest_document_async`` drives pending/processing -> ready and raises on
@@ -69,20 +81,26 @@ def ingest_document(self, document_id: str) -> None:
       final attempt, record 'failed'.
 
     The id arrives as a str (the JSON broker can't carry a UUID) and is parsed back
-    here.
+    here. user_id rides the payload — the enqueuing request knows the owner; the
+    worker announces it for RLS.
     """
     doc_id = UUID(document_id)
     logger.info("ingesting document %s (attempt %d)", doc_id, self.request.retries + 1)
+    # asyncio.run copies the current context, so the coroutine (and the
+    # _record_failed calls below) see the announced identity.
+    token = current_user_id.set(UUID(user_id))
     try:
         _run_async(ingest_document_async(doc_id))
     except PermanentIngestError as exc:
-        logger.error("permanent ingest failure for %s: %s", doc_id, exc)
-        _record_failed(doc_id, str(exc))
+        logger.error("permanent ingest failure for %s: %s", doc_id, exc, exc_info=True)
+        _record_failed(doc_id, _public_error(exc))
         raise
     except Exception as exc:
         if self.request.retries >= MAX_RETRIES:
-            logger.error("ingest exhausted retries for %s: %s", doc_id, exc)
-            _record_failed(doc_id, str(exc))
+            logger.error(
+                "ingest exhausted retries for %s: %s", doc_id, exc, exc_info=True
+            )
+            _record_failed(doc_id, _public_error(exc))
             raise
         countdown = RETRY_BACKOFF_BASE * (2**self.request.retries)
         logger.warning(
@@ -94,3 +112,5 @@ def ingest_document(self, document_id: str) -> None:
             exc,
         )
         raise self.retry(exc=exc, countdown=countdown)
+    finally:
+        current_user_id.reset(token)

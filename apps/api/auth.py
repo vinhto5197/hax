@@ -20,6 +20,7 @@ from packages.core.auth.revocation import session_revoked
 from packages.core.auth.tokens import InvalidSessionToken, decode_session_token
 from packages.db import AsyncSessionLocal
 from packages.db.repos import users as users_repo
+from packages.db.user_context import current_user_id
 
 COOKIE_NAME_ENV = "AUTH_COOKIE_NAME"
 _DEFAULT_COOKIE = "authjs.session-token"
@@ -72,6 +73,10 @@ async def current_user(request: Request) -> CurrentUser:
             detail="session revoked",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    # Announce identity for this request's DB work (RLS). Each request runs in
+    # its own asyncio task with its own context, so no cross-request bleed and
+    # no reset needed; the SSE stream + its finally run in this same task.
+    current_user_id.set(claims.sub)
     return CurrentUser(id=claims.sub, email=claims.email)
 
 

@@ -19,6 +19,10 @@ class PermanentIngestError(Exception):
     The Celery task records the document 'failed' immediately on this, instead of
     retrying. Any OTHER exception (Voyage / S3 / DB I/O) is treated as transient
     and retried with backoff.
+
+    Messages are USER-VISIBLE (they become doc.error via the task's _public_error
+    pass-through): keep them static or interpolate only server-generated ids/
+    filenames — never raw driver/SDK exception text.
     """
 
 
@@ -88,16 +92,15 @@ async def ingest_document_async(document_id: UUID) -> None:
         try:
             await session.commit()
         except IntegrityError as exc:
-            raise PermanentIngestError(
-                f"chunk insert violated a constraint: {exc}"
-            ) from exc
+            raise PermanentIngestError("chunk insert violated a constraint") from exc
 
 
 async def mark_document_failed(document_id: UUID, error: str) -> None:
     """Record a terminal 'failed' status + error — the one place it is written.
 
-    No-op if the row is gone (deleted mid-ingest). Raw error text is dev-useful
-    while single-tenant; sanitize before M2.5 multi-tenancy.
+    No-op if the row is gone (deleted mid-ingest). Receives already-sanitized
+    text — the calling task owns sanitization (_public_error); raw detail goes
+    to logs only.
     """
     async with AsyncSessionLocal() as session:
         doc = await session.get(Document, document_id)
