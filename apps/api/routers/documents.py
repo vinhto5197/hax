@@ -93,7 +93,7 @@ async def upload_document(
     # Enqueue ingestion (Celery) and return at 'pending'; the UI polls for the
     # status flip. The id goes as a str — the JSON broker can't carry a UUID.
     try:
-        ingest_document.delay(str(doc.id))
+        ingest_document.delay(str(doc.id), str(user.id))
     except Exception:
         # The row is already committed, so a broker outage here would strand the
         # doc at 'pending' with no task enqueued. Mark it 'failed' so 'pending'

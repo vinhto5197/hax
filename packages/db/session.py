@@ -29,3 +29,22 @@ AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 class Base(DeclarativeBase):
     pass
+
+
+from sqlalchemy import event, text  # noqa: E402 — grouped with the listener it serves
+
+from packages.db.user_context import current_user_id  # noqa: E402
+
+
+@event.listens_for(engine.sync_engine, "begin")
+def _announce_rls_identity(conn) -> None:
+    # One central place instead of per-callsite SET LOCAL: forgetting at a
+    # callsite is exactly the leak class this slice removes. set_config(...,
+    # true) == SET LOCAL — dies at transaction end, so pooled connections are
+    # handed back identity-free (pool-bleed fence).
+    uid = current_user_id.get()
+    if uid is not None:
+        conn.execute(
+            text("SELECT set_config('app.current_user_id', :uid, true)"),
+            {"uid": str(uid)},
+        )
