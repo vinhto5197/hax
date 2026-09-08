@@ -136,9 +136,19 @@ All API routes require login (M2.5) — the app is unusable without these steps.
 
    `AUTH_SECRET` is the JWT secret shared between Auth.js (web) and FastAPI; `INTERNAL_API_SECRET` gates the server-to-server `/internal/auth/*` routes. They must be **different values**.
 
-2. **Set `BOOTSTRAP_USER_EMAIL` before your first `make migrate`** — only relevant if your database predates auth (has unowned conversations/documents). The auth migration assigns those legacy rows to a user created with this email; on a fresh empty database it's unused and can stay blank.
+2. **Two-URL env contract** (M2.5 slice 2, row-level security): `DATABASE_URL` is what the API/worker connect with at runtime, and it must point at the least-privilege **`hax_app`** role — a superuser role bypasses Postgres RLS entirely, which would make the per-user isolation silently decorative. `MIGRATIONS_DATABASE_URL` is separate and points at the **`hax`** owner role — Alembic needs ownership to run DDL. `.env.example` has both pre-filled for the compose Postgres; don't point `DATABASE_URL` at `hax`.
 
-3. **Claim the bootstrap account** (it's created without a password):
+3. **Pre-existing dev database volume?** `hax_app` and its grants are created by [infra/docker-compose/postgres/init.sql](infra/docker-compose/postgres/init.sql), which only runs on a **fresh** Postgres volume (Postgres only executes `/docker-entrypoint-initdb.d` on first init). If your volume predates this (the API fails to connect as `hax_app`, or `make infra-verify` still shows only the `hax` role), apply it once by hand:
+
+   ```bash
+   docker exec -i hax-postgres psql -U hax -d hax < infra/docker-compose/postgres/init.sql
+   ```
+
+   A fresh clone / `make infra-clean` volume never needs this — it's already covered.
+
+4. **Set `BOOTSTRAP_USER_EMAIL` before your first `make migrate`** — only relevant if your database predates auth (has unowned conversations/documents). The auth migration assigns those legacy rows to a user created with this email; on a fresh empty database it's unused and can stay blank.
+
+5. **Claim the bootstrap account** (it's created without a password):
 
    ```bash
    .venv/bin/python scripts/set_password.py you@example.com

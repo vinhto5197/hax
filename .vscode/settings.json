@@ -27,9 +27,19 @@
       "server": "localhost",
       "port": 5432,
       "driver": "PostgreSQL",
-      "name": "dev",
+      "name": "dev_superuser",
       "database": "hax",
       "username": "hax"
+    },
+    {
+      "ssh": "Disabled",
+      "previewLimit": 50,
+      "server": "localhost",
+      "port": 5432,
+      "driver": "PostgreSQL",
+      "name": "dev",
+      "database": "hax",
+      "username": "hax_app"
     }
   ]
 }

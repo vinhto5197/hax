@@ -41,3 +41,5 @@ Each ADR is a single markdown file: `NNNN-kebab-case-title.md` with a numeric pr
 | [0008](0008-langchain-boundaries-for-rag.md) | LangChain boundaries for RAG | superseded by 0009 |
 | [0009](0009-voyage-sdk-direct-langchain-splitter-only.md) | Voyage SDK directly; LangChain only for text splitting | accepted |
 | [0010](0010-celery-for-ingestion.md) | Celery for ingestion | accepted |
+| [0011](0011-auth-architecture.md) | Auth architecture: Auth.js front door, FastAPI identity owner, standard JWT bridge | accepted |
+| [0012](0012-structural-isolation.md) | Structural per-user isolation (repo layer + RLS) | accepted |
