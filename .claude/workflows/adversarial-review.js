@@ -10,9 +10,22 @@ export const meta = {
   ],
 }
 
+// PLAN REQUIREMENT — READ BEFORE RUNNING. This workflow spawns ~60 agents and
+// consumes roughly 25% of a Claude Max 5x ($100/mo) 5-hour usage window per
+// diff-scoped run (~2.5M Opus + ~0.2M Fable tokens), more for a whole-project
+// range. On Pro or Max 1x it will exhaust the window mid-run and die with
+// partial coverage. It refuses to start unless the launcher acknowledges the
+// tier explicitly: args.plan must equal "max-5x" (or "max-20x").
+//
 // Tiers decided 2026-09-08 (see memory: ar-config-and-calibration). Fable ≈ 4-6x
 // Opus on the usage meter, so it is confined to two singleton agents and the
 // lenses where a missed finding is most expensive.
+const ALLOWED_PLANS = new Set(['max-5x', 'max-20x'])
+if (!ALLOWED_PLANS.has(args.plan)) {
+  log(`Refusing to run: pass args.plan = "max-5x" or "max-20x" to confirm your subscription tier. ` +
+      `This review needs ~25% of a Max 5x usage window; lower tiers exhaust mid-run.`)
+  return { refused: true, reason: 'plan tier not acknowledged (args.plan)' }
+}
 const FINDER_MODEL = 'opus'
 const VERIFY_MODEL = 'opus'
 const HEAVY_MODEL = 'fable'
