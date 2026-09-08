@@ -1,8 +1,7 @@
-"""Cross-cutting authz sweep (M2.5 slice 2, Task 6): the ingest-ownership
-regression owed since slice-2 DB fixtures landed, the agent tool-context path
-end to end, GUC-less fail-closed checks, and the raise-site sanitization lock
-for the chunk-insert IntegrityError path (Step 1b — supersedes the tautological
-unit test in tests/core/test_ingest_error_sanitization.py).
+"""Cross-cutting authz seams: ingest ownership through the worker path,
+executor-level ToolContext scoping for the agent's search tool, fail-closed
+behavior on RAG tables when no identity is announced, and raise-site
+sanitization of the chunk-insert IntegrityError path.
 
 Two distinct isolation layers are exercised on purpose, never blended within
 one assertion:
@@ -145,14 +144,13 @@ async def test_constraint_violation_message_is_static(
     # [SQL: ...] [parameters: ...]) must never reach the PermanentIngestError
     # message — it becomes user-visible doc.error via _public_error.
     #
-    # Hermetic by construction (gate ruling 2026-09-06, replacing an earlier
-    # delete-mid-ingest attempt that empirically hit StaleDataError on the
-    # Document status UPDATE before ever reaching the chunk-insert
-    # IntegrityError — see task-6-report.md): patch AsyncSession.commit to
-    # let ingest's first commit (status="processing") through untouched, then
-    # raise a real IntegrityError carrying driver-shaped leak bait in place of
-    # its second commit (status="ready" + chunk insert), independent of
-    # SQLAlchemy's flush-ordering behavior.
+    # Hermetic on purpose: the real delete-mid-ingest race raises
+    # StaleDataError on the parent UPDATE before the chunk insert, so the
+    # IntegrityError handler is only reachable by injection. Patch
+    # AsyncSession.commit to let ingest's first commit (status="processing")
+    # through untouched, then raise a real IntegrityError carrying
+    # driver-shaped leak bait in place of its second commit (status="ready" +
+    # chunk insert), independent of SQLAlchemy's flush-ordering behavior.
     from sqlalchemy.exc import IntegrityError
     from sqlalchemy.ext.asyncio import AsyncSession
 

@@ -47,7 +47,12 @@ superuser, so dev now mirrors prod.
   against a real Postgres (`hax_test`), CI included.
 - Data-touching migrations run as the owner under FORCE RLS — they must
   toggle RLS or announce identity explicitly (documented M3 hand-off).
-- `scripts/corpus.py` uses MIGRATIONS_DATABASE_URL for the all-rows view.
+- Prod bootstrap must replicate init.sql's `ALTER DEFAULT PRIVILEGES`, or a
+  table created by a migration after RLS lands leaves `hax_app` without
+  access to it.
+- `scripts/corpus.py` uses MIGRATIONS_DATABASE_URL for the all-rows view
+  (dev: superuser bypass; on RDS the owner is bound by FORCE — caveat
+  tracked for M3).
 - `accounts` and `email_tokens` also carry `user_id` but are **deliberately
   outside RLS**: their current consumers run without an announced identity —
   `oauth-upsert` (internal-secret-gated, pre-session) and email-token

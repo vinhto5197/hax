@@ -101,4 +101,5 @@ def downgrade() -> None:
         op.execute(f"DROP POLICY {table}_owner ON {table}")
         op.execute(f"ALTER TABLE {table} NO FORCE ROW LEVEL SECURITY")
         op.execute(f"ALTER TABLE {table} DISABLE ROW LEVEL SECURITY")
-    # Grants are left in place: harmless, and Task 0's init.sql owns them.
+    # Grants are left in place: harmless, and
+    # infra/docker-compose/postgres/init.sql owns them.

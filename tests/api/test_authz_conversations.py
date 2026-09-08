@@ -54,12 +54,14 @@ async def test_owner_delete_204(client, user_a, admin_engine):
     a_conv = await make_conversation(admin_engine, user_a.id)
     r = await client.delete(f"/api/conversations/{a_conv}", headers=bearer(user_a))
     assert r.status_code == 204
+    gone = await client.get(f"/api/conversations/{a_conv}", headers=bearer(user_a))
+    assert gone.status_code == 404
 
 
 async def test_chat_append_to_foreign_conversation_404(
     client, user_a, user_b, admin_engine
 ):
-    # The write half of Task 14's finding: B must not add turns to A's thread.
+    # The write half of isolation: B must not append turns to A's thread;
     # persist_user_turn 404s before any LLM call, so no network is touched.
     a_conv = await make_conversation(admin_engine, user_a.id)
     r = await client.post(

@@ -2,7 +2,7 @@
 
 Two engines with deliberately different power:
 - APP engine (packages.db.engine): connects as hax_app — what the routes under
-  test use; RLS applies to it (from Task 5 on).
+  test use; RLS applies to it.
 - ADMIN engine: connects as hax (owner; superuser in dev/CI) for seeding,
   truncation, and cross-user assertions that must see all rows.
 Never seed through the app engine: once RLS lands, un-announced writes fail.
@@ -24,10 +24,13 @@ from sqlalchemy.pool import NullPool
 
 import apps.api.redis_client as redis_client
 from packages.db import engine
+from packages.db.session import to_async_url
 from packages.db.user_context import current_user_id
 
 ROOT = Path(__file__).resolve().parents[2]
-ADMIN_DSN = "postgresql://hax:hax@localhost:5432"
+# tests/conftest.py hard-sets this to the hax_test owner connection — derive
+# from it instead of a second literal DSN.
+ADMIN_URL = os.environ["MIGRATIONS_DATABASE_URL"]
 TEST_DB = "hax_test"
 
 # Mirrors infra/docker-compose/postgres/init.sql so CI (bare service container)
@@ -52,7 +55,10 @@ def test_database():
     import asyncpg
 
     async def prepare() -> None:
-        conn = await asyncpg.connect(dsn=f"{ADMIN_DSN}/postgres")
+        # CREATE DATABASE can't run inside the target DB — connect to the
+        # cluster's always-present maintenance DB instead.
+        maintenance_dsn = ADMIN_URL.replace(f"/{TEST_DB}", "/postgres")
+        conn = await asyncpg.connect(dsn=maintenance_dsn)
         try:
             exists = await conn.fetchval(
                 "SELECT 1 FROM pg_database WHERE datname = $1", TEST_DB
@@ -74,7 +80,7 @@ def test_database():
 
     async def grant() -> None:
         # Grants are per-database; init.sql only covered `hax`.
-        conn = await asyncpg.connect(dsn=f"{ADMIN_DSN}/{TEST_DB}")
+        conn = await asyncpg.connect(dsn=ADMIN_URL)
         try:
             for stmt in _GRANTS_SQL:
                 await conn.execute(stmt)
@@ -87,7 +93,7 @@ def test_database():
 @pytest.fixture(scope="session")
 def admin_engine():
     eng = create_async_engine(
-        f"{ADMIN_DSN}/{TEST_DB}".replace("postgresql://", "postgresql+asyncpg://", 1),
+        to_async_url(ADMIN_URL),
         poolclass=NullPool,  # session-scoped: must not pool loop-bound conns
     )
     yield eng

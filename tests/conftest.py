@@ -3,7 +3,7 @@ import os
 # Deterministic env for tests. Set BEFORE app modules import (conftest runs
 # first); hard-assign, don't setdefault — tests must never see real .env
 # values. DATABASE_URL points at hax_test so the suite structurally cannot
-# touch dev data; the app role/admin split mirrors dev (Task 0).
+# touch dev data; the app role/admin split mirrors dev.
 # >=32 bytes: PyJWT's HMAC-SHA256 key-length check warns below the digest
 # size, and CI runs pytest -W error, so a shorter fake secret fails the suite.
 os.environ["AUTH_SECRET"] = "test-secret-not-for-real-use-pad"
