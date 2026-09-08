@@ -76,7 +76,8 @@ celerybeat.pid
 .docker/
 
 # claude code
-.claude/
+.claude/*
+!.claude/workflows/
 
 # ide
 .idea/
