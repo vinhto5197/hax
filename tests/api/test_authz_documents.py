@@ -31,6 +31,8 @@ async def test_owner_delete_204(client, user_a, admin_engine, monkeypatch):
     monkeypatch.setattr(storage, "delete", lambda key: None)
     r = await client.delete(f"/api/documents/{a_doc}", headers=bearer(user_a))
     assert r.status_code == 204
+    still = await client.get("/api/documents", headers=bearer(user_a))
+    assert str(a_doc) not in [d["id"] for d in still.json()]
 
 
 async def test_upload_stamps_owner(client, user_a, admin_engine, monkeypatch):

@@ -11,6 +11,12 @@ async def get_session() -> AsyncIterator[AsyncSession]:
     The chat route deliberately does NOT use this — a request-scoped session
     would pin a pooled connection for the entire SSE stream, so chat_service
     opens its own short-lived sessions at the start and end of a turn instead.
+
+    Ordering invariant: the RLS identity announcement fires at transaction
+    BEGIN (session.py's engine listener). This dependency must never execute
+    SQL itself — it resolves before `current_user` sets the identity
+    ContextVar, so any statement here would autobegin identity-less and fail
+    closed under RLS.
     """
     async with AsyncSessionLocal() as session:
         yield session
