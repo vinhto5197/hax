@@ -110,6 +110,12 @@ _BIN_OPS = {
 }
 _UNARY_OPS = {ast.UAdd: operator.pos, ast.USub: operator.neg}
 _MAX_POW_EXP = 1000  # cap the exponent so `2**10**9` can't wedge the process
+# The exponent cap alone doesn't bound the RESULT of a chained expression: the
+# base of an outer pow/mult can itself be the unbounded output of an inner
+# one (e.g. `((9**1000)**1000)**1000`), so a big-int op sized in the millions
+# of bits runs synchronously on the event loop before str() ever gets a
+# chance to reject it. Reject by projected bit length BEFORE computing.
+_MAX_RESULT_BITS = 1_000_000
 
 
 def _eval_expr(node: ast.AST) -> float:
@@ -121,8 +127,20 @@ def _eval_expr(node: ast.AST) -> float:
         return _UNARY_OPS[type(node.op)](_eval_expr(node.operand))
     if isinstance(node, ast.BinOp) and type(node.op) in _BIN_OPS:
         left, right = _eval_expr(node.left), _eval_expr(node.right)
-        if isinstance(node.op, ast.Pow) and abs(right) > _MAX_POW_EXP:
-            raise ValueError(f"exponent too large (> {_MAX_POW_EXP})")
+        if isinstance(node.op, ast.Pow):
+            if abs(right) > _MAX_POW_EXP:
+                raise ValueError(f"exponent too large (> {_MAX_POW_EXP})")
+            if isinstance(left, int) and left.bit_length() * abs(int(right)) > (
+                _MAX_RESULT_BITS
+            ):
+                raise ValueError("result too large to compute")
+        if (
+            isinstance(node.op, ast.Mult)
+            and isinstance(left, int)
+            and isinstance(right, int)
+            and left.bit_length() + right.bit_length() > _MAX_RESULT_BITS
+        ):
+            raise ValueError("result too large to compute")
         return _BIN_OPS[type(node.op)](left, right)
     raise ValueError(f"unsupported expression element: {type(node).__name__}")
 

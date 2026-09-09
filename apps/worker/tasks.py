@@ -103,13 +103,17 @@ def ingest_document(self, document_id: str, user_id: str) -> None:
             _record_failed(doc_id, _public_error(exc))
             raise
         countdown = RETRY_BACKOFF_BASE * (2**self.request.retries)
+        # Exception TYPE only, never str(exc): a DBAPI error's text can carry
+        # bound parameters (chunk content) even with hide_parameters=True if
+        # the exception was constructed outside the engine's own wrapping —
+        # exc_info is also deliberately omitted here for the same reason.
         logger.warning(
             "transient ingest failure for %s; retry %d/%d in %ds: %s",
             doc_id,
             self.request.retries + 1,
             MAX_RETRIES,
             countdown,
-            exc,
+            type(exc).__name__,
         )
         raise self.retry(exc=exc, countdown=countdown)
     finally:

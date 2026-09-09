@@ -10,7 +10,7 @@ def to_async_url(url: str) -> str:
     return url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
 
-_RAW_URL = os.getenv("DATABASE_URL", "postgresql://hax:hax@localhost:5432/hax")
+_RAW_URL = os.getenv("DATABASE_URL", "postgresql://hax_app:hax_app@localhost:5432/hax")
 DATABASE_URL_ASYNC = to_async_url(_RAW_URL)
 
 # Owner-role URL for Alembic/admin tooling (DDL needs ownership; the runtime
@@ -20,7 +20,11 @@ MIGRATIONS_DATABASE_URL_ASYNC = to_async_url(
     os.getenv("MIGRATIONS_DATABASE_URL") or _RAW_URL
 )
 
-engine = create_async_engine(DATABASE_URL_ASYNC)
+# hide_parameters=True: DBAPI error strings otherwise append [parameters: …],
+# which for the chunk insert is raw user document text — this is the
+# load-bearing control against that leaking into worker/CloudWatch logs, not
+# any individual log-call tweak.
+engine = create_async_engine(DATABASE_URL_ASYNC, hide_parameters=True)
 # expire_on_commit=False: the default's post-commit lazy reload isn't awaited in
 # async and raises MissingGreenlet. Trade-off: objects keep pre-commit values,
 # so refresh() explicitly where DB-computed state is needed.
@@ -47,4 +51,35 @@ def _announce_rls_identity(conn) -> None:
         conn.execute(
             text("SELECT set_config('app.current_user_id', :uid, true)"),
             {"uid": str(uid)},
+        )
+
+
+async def assert_rls_bound_role() -> None:
+    """Refuse to serve as a role that bypasses RLS (superuser / BYPASSRLS): the
+    second isolation layer would be silently decorative. Refuse to serve as
+    the schema owner too: RDS's master user is neither superuser nor
+    BYPASSRLS (FORCE keeps it RLS-bound) but owns every table, so ownership
+    is a separate, equally disqualifying condition. Called at API startup and
+    worker-process init."""
+    async with engine.connect() as conn:
+        bypasses_rls, owns_tables = (
+            await conn.execute(
+                text(
+                    "SELECT"
+                    " (SELECT rolsuper OR rolbypassrls FROM pg_roles"
+                    "  WHERE rolname = current_user) AS bypasses_rls,"
+                    " EXISTS (SELECT 1 FROM pg_tables"
+                    "  WHERE schemaname = 'public' AND tableowner = current_user)"
+                    "  AS owns_tables"
+                )
+            )
+        ).one()
+    reasons = []
+    if bypasses_rls:
+        reasons.append("connects as an RLS-bypassing role")
+    if owns_tables:
+        reasons.append("connects as the schema owner")
+    if reasons:
+        raise RuntimeError(
+            f"DATABASE_URL {' and '.join(reasons)}; use the app role (hax_app)"
         )

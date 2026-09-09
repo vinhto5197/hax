@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -6,8 +8,18 @@ from apps.api.routers.chat import router as chat_router
 from apps.api.routers.conversations import router as conversations_router
 from apps.api.routers.documents import router as documents_router
 from apps.api.routers.internal_auth import router as internal_auth_router
+from packages.db.session import assert_rls_bound_role
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Fail closed at boot rather than serve every request as a role that
+    # silently bypasses RLS.
+    await assert_rls_bound_role()
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 
 # CORS is a defensive backstop: normal traffic is same-origin (dev rewrites /
 # prod reverse proxy), not cross-origin.
