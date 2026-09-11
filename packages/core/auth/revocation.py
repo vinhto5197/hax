@@ -1,7 +1,7 @@
 """Session revocation: auth_time vs users.sessions_valid_after.
 
 Redis is a write-through cache over the DB column — anything that bumps the
-cutoff (password reset, slice 4) MUST write both, keyed by sva_cache_key, so
+cutoff (password reset, slice 4) MUST write both, via publish_sva, so
 revocation is instant for cached users. Missing user => revoked (a deleted
 account's tokens die immediately). RedisError => fail open (core auth still
 enforced); DB fetch errors propagate — an unreachable DB is a real outage.
@@ -25,13 +25,17 @@ def sva_cache_key(user_id: uuid.UUID) -> str:
     return f"sva:{user_id}"
 
 
+def _encode_cutoff(cutoff: datetime) -> str:
+    return str(int(cutoff.timestamp()))
+
+
 async def publish_sva(redis, user_id: uuid.UUID, cutoff: datetime) -> None:
     # The DB write is already committed by the caller; a cache miss falls back
     # to it, so a Redis failure degrades to "revoked within TTL" — consistent
     # with the fail-open policy above, not a reason to fail the request.
     try:
         await redis.set(
-            sva_cache_key(user_id), str(int(cutoff.timestamp())), ex=SVA_CACHE_TTL_S
+            sva_cache_key(user_id), _encode_cutoff(cutoff), ex=SVA_CACHE_TTL_S
         )
     except RedisError:
         logger.warning("sva cache publish failed; DB cutoff stands", exc_info=True)
@@ -52,9 +56,6 @@ async def session_revoked(
         cutoff = await fetch_sva(claims.sub)
         if cutoff is None:
             return True
-        cached = str(int(cutoff.timestamp()))
-        try:
-            await redis.set(key, cached, ex=SVA_CACHE_TTL_S)
-        except RedisError:
-            logger.warning("sva cache write failed; continuing", exc_info=True)
+        await publish_sva(redis, claims.sub, cutoff)
+        cached = _encode_cutoff(cutoff)
     return claims.auth_time < int(cached)

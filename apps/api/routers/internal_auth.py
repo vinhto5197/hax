@@ -60,8 +60,9 @@ async def verify_credentials(
 
 
 async def _resolve_oauth_user(
-    session: AsyncSession, body: OAuthUpsertIn, email: str
+    session: AsyncSession, body: OAuthUpsertIn
 ) -> tuple[User, datetime | None]:
+    email = body.email.strip().lower()
     user = await accounts_repo.get_user_by_account(
         session, body.provider, body.provider_account_id
     )
@@ -92,9 +93,8 @@ async def oauth_upsert(
     body: OAuthUpsertIn,
     session: AsyncSession = Depends(get_session),
 ) -> AuthUserOut:
-    email = body.email.strip().lower()
     try:
-        user, cutoff = await _resolve_oauth_user(session, body, email)
+        user, cutoff = await _resolve_oauth_user(session, body)
         await session.commit()
     except IntegrityError:
         # Lost a first-sign-in race: a concurrent request inserted the same
@@ -103,7 +103,7 @@ async def oauth_upsert(
         # commits, so once this fires the winner's rows are visible and one
         # re-run of the lookups resolves to them.
         await session.rollback()
-        user, cutoff = await _resolve_oauth_user(session, body, email)
+        user, cutoff = await _resolve_oauth_user(session, body)
         await session.commit()
     if cutoff is not None:
         # Publish AFTER commit: the cache must never lead the DB, or a reader
