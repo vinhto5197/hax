@@ -125,6 +125,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/internal/auth/oauth-upsert": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Oauth Upsert */
+        post: operations["oauth_upsert_internal_auth_oauth_upsert_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -276,6 +293,25 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** OAuthUpsertIn */
+        OAuthUpsertIn: {
+            /**
+             * Provider
+             * @constant
+             */
+            provider: "google";
+            /** Provider Account Id */
+            provider_account_id: string;
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+            /** Email Verified */
+            email_verified: boolean;
+            /** Name */
+            name?: string | null;
         };
         /** SignupIn */
         SignupIn: {
@@ -572,6 +608,48 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AuthUserOut"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    oauth_upsert_internal_auth_oauth_upsert_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-internal-secret"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OAuthUpsertIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthUserOut"];
+                };
+            };
+            /** @description provider email unverified; nothing linked */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

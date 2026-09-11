@@ -25,6 +25,18 @@ def sva_cache_key(user_id: uuid.UUID) -> str:
     return f"sva:{user_id}"
 
 
+async def publish_sva(redis, user_id: uuid.UUID, cutoff: datetime) -> None:
+    # The DB write is already committed by the caller; a cache miss falls back
+    # to it, so a Redis failure degrades to "revoked within TTL" — consistent
+    # with the fail-open policy above, not a reason to fail the request.
+    try:
+        await redis.set(
+            sva_cache_key(user_id), str(int(cutoff.timestamp())), ex=SVA_CACHE_TTL_S
+        )
+    except RedisError:
+        logger.warning("sva cache publish failed; DB cutoff stands", exc_info=True)
+
+
 async def session_revoked(
     redis,
     claims: SessionClaims,
