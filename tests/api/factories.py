@@ -81,3 +81,19 @@ async def make_chunk(
                 "vec": vec,
             },
         )
+
+
+async def make_account(
+    admin_engine: AsyncEngine,
+    user_id: uuid.UUID,
+    provider: str,
+    provider_account_id: str,
+) -> None:
+    async with admin_engine.begin() as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO accounts (user_id, provider, provider_account_id)"
+                " VALUES (:uid, :provider, :pid)"
+            ),
+            {"uid": user_id, "provider": provider, "pid": provider_account_id},
+        )
