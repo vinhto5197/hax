@@ -83,5 +83,4 @@ async def claim_by_verified_email(
         user.email_verified_at = datetime.now(UTC)
     if user.name is None and name:
         user.name = name
-    await session.flush()
     return cutoff

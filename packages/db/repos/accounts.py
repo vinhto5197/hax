@@ -28,13 +28,10 @@ async def get_user_by_account(
 
 async def link(
     session: AsyncSession, user_id: uuid.UUID, provider: str, provider_account_id: str
-) -> Account:
-    account = Account(
-        user_id=user_id, provider=provider, provider_account_id=provider_account_id
+) -> None:
+    """The only place an accounts row is written; the route owns the commit."""
+    session.add(
+        Account(
+            user_id=user_id, provider=provider, provider_account_id=provider_account_id
+        )
     )
-    session.add(account)
-    # flush not commit: the route owns the transaction boundary — and the
-    # unique (provider, provider_account_id) violation must surface HERE so
-    # the route can resolve a lost first-sign-in race.
-    await session.flush()
-    return account
