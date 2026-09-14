@@ -1,5 +1,6 @@
 import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import Google from "next-auth/providers/google";
 import { SignJWT, jwtVerify } from "jose";
 
 // Rate-limiting leaks nothing (unlike 401's anti-enumeration), so it surfaces
@@ -55,11 +56,58 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         };
       },
     }),
+    Google,
   ],
   callbacks: {
+    async signIn({ user, account, profile }) {
+      // Credentials sign-ins were already decided by authorize().
+      if (account?.provider !== "google") return true;
+      // FastAPI owns identity: it applies the linking rules and returns the
+      // hax user (ADR 0011). A refusal or outage must land the user back on
+      // /login with a message, so failures become redirect URLs, not throws.
+      // Everything that can throw (the fetch, and parsing a 200 body that
+      // turns out to be malformed) stays inside this try — any failure here
+      // must become a redirect string, never an uncaught throw, or Auth.js
+      // sends the user to its own /auth/error page instead of ours.
+      let hax: { id: string; email: string; name: string | null };
+      try {
+        const res = await fetch(
+          `${process.env.API_INTERNAL_URL}/internal/auth/oauth-upsert`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Internal-Secret": process.env.INTERNAL_API_SECRET ?? "",
+            },
+            body: JSON.stringify({
+              provider: "google",
+              provider_account_id: account.providerAccountId,
+              email: profile?.email,
+              email_verified: profile?.email_verified === true,
+              name: profile?.name ?? null,
+            }),
+          },
+        );
+        if (res.status === 403) return "/login?error=google_unverified";
+        if (!res.ok) return "/login?error=google_failed";
+        hax = (await res.json()) as typeof hax;
+      } catch {
+        return "/login?error=google_failed";
+      }
+      if (typeof hax?.id !== "string") return "/login?error=google_failed";
+      // Without a database adapter Auth.js passes this same object on to the
+      // jwt callback, which reads user.id into token.sub — so the JWT carries
+      // the hax user id, never Google's. Verified against the pinned
+      // next-auth version; a mismatch fails closed (FastAPI rejects a
+      // non-UUID sub), it cannot leak.
+      user.id = hax.id;
+      user.email = hax.email;
+      return true;
+    },
     jwt({ token, user }) {
       if (user) {
-        // First mint after a successful login.
+        // First mint after a successful login (credentials or Google; signIn
+        // above has already swapped in the hax id).
         token.sub = (user as { id: string }).id;
         token.email = user.email;
         token.auth_time = Math.floor(Date.now() / 1000);

@@ -6,6 +6,7 @@ import { useState, type SubmitEvent } from "react";
 import { signIn } from "next-auth/react";
 
 import { AuthCard, buttonClass, fieldClass } from "@/components/auth/AuthCard";
+import { GoogleButton, OrDivider } from "@/components/auth/GoogleButton";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -101,6 +102,8 @@ export default function SignupPage() {
           {submitting ? "Signing up…" : "Sign up"}
         </button>
       </form>
+      <OrDivider />
+      <GoogleButton label="Continue with Google" />
       <p className="text-sm text-black/60 dark:text-white/60">
         Already have an account?{" "}
         <Link href="/login" className="underline">

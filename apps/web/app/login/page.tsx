@@ -1,17 +1,31 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState, type SubmitEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState, type SubmitEvent } from "react";
 import { signIn } from "next-auth/react";
 
 import { AuthCard, buttonClass, fieldClass } from "@/components/auth/AuthCard";
+import { GoogleButton, OrDivider } from "@/components/auth/GoogleButton";
 
-export default function LoginPage() {
+// Google failures come back as a redirect to /login?error=... — the two codes
+// below are ours (auth.ts signIn callback); anything else is Auth.js's own
+// (OAuthCallbackError, OAuthAccountNotLinked, ...) and gets the generic line.
+function oauthErrorMessage(code: string | null): string | null {
+  if (!code) return null;
+  if (code === "google_unverified")
+    return "Google hasn't verified that email address, so it can't be used to sign in.";
+  return "Google sign-in didn't complete. Please try again.";
+}
+
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() =>
+    oauthErrorMessage(searchParams.get("error")),
+  );
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(event: SubmitEvent) {
@@ -66,7 +80,8 @@ export default function LoginPage() {
           {submitting ? "Logging in…" : "Log in"}
         </button>
       </form>
-      {/* "Continue with Google" lands here in slice 3, below the form. */}
+      <OrDivider />
+      <GoogleButton label="Continue with Google" />
       <p className="text-sm text-black/60 dark:text-white/60">
         No account?{" "}
         <Link href="/signup" className="underline">
@@ -74,5 +89,15 @@ export default function LoginPage() {
         </Link>
       </p>
     </AuthCard>
+  );
+}
+
+export default function LoginPage() {
+  // useSearchParams requires a Suspense boundary for the build's static pass;
+  // the fallback mirrors the real card so the prerendered page isn't blank.
+  return (
+    <Suspense fallback={<AuthCard title="Log in to hax">{null}</AuthCard>}>
+      <LoginForm />
+    </Suspense>
   );
 }
