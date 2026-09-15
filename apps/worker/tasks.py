@@ -2,9 +2,11 @@
 
 import asyncio
 import logging
+import smtplib
 from uuid import UUID
 
 from apps.worker.celery_app import celery_app
+from packages.core.email import smtp, templates
 from packages.core.rag.ingest import (
     PermanentIngestError,
     ingest_document_async,
@@ -118,3 +120,32 @@ def ingest_document(self, document_id: str, user_id: str) -> None:
         raise self.retry(exc=exc, countdown=countdown)
     finally:
         current_user_id.reset(token)
+
+
+EMAIL_MAX_RETRIES = 3
+
+
+@celery_app.task(bind=True, name="send_email", max_retries=EMAIL_MAX_RETRIES)
+def send_email(self, to: str, template: str, params: dict[str, str]) -> None:
+    # Sync on purpose: smtplib is blocking and the worker is a prefork process.
+    # Rendering errors are ours (bad template/params) — no retry. Transport
+    # errors retry 5/10/20 s, then give up: email loss is non-fatal, every
+    # link has a resend path, and a poisoned message must not pin a slot.
+    rendered = templates.render(template, params)
+    try:
+        smtp.send(to, rendered)
+    except (smtplib.SMTPException, OSError) as exc:
+        if self.request.retries >= EMAIL_MAX_RETRIES:
+            logger.error(
+                "send_email giving up: template=%s err=%s", template, type(exc).__name__
+            )
+            return
+        countdown = RETRY_BACKOFF_BASE * 2**self.request.retries
+        logger.warning(
+            "send_email transient failure (attempt %d/%d): %s; retrying in %ds",
+            self.request.retries + 1,
+            EMAIL_MAX_RETRIES,
+            type(exc).__name__,
+            countdown,
+        )
+        raise self.retry(exc=exc, countdown=countdown)
