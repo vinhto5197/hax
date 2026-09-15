@@ -59,6 +59,17 @@ services:
       timeout: 5s
       retries: 5
 
+  mailpit:
+    # Dev SMTP sink + inbox (http://localhost:8025). The worker's send_email
+    # task points at it via SMTP_HOST/SMTP_PORT; prod swaps the env for a real
+    # relay (M3), same code path.
+    image: axllent/mailpit:v1.27.0
+    container_name: hax-mailpit
+    ports:
+      # Loopback only — a dev inbox must not be readable from the LAN.
+      - "127.0.0.1:1025:1025" # SMTP
+      - "127.0.0.1:8025:8025" # web UI
+
 volumes:
   postgres_data:
   redis_data:

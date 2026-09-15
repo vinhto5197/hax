@@ -16,3 +16,10 @@ os.environ["REDIS_URL"] = "redis://localhost:1/0"
 # no test may reach the network.
 os.environ["ANTHROPIC_API_KEY"] = "test-not-a-real-key"
 os.environ["VOYAGE_API_KEY"] = "test-not-a-real-key"
+# Unroutable port, like REDIS_URL above; individual smtp tests override via
+# monkeypatch (which restores real env after each test, not just these).
+os.environ["SMTP_HOST"] = "localhost"
+os.environ["SMTP_PORT"] = "1"
+os.environ["SMTP_FROM"] = "test@example.com"
+os.environ.pop("SMTP_USER", None)
+os.environ.pop("SMTP_PASSWORD", None)
