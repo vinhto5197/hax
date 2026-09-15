@@ -126,7 +126,10 @@ Linking rules, in order, in one transaction:
    an unproven party (anyone can sign up with someone else's address before
    the owner does; pre-hijacking), so the proven owner's claim discards it and
    revokes its sessions rather than inheriting it. The new cutoff is written
-   through to the Redis revocation cache (`publish_sva`) after commit.
+   through to the Redis revocation cache (`publish_sva`) after commit. This
+   defense is complete only with `AUTH_REQUIRE_EMAIL_VERIFICATION=true`:
+   with the gate off, an unverified placeholder can log in and seed data
+   that the claimant then inherits.
 4. Otherwise create a verified user with `password_hash` NULL plus the
    account row. Such a user has no password until the reset flow adds one.
 
