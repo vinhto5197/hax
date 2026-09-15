@@ -94,3 +94,53 @@ blind") — not a blocker pre-deploy, since nothing public depends on it yet.
   `users` exists.
 - `local/specs/2026-07-30-m2.5-auth-titles.md` — full design (session/token
   design, threat model, slice breakdown).
+
+## Addendum (2026-09-14): Google sign-in and account linking
+
+Google is an Auth.js OIDC provider in Next, but **identity resolution still
+happens in FastAPI**: Auth.js's `signIn` callback POSTs the provider identity
+(`provider`, `provider_account_id`, `email`, `email_verified`, `name`) to
+`/internal/auth/oauth-upsert` (secret-gated like verify-credentials), and the
+returned hax user id replaces the provider's id before the JWT is minted —
+`sub` is always a hax user id, so `current_user` and RLS never see a Google
+`sub`. Without a database adapter Auth.js hands the `signIn` callback's user
+object unchanged to the `jwt` callback (verified against the pinned
+version); if that ever changed, the token would carry a non-UUID `sub` and
+FastAPI would reject it — a fail-closed, not fail-open, mismatch.
+
+Linking rules, in order, in one transaction:
+
+1. `(provider, provider_account_id)` already linked → that user, even if
+   Google now reports a different email (email is the hax identity key and is
+   never rewritten by a provider).
+2. Provider says the email is **not** verified → `403 email_unverified`,
+   nothing written. An unverified provider email proves nothing about who
+   controls the mailbox: linking it would be an account takeover (sign in
+   with a Google account claiming the victim's address), and creating a user
+   from it would squat the address against the real owner.
+3. Verified email matching an existing user (case-insensitive) → the
+   provider-verified sign-in **claims and links** the row
+   (`users_repo.claim_by_verified_email`): stamp `email_verified_at` if NULL, fill `name` only if NULL, and — if the
+   row was never verified but already carries a password — clear
+   `password_hash` and bump `sessions_valid_after`. That password was set by
+   an unproven party (anyone can sign up with someone else's address before
+   the owner does; pre-hijacking), so the proven owner's claim discards it and
+   revokes its sessions rather than inheriting it. The new cutoff is written
+   through to the Redis revocation cache (`publish_sva`) after commit.
+4. Otherwise create a verified user with `password_hash` NULL plus the
+   account row. Such a user has no password until the reset flow adds one.
+
+The `accounts` unique constraint on `(provider, provider_account_id)` and the
+`lower(email)` unique index are the backstop for concurrent first sign-ins:
+the loser's INSERT raises `IntegrityError` — at `create_oauth_user`'s flush
+for an email collision, at the route's `commit()` for the account row — and
+the route rolls back and re-runs the lookups, which now find the winner.
+
+Alternatives considered: doing the upsert in the `jwt` callback (has
+`account`/`profile` too) — rejected because a refusal there surfaces as an
+Auth.js error page, whereas `signIn` can return a redirect URL and land the
+user on `/login` with a specific message; Auth.js
+`allowDangerousEmailAccountLinking` — adapter-only and, as named, links on
+unverified emails. Stamping verified without clearing an unverified-era
+password was the spec's original rule 3; rejected at implementation because
+it would launder a pre-registered password past the verification gate.

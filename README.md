@@ -149,11 +149,11 @@ All API routes require login (M2.5) — the app is unusable without these steps.
    Then log in via the web UI with that email + password. New users can just sign up on `/signup` — no script needed.
 
 5. **Google sign-in (optional).** One-time setup in [Google Cloud Console](https://console.cloud.google.com):
-   1. Create (or pick) a project → **APIs & Services → OAuth consent screen** (now "Google Auth Platform"): choose **External**, fill the app name + your email, and under **Test users** add the Google account(s) you'll log in with. The app can stay in *Testing* — no Google verification needed for personal use.
+   1. Create (or pick) a project → **APIs & Services → OAuth consent screen** (now "Google Auth Platform"): choose **External**, fill the app name + your email. Under **Test users**, add the Google account(s) you'll log in with — a precaution: Google may refuse unlisted accounts while the app is in *Testing*. The app can stay in Testing; no Google verification is needed for the basic sign-in scopes.
    2. **Credentials → Create credentials → OAuth client ID → Web application.** Authorized JavaScript origin: `http://localhost:3000`. Authorized redirect URI: `http://localhost:3000/auth/callback/google` (note `/auth`, not `/api/auth` — Auth.js runs under `basePath: "/auth"` here).
    3. Copy the client ID and secret into `.env` as `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET`, then restart `make dev` (Next reads env at start).
 
-   Linking rules (ADR 0011): a Google sign-in whose email matches an existing account **links to it** (and marks the email verified) only if Google reports the email verified; a Google-born account has no password until the reset flow (slice 4) adds one. For the deployed origin (M3) add its origin + `/auth/callback/google` to the same client.
+   Linking rules (ADR 0011): only if Google reports the email verified, a Google sign-in whose email matches an existing account **links to it** and marks the email verified; if that account was never verified, its password is cleared and its sessions signed out (the reset flow re-adds a password). A Google-born account has no password until the reset flow (slice 4) adds one. For the deployed origin (M3) add its origin + `/auth/callback/google` to the same client.
 
 ### Debugging (VS Code)
 

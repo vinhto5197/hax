@@ -2,8 +2,9 @@
 
 Redis is a write-through cache over the DB column — anything that bumps the
 cutoff (password reset, slice 4) MUST write both, via publish_sva, so
-revocation is instant for cached users. Missing user => revoked (a deleted
-account's tokens die immediately). RedisError => fail open (core auth still
+revocation is instant for cached users. Missing user => revoked on the next
+cache miss (a deleted account's tokens die within SVA_CACHE_TTL_S unless the
+deleter purges the key). RedisError => fail open (core auth still
 enforced); DB fetch errors propagate — an unreachable DB is a real outage.
 """
 
