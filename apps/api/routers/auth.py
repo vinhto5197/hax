@@ -7,10 +7,15 @@ from apps.api.deps import get_session
 from apps.api.redis_client import get_redis
 from apps.worker.tasks import send_email
 from packages.core.auth import rate_limit
-from packages.core.auth.email_tokens import VERIFY_EMAIL_TTL, expiry, generate
+from packages.core.auth.email_tokens import (
+    VERIFY_EMAIL_TTL,
+    expiry,
+    generate,
+    hash_token,
+)
 from packages.core.auth.passwords import hash_password_async
 from packages.core.auth.revocation import publish_sva
-from packages.core.schemas.auth import AcceptedOut, EmailIn, SignupIn
+from packages.core.schemas.auth import AcceptedOut, EmailIn, EmailOut, SignupIn, TokenIn
 from packages.db.models import User
 from packages.db.repos import email_tokens as tokens_repo
 from packages.db.repos import users as users_repo
@@ -134,3 +139,25 @@ async def resend_verification(
     await session.commit()
     send_email.delay(email, "verify_email", {"link": link})
     return AcceptedOut()
+
+
+@router.post("/verify-email", responses={400: {"description": "invalid_token"}})
+async def verify_email(
+    body: TokenIn,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+) -> EmailOut:
+    # Token alone identifies the account, so this is IP-only (no email to
+    # bucket on before the token is looked up).
+    await _limit(request, "verify", per_ip=10, window_s=900)
+    token = await tokens_repo.get_valid(session, hash_token(body.token), "verify_email")
+    if token is None:
+        raise HTTPException(400, detail={"code": "invalid_token"})
+    user = await users_repo.get_by_id(session, token.user_id)
+    if user is None:
+        raise HTTPException(400, detail={"code": "invalid_token"})
+    await users_repo.mark_email_verified(session, user)
+    await tokens_repo.mark_used(session, token)
+    await tokens_repo.void_unused(session, user.id, "verify_email")
+    await session.commit()
+    return EmailOut(email=user.email)
