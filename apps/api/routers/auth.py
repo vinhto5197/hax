@@ -8,6 +8,7 @@ from apps.api.redis_client import get_redis
 from apps.worker.tasks import send_email
 from packages.core.auth import rate_limit
 from packages.core.auth.email_tokens import (
+    RESET_PASSWORD_TTL,
     VERIFY_EMAIL_TTL,
     expiry,
     generate,
@@ -15,7 +16,14 @@ from packages.core.auth.email_tokens import (
 )
 from packages.core.auth.passwords import hash_password_async
 from packages.core.auth.revocation import publish_sva
-from packages.core.schemas.auth import AcceptedOut, EmailIn, EmailOut, SignupIn, TokenIn
+from packages.core.schemas.auth import (
+    AcceptedOut,
+    EmailIn,
+    EmailOut,
+    ResetPasswordIn,
+    SignupIn,
+    TokenIn,
+)
 from packages.db.models import User
 from packages.db.repos import email_tokens as tokens_repo
 from packages.db.repos import users as users_repo
@@ -39,6 +47,14 @@ async def issue_verify_link(session: AsyncSession, user: User) -> str:
         session, user.id, "verify_email", token_hash, expiry(VERIFY_EMAIL_TTL)
     )
     return f"{app_base_url()}/verify-email?token={raw}"
+
+
+async def issue_reset_link(session: AsyncSession, user: User) -> str:
+    raw, token_hash = generate()
+    await tokens_repo.create(
+        session, user.id, "reset_password", token_hash, expiry(RESET_PASSWORD_TTL)
+    )
+    return f"{app_base_url()}/reset-password?token={raw}"
 
 
 async def _limit(
@@ -156,8 +172,62 @@ async def verify_email(
     user = await users_repo.get_by_id(session, token.user_id)
     if user is None:
         raise HTTPException(400, detail={"code": "invalid_token"})
+    if not await tokens_repo.consume(session, token):
+        raise HTTPException(400, detail={"code": "invalid_token"})
     await users_repo.mark_email_verified(session, user)
-    await tokens_repo.mark_used(session, token)
-    await tokens_repo.void_unused(session, user.id, "verify_email")
     await session.commit()
+    return EmailOut(email=user.email)
+
+
+@router.post("/request-password-reset", status_code=202)
+async def request_password_reset(
+    body: EmailIn,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+) -> AcceptedOut:
+    email = body.email.strip().lower()
+    await _limit(
+        request, "reset_request", per_ip=10, window_s=3600, email=email, per_email=3
+    )
+    user = await users_repo.get_by_email(session, email)
+    if user is None:
+        return AcceptedOut()
+    # Same invariant as signup/resend: void earlier links first so the new
+    # one is the only live reset link for this user.
+    await tokens_repo.void_unused(session, user.id, "reset_password")
+    # Google-born accounts (no password) get the link too: this IS how they
+    # add a password.
+    link = await issue_reset_link(session, user)
+    await session.commit()
+    send_email.delay(email, "reset_password", {"link": link})
+    return AcceptedOut()
+
+
+@router.post("/reset-password", responses={400: {"description": "invalid_token"}})
+async def reset_password(
+    body: ResetPasswordIn,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+) -> EmailOut:
+    await _limit(request, "reset_confirm", per_ip=10, window_s=900)
+    token = await tokens_repo.get_valid(
+        session, hash_token(body.token), "reset_password"
+    )
+    if token is None:
+        raise HTTPException(400, detail={"code": "invalid_token"})
+    user = await users_repo.get_by_id(session, token.user_id)
+    if user is None:
+        raise HTTPException(400, detail={"code": "invalid_token"})
+    # Strictly single-use, and every other live reset link for this user dies
+    # with it: consume() spends `token` and voids its siblings in one
+    # statement (one lock order — two concurrent confirms for the same user
+    # can't deadlock each other). The loser gets the same 400 as an invalid
+    # token.
+    if not await tokens_repo.consume(session, token):
+        raise HTTPException(400, detail={"code": "invalid_token"})
+    cutoff = await users_repo.reset_password(
+        session, user, await hash_password_async(body.password)
+    )
+    await session.commit()
+    await publish_sva(get_redis(), user.id, cutoff)
     return EmailOut(email=user.email)

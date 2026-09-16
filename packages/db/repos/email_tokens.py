@@ -24,8 +24,14 @@ async def create(
     return token
 
 
-async def void_unused(session: AsyncSession, user_id: uuid.UUID, purpose: str) -> None:
-    await session.execute(
+async def void_unused(
+    session: AsyncSession, user_id: uuid.UUID, purpose: str
+) -> set[uuid.UUID]:
+    """Void every live token of `purpose` for `user_id` in ONE statement and
+    return the ids it voided. Issuing paths call it before creating a new
+    token (one live link per purpose); consume() reuses it so spending a
+    token and sweeping its siblings share one statement and one lock order."""
+    result = await session.execute(
         update(EmailToken)
         .where(
             EmailToken.user_id == user_id,
@@ -33,7 +39,9 @@ async def void_unused(session: AsyncSession, user_id: uuid.UUID, purpose: str) -
             EmailToken.used_at.is_(None),
         )
         .values(used_at=datetime.now(UTC))
+        .returning(EmailToken.id)
     )
+    return {row[0] for row in result}
 
 
 async def get_valid(
@@ -50,5 +58,7 @@ async def get_valid(
     return result.first()
 
 
-async def mark_used(session: AsyncSession, token: EmailToken) -> None:
-    token.used_at = datetime.now(UTC)
+async def consume(session: AsyncSession, token: EmailToken) -> bool:
+    """Spend `token`: True iff this call voided it (a concurrent confirm with
+    the same or a sibling link loses — the DB arbitrates, not a check-then-set)."""
+    return token.id in await void_unused(session, token.user_id, token.purpose)

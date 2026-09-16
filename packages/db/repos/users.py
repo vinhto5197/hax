@@ -105,3 +105,17 @@ async def replace_pending_password(
     if name:
         user.name = name
     return cutoff
+
+
+async def reset_password(
+    session: AsyncSession, user: User, password_hash: str
+) -> datetime:
+    """Inbox-proven password set. Stamps verified if NULL (the link proved
+    the inbox) and revokes every prior session (spec: a stolen token must not
+    outlive a reset). Returns the cutoff; caller publishes it after commit."""
+    cutoff = datetime.now(UTC)
+    user.password_hash = password_hash
+    user.sessions_valid_after = cutoff
+    if user.email_verified_at is None:
+        user.email_verified_at = cutoff
+    return cutoff
