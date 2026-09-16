@@ -84,3 +84,24 @@ async def claim_by_verified_email(
     if user.name is None and name:
         user.name = name
     return cutoff
+
+
+async def mark_email_verified(session: AsyncSession, user: User) -> None:
+    if user.email_verified_at is None:
+        user.email_verified_at = datetime.now(UTC)
+
+
+async def replace_pending_password(
+    session: AsyncSession, user: User, password_hash: str, name: str | None
+) -> datetime:
+    """A signup on a never-verified row takes it over: the earlier password
+    was never proven (verification is by link alone, so the LAST submitter
+    must own the pending password or a victim's own signup could verify a
+    stranger's), so it's replaced and its sessions revoked. Returns the new
+    cutoff (caller publishes it after commit)."""
+    cutoff = datetime.now(UTC)
+    user.password_hash = password_hash
+    user.sessions_valid_after = cutoff
+    if name:
+        user.name = name
+    return cutoff
