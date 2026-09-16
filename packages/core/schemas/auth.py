@@ -11,9 +11,17 @@ class SignupIn(BaseModel):
     name: str | None = Field(default=None, max_length=200)
 
 
-class SignupOut(BaseModel):
-    id: UUID
-    email: str
+class AcceptedOut(BaseModel):
+    # One body for every input on the anti-enumeration routes.
+    # A model, not a bare string: FastAPI derives the OpenAPI/TypeScript type
+    # from it (a literal "check_inbox", not string), every route returns an
+    # object, and an object can gain a field without breaking readers of
+    # .status.
+    status: Literal["check_inbox"] = "check_inbox"
+
+
+class EmailIn(BaseModel):
+    email: EmailStr
 
 
 class CredentialsIn(BaseModel):

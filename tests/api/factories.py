@@ -97,3 +97,29 @@ async def make_account(
             ),
             {"uid": user_id, "provider": provider, "pid": provider_account_id},
         )
+
+
+async def make_email_token(
+    admin_engine: AsyncEngine,
+    user_id: uuid.UUID,
+    purpose: str,
+    token_hash: str,
+    expires_in_s: int = 3600,
+    used: bool = False,
+) -> None:
+    async with admin_engine.begin() as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO email_tokens"
+                " (user_id, purpose, token_hash, expires_at, used_at)"
+                " VALUES (:uid, :purpose, :h, now() + make_interval(secs => :ttl),"
+                " CASE WHEN :used THEN now() ELSE NULL END)"
+            ),
+            {
+                "uid": user_id,
+                "purpose": purpose,
+                "h": token_hash,
+                "ttl": expires_in_s,
+                "used": used,
+            },
+        )
