@@ -35,6 +35,14 @@ class AuthUserOut(BaseModel):
     name: str | None
 
 
+class TokenIn(BaseModel):
+    token: str = Field(min_length=1, max_length=128)
+
+
+class EmailOut(BaseModel):
+    email: str
+
+
 class OAuthUpsertIn(BaseModel):
     # Closed set: a provider name is a trust decision (which issuer's
     # email_verified we believe), so adding one is a code change, not data.

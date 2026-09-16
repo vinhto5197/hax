@@ -4,7 +4,7 @@ is outside RLS (ADR 0012). Routes own the commit."""
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from packages.db.models import EmailToken
@@ -34,3 +34,21 @@ async def void_unused(session: AsyncSession, user_id: uuid.UUID, purpose: str) -
         )
         .values(used_at=datetime.now(UTC))
     )
+
+
+async def get_valid(
+    session: AsyncSession, token_hash: str, purpose: str
+) -> EmailToken | None:
+    result = await session.scalars(
+        select(EmailToken).where(
+            EmailToken.token_hash == token_hash,
+            EmailToken.purpose == purpose,
+            EmailToken.used_at.is_(None),
+            EmailToken.expires_at > func.now(),
+        )
+    )
+    return result.first()
+
+
+async def mark_used(session: AsyncSession, token: EmailToken) -> None:
+    token.used_at = datetime.now(UTC)

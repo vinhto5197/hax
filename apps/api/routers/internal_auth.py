@@ -24,7 +24,7 @@ router = APIRouter(prefix="/internal/auth", dependencies=[Depends(internal_only)
 
 
 def _require_verified() -> bool:
-    return os.getenv("AUTH_REQUIRE_EMAIL_VERIFICATION", "false").lower() in (
+    return os.getenv("AUTH_REQUIRE_EMAIL_VERIFICATION", "true").lower() in (
         "1",
         "true",
     )

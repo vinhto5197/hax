@@ -23,3 +23,6 @@ os.environ["SMTP_PORT"] = "1"
 os.environ["SMTP_FROM"] = "test@example.com"
 os.environ.pop("SMTP_USER", None)
 os.environ.pop("SMTP_PASSWORD", None)
+# Slice 4 default is "true"; hard-set so the suite matches prod regardless of
+# the invoking shell's env.
+os.environ["AUTH_REQUIRE_EMAIL_VERIFICATION"] = "true"
