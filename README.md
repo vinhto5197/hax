@@ -61,7 +61,7 @@ colima start
 # If using Docker Desktop, just open the app
 ```
 
-Start everything (Postgres, Redis, MinIO, FastAPI, Next.js):
+Start everything (Postgres, Redis, MinIO, Mailpit, FastAPI, Next.js):
 
 ```bash
 make dev
@@ -84,7 +84,7 @@ make dev-stop
 Other useful commands:
 
 ```bash
-make infra-logs      # tail Postgres + Redis + MinIO logs
+make infra-logs      # tail Postgres + Redis + MinIO + Mailpit logs
 make infra-clean     # tear down containers AND delete volumes (full reset)
 make infra-psql      # open a psql shell against postgres
 make infra-redis-cli # open a redis-cli shell against redis
@@ -140,13 +140,13 @@ All API routes require login (M2.5) — the app is unusable without these steps.
 
 3. **Set `BOOTSTRAP_USER_EMAIL` before your first `make migrate`** — only relevant if your database predates auth (has unowned conversations/documents). The auth migration assigns those legacy rows to a user created with this email; on a fresh empty database it's unused and can stay blank.
 
-4. **Claim the bootstrap account** (it's created without a password):
+4. **Claim the bootstrap account** (it's created without a password, and unverified):
 
    ```bash
    .venv/bin/python scripts/set_password.py you@example.com
    ```
 
-   Then log in via the web UI with that email + password. New users can just sign up on `/signup` — no script needed.
+   This only sets the password hash — the row stays unverified, so with the gate on (default), logging in with it gets you the "verify your email" message; click **Resend** on the login page to get a link. Simpler: skip the script and use **Forgot password** with that email instead — it proves the inbox and sets the password in one step, no verify click needed. New users just sign up on `/signup`; no script needed.
 
 5. **Google sign-in (optional).** One-time setup in [Google Cloud Console](https://console.cloud.google.com):
    1. Create (or pick) a project → **APIs & Services → OAuth consent screen** (now "Google Auth Platform"): choose **External**, fill the app name + your email. Under **Test users**, add the Google account(s) you'll log in with — a precaution: Google may refuse unlisted accounts while the app is in *Testing*. The app can stay in Testing; no Google verification is needed for the basic sign-in scopes.
@@ -154,6 +154,8 @@ All API routes require login (M2.5) — the app is unusable without these steps.
    3. Copy the client ID and secret into `.env` as `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET`, then restart `make dev` (Next reads env at start).
 
    Linking rules (ADR 0011): only if Google reports the email verified, a Google sign-in whose email matches an existing account **links to it** and marks the email verified; if that account was never verified, its password is cleared and its sessions signed out (the reset flow re-adds a password). A Google-born account has no password until the reset flow (slice 4) adds one. For the deployed origin (M3) add its origin + `/auth/callback/google` to the same client.
+
+6. **Email verification + password reset (M2.5 slice 4).** The login gate is **on** by default (`AUTH_REQUIRE_EMAIL_VERIFICATION=true`): signup emails a verify link, and an unverified password account can't log in until it's clicked. In dev, every email — verify, reset, "you already have an account" — lands in **Mailpit** at `http://localhost:8025` (nothing leaves the machine); nothing sends unless the worker is running (`make worker`), so an email that never arrives usually means the worker isn't up. Lifecycle in one paragraph: sign up → check Mailpit → click Confirm → log in. Forgot your password (or want to add one to a Google-born account)? Use **Forgot password** → check Mailpit → set a new password — this signs you out of every other session. After pulling code that adds a new worker task, restart `make worker`: Celery discards messages for tasks it doesn't recognize rather than queuing them.
 
 ### Debugging (VS Code)
 
@@ -188,6 +190,7 @@ Check what's running at any time with `make status` (a TCP probe of each service
 | Async      | Celery + Redis (broker + cache)                                    |
 | Data       | Postgres + pgvector (embeddings)                                   |
 | Storage    | Object storage for uploads — S3 in prod, MinIO in dev (boto3)      |
+| Email      | Transactional email — Mailpit (dev), real SMTP relay in prod       |
 | Types      | OpenAPI spec → generated TypeScript (e.g. openapi-typescript)      |
 | Infra      | Docker, Docker Compose                                             |
 | Deploy     | AWS, provisioned via Terraform                                     |
