@@ -10,6 +10,13 @@ class RateLimit extends CredentialsSignin {
   code = "rate_limited";
 }
 
+// Same anti-enumeration exception as RateLimit: an unverified account isn't a
+// secret (the user just created it), so telling them what to do next beats a
+// generic denial.
+class EmailUnverified extends CredentialsSignin {
+  code = "email_unverified";
+}
+
 // The minting half of the JWT bridge. Cross-module contract with
 // packages/core/auth/tokens.py (the verifying half): HS256, iss/aud below,
 // claims sub/email/iat/exp/jti/auth_time. auth_time is set ONCE at login and
@@ -46,7 +53,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         );
         // Rate-limited is safe to distinguish (no account-existence leak).
         if (res.status === 429) throw new RateLimit();
-        // Any other failure (401/403/500) -> null -> one generic UI message,
+        // Unverified is also safe to distinguish — the password already
+        // matched, so this isn't a credential-guessing oracle.
+        if (res.status === 403) throw new EmailUnverified();
+        // Any other failure (401/500) -> null -> one generic UI message,
         // keeping wrong-password and no-account deliberately indistinguishable.
         if (!res.ok) return null;
         return (await res.json()) as {
