@@ -147,3 +147,121 @@ user on `/login` with a specific message; Auth.js
 unverified emails. Stamping verified without clearing an unverified-era
 password was the spec's original rule 3; rejected at implementation because
 it would launder a pre-registered password past the verification gate.
+
+## Addendum (2026-09-18): Email flows — verification and password reset
+
+**Transport.** Emails are enqueued on the existing Celery worker
+(`send_email(to, template, params)`, `apps/worker/tasks.py`), rendered from
+one text source into text + HTML (`packages/core/email/templates.py`;
+`params` are URLs the API builds, never user text — HTML-escaped and
+rendered as anchors), and sent over stdlib `smtplib`/`EmailMessage`
+(`packages/core/email/smtp.py`) to `SMTP_HOST:SMTP_PORT` — Mailpit in dev, a
+real relay via the same env at deploy. When `SMTP_USER` is set the
+connection is upgraded with STARTTLS over a verified `ssl` context and
+authenticated; otherwise plaintext SMTP (Mailpit on localhost).
+`EmailMessage` raises on CR/LF in a header value, so header injection is
+ruled out by the stdlib `EmailMessage` API, not by input filtering.
+Transport errors (`SMTPException`/`OSError`) retry at
+5/10/20 s then give up quietly — email loss is non-fatal, every link has a
+resend path; render errors (bad template/params) propagate immediately, no
+retry. The route enqueues only **after** its `commit()`, never before: a
+failed commit must not mail a link whose token doesn't exist. The residual
+"commit succeeded, enqueue failed" case (Redis down, worker unreachable)
+surfaces as a 500 to the caller, who re-requests. Why a worker and not a
+synchronous send: relay latency and failures must not sit on the request
+path.
+
+**Tokens.** `packages/core/auth/email_tokens.py` generates a 256-bit
+`secrets.token_urlsafe(32)`; `packages/db/repos/email_tokens.py` stores only
+`sha256(raw)`, with a TTL (24 h verify, 1 h reset) and a purpose. The raw
+token is never logged. It exists in the emailed link and in the broker
+message that carries that link to the worker (a Redis compromise exposes
+live links until they expire), and the page sends it back only in a POST
+body. Invariant: **zero or one live token per user per purpose.** Any
+issuing path that can add a second live token voids the user's existing
+ones of that purpose first (`tokens_repo.void_unused`) — the placeholder
+branch of `signup`, `resend-verification`, and `request-password-reset` all
+do; the new-address branch of `signup` does not, because a freshly created
+user has no tokens to void. Consumption (`verify-email`, `reset-password`)
+goes through `tokens_repo.consume`, which is `void_unused` (one `UPDATE …
+RETURNING`) plus a membership check on the returned ids — so a double
+click, or two live links for the same purpose, resolve to exactly one
+winner through one lock order (no deadlock, no ORM check-then-set race).
+Links are `{APP_BASE_URL}/verify-email?token=` and `/reset-password?token=`;
+the token rides the URL only as far as the page, which POSTs it in a
+request body (URLs get logged by proxies/browsers, bodies don't).
+
+**Signup.** `POST /api/auth/signup` returns one uniform 202
+`{"status":"check_inbox"}` for every input, and argon2 runs on every branch
+(`hash_password_async` before the `get_by_email` lookup) — this equalizes
+the dominant cost, but the new-address branch still does its own inserts
+after that point, an accepted residual. New address → an
+unverified user + a verify link. Existing, verified → an "you already have
+an account" email (login + reset links), nothing written. Existing,
+unverified placeholder → the last submitter owns the pending password
+(`replace_pending_password`: new hash, `sessions_valid_after` bumped, old
+verify links voided, a new one issued). That rule is the pre-hijack defense
+that link-only verification needs: since nothing but the click proves
+ownership, a victim's own signup can never end up verifying a stranger's
+password — the residual is an attacker re-signing-up *after* the victim,
+inside the 24 h window (targeted, rare, and the victim's next signup attempt
+reclaims it again). It doubles as lazy expiry for squatted placeholders — no
+sweep job needed. A per-email cap of 3/h on signup mail (a spec tightening)
+bounds mail-bombing one address from many IPs; tracked as a targeted-DoS
+lever in the backlog.
+
+**Verification.** The `/verify-email` page is link-only — no password
+re-entry — and shows a Confirm button that calls the API only on click,
+because corporate mail scanners pre-fetch links in transit and would burn
+the single-use token before the user arrives. Consuming the token stamps
+`email_verified_at`. The login gate
+(`AUTH_REQUIRE_EMAIL_VERIFICATION`, default `true` from this slice) means an
+unverified password account gets `email_unverified` (403) from
+`verify-credentials`, and the login page shows a resend button — the
+spec's one accepted enumeration exception, since the user just created the
+account and already knows it exists. Success lands on
+`/login?verified=1&email=…` — a client navigation to our own page, not an
+API redirect; the query is never posted back.
+
+**Reset.** `request-password-reset` is a uniform 202 and issues a link for
+any existing account, including Google-born ones with no password — this is
+how they gain one. It has the same accepted residual as signup: an existing
+address costs an INSERT, a commit and an enqueue that an unknown one does
+not. `reset-password` consumes the token, sets the new hash,
+stamps `email_verified_at` if still NULL (the link proves the inbox),
+bumps `sessions_valid_after`, commits, then write-throughs the new cutoff to
+the revocation cache (`publish_sva`) — every prior session dies. It then
+clears the `login_email` rate-limit bucket: the owner just proved control of
+the inbox by setting the password, so the guessing limiter must not block
+the login that follows (the per-IP bucket is untouched). The page then signs
+in immediately; if that sign-in fails anyway (e.g. the limiter's per-IP leg
+still tripped) it lands on `/login?reset=1` instead of a silent bounce.
+
+**Rate limits**, as shipped: signup 10/h/IP + 3/h/email; resend-verification
+and request-password-reset 3/h/email + 10/h/IP; verify-email and
+reset-password 10/15 min/IP. The IP bucket is always checked first and
+short-circuits on a miss, so a flooding IP burns its own budget before it
+can touch a victim's per-email bucket. Redis errors fail open (existing
+contract, `packages/core/auth/rate_limit.py`).
+
+Alternatives considered:
+
+- **Password re-entry on the verify page** — closes the pre-hijack race
+  completely, but is a non-standard screen for email verification. Replaced
+  by "last submitter owns the pending password", with the residual stated
+  above instead of eliminated.
+- **Binding the verify link to a signup-browser cookie** — breaks
+  open-the-link-on-your-phone, a common real flow.
+- **Withholding the reset link for social-only (passwordless) accounts** —
+  rejected: the reset link IS how those accounts add a password.
+- **Sending synchronously inside the request** — rejected: relay latency
+  and failures would sit on the request path.
+- **A provider HTTP SDK instead of SMTP** — rejected: SMTP is
+  provider-neutral, so the M3 relay swap is env-only, no code change.
+
+**Deploy notes.** `APP_BASE_URL` must be the deployed web origin (it's
+embedded in every emailed link). `SMTP_*` env points at a real relay with
+SPF + DKIM configured on the sending domain. The worker must restart before
+or with any deploy that adds a task — Celery discards a message for a task
+it doesn't know rather than retrying it.
+`AUTH_REQUIRE_EMAIL_VERIFICATION=true` is a launch precondition.
