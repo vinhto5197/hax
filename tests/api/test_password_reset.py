@@ -19,6 +19,7 @@ from tests.api.conftest import _make_user
 from tests.api.factories import make_email_token
 
 BODY = {"status": "check_inbox"}
+INTERNAL = {"X-Internal-Secret": os.environ["INTERNAL_API_SECRET"]}
 
 
 @pytest.fixture
@@ -293,3 +294,42 @@ async def test_double_consume_is_single_use_hermetic(client, admin_engine, monke
     assert first.status_code == 200 and second.status_code == 400
     row = await _row(admin_engine, u.id)
     assert verify_password(row.password_hash, "password-one")
+
+
+async def test_reset_clears_login_rate_limit(client, admin_engine):
+    # Inbox proof: a reset must clear the login_email guessing bucket, or the
+    # "failed a few logins -> forgot password -> reset" path 429s at the very
+    # login the user just earned.
+    u = await _make_user(admin_engine, "r@example.com")
+    async with admin_engine.begin() as conn:
+        await conn.execute(
+            text("UPDATE users SET password_hash = :h WHERE id = :id"),
+            {"h": hash_password("old-one-1"), "id": u.id},
+        )
+    for _ in range(5):
+        await client.post(
+            "/internal/auth/verify-credentials",
+            json={"email": "r@example.com", "password": "wrong-password"},
+            headers=INTERNAL,
+        )
+    # Bucket burned by the 5 wrong attempts; the 6th 429s even with the
+    # correct (pre-reset) password.
+    sixth = await client.post(
+        "/internal/auth/verify-credentials",
+        json={"email": "r@example.com", "password": "old-one-1"},
+        headers=INTERNAL,
+    )
+    assert sixth.status_code == 429
+
+    await make_email_token(admin_engine, u.id, "reset_password", hash_token("raw1"))
+    res = await client.post(
+        "/api/auth/reset-password", json={"token": "raw1", "password": "brand-new-9"}
+    )
+    assert res.status_code == 200
+
+    after = await client.post(
+        "/internal/auth/verify-credentials",
+        json={"email": "r@example.com", "password": "brand-new-9"},
+        headers=INTERNAL,
+    )
+    assert after.status_code == 200

@@ -2,7 +2,7 @@ import fakeredis.aioredis
 import pytest
 from redis.exceptions import RedisError
 
-from packages.core.auth.rate_limit import hit
+from packages.core.auth.rate_limit import clear, hit
 
 
 @pytest.fixture
@@ -40,4 +40,21 @@ async def test_fails_open_on_redis_error(caplog):
             raise RedisError("down")
 
     assert await hit(BrokenRedis(), "t", "k", limit=1, window_s=60) is True
+    assert "rate limiter unavailable" in caplog.text
+
+
+async def test_clear_drops_bucket(redis):
+    for _ in range(3):
+        await hit(redis, "t", "k", limit=3, window_s=60)
+    assert await hit(redis, "t", "k", limit=3, window_s=60) is False
+    await clear(redis, "t", "k")
+    assert await hit(redis, "t", "k", limit=3, window_s=60) is True
+
+
+async def test_clear_fails_open_on_redis_error(caplog):
+    class BrokenRedis:
+        async def delete(self, key):
+            raise RedisError("down")
+
+    await clear(BrokenRedis(), "t", "k")  # must not raise
     assert "rate limiter unavailable" in caplog.text
