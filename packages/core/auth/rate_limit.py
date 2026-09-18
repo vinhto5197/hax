@@ -29,3 +29,14 @@ async def hit(redis, name: str, ident: str, limit: int, window_s: int) -> bool:
             "rate limiter unavailable; failing open for %s", name, exc_info=True
         )
         return True
+
+
+async def clear(redis, name: str, ident: str) -> None:
+    """Drop one bucket. Fail-open like hit(): a Redis error leaves the bucket
+    to expire on its own rather than failing the caller."""
+    try:
+        await redis.delete(f"rl:{name}:{ident}")
+    except RedisError:
+        logger.warning(
+            "rate limiter unavailable; could not clear %s", name, exc_info=True
+        )

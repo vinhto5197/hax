@@ -230,4 +230,7 @@ async def reset_password(
     )
     await session.commit()
     await publish_sva(get_redis(), user.id, cutoff)
+    # Inbox proof: the owner just set this password, so the guessing limiter
+    # must not block the login that follows.
+    await rate_limit.clear(get_redis(), "login_email", user.email)
     return EmailOut(email=user.email)
