@@ -203,10 +203,17 @@ unverified placeholder → the last submitter owns the pending password
 verify links voided, a new one issued). That rule is the pre-hijack defense
 that link-only verification needs: since nothing but the click proves
 ownership, a victim's own signup can never end up verifying a stranger's
-password — the residual is an attacker re-signing-up *after* the victim,
-inside the 24 h window (targeted, rare, and the victim's next signup attempt
-reclaims it again). It doubles as lazy expiry for squatted placeholders — no
-sweep job needed. A per-email cap of 3/h on signup mail (a spec tightening)
+password. Residual with link-only verification: (i) an attacker re-signs-up
+AFTER the victim inside the 24 h window, or (ii) the attacker signs up first
+and the victim clicks Confirm on the unsolicited email — in both the row is
+verified with the attacker's password. A verified row is no longer reclaimed
+by signup (that path sends the account-exists email); password reset
+recovers it, and it revokes the attacker's sessions. A later Google sign-in
+links to the verified row without clearing that password (the slice-3 claim
+clears only never-verified rows), so the reset is the recovery in every
+case. The verification email says not to confirm a signup you didn't make.
+That rule doubles as lazy expiry for squatted placeholders — no sweep job needed. A
+per-email cap of 3/h on signup mail (a spec tightening)
 bounds mail-bombing one address from many IPs; tracked as a targeted-DoS
 lever in the backlog.
 

@@ -19,7 +19,8 @@ _TEMPLATES: dict[str, tuple[str, str, tuple[str, ...]]] = {
     "verify_email": (
         "Verify your hax email",
         "Confirm this address to finish setting up your hax account:\n\n{link}\n\n"
-        "The link expires in 24 hours. " + _IGNORE + "\n",
+        "The link expires in 24 hours. If you didn't sign up for hax, don't "
+        "confirm — someone may have entered your address by mistake. " + _IGNORE + "\n",
         ("link",),
     ),
     "reset_password": (

@@ -57,6 +57,17 @@ async def issue_reset_link(session: AsyncSession, user: User) -> str:
     return f"{app_base_url()}/reset-password?token={raw}"
 
 
+def _account_exists_outgoing(email: str) -> tuple[str, str, dict[str, str]]:
+    return (
+        email,
+        "account_exists",
+        {
+            "login_url": f"{app_base_url()}/login",
+            "reset_url": f"{app_base_url()}/forgot-password",
+        },
+    )
+
+
 async def _limit(
     request: Request,
     name: str,
@@ -109,27 +120,29 @@ async def signup(
             {"link": await issue_verify_link(session, user)},
         )
     elif user.email_verified_at is not None:
-        outgoing = (
-            email,
-            "account_exists",
-            {
-                "login_url": f"{app_base_url()}/login",
-                "reset_url": f"{app_base_url()}/forgot-password",
-            },
-        )
+        outgoing = _account_exists_outgoing(email)
     else:
         # Unverified placeholder (fresh or stale): the last submitter owns the
         # pending password — verification is by link alone, so keeping an
         # earlier, unproven password would let this signup verify it.
+        # Tokens before users: every writer takes locks in the same order as
+        # consume() → no deadlock between a re-signup and a Confirm.
+        await tokens_repo.void_unused(session, user.id, "verify_email")
         cutoff = await users_repo.replace_pending_password(
             session, user, password_hash, body.name
         )
-        await tokens_repo.void_unused(session, user.id, "verify_email")
-        outgoing = (
-            email,
-            "verify_email",
-            {"link": await issue_verify_link(session, user)},
-        )
+        if cutoff is None:
+            # A concurrent verify won the race: the row is now an existing,
+            # verified account, so this submission is treated the same as
+            # the verified branch — no new link for an account that's no
+            # longer pending.
+            outgoing = _account_exists_outgoing(email)
+        else:
+            outgoing = (
+                email,
+                "verify_email",
+                {"link": await issue_verify_link(session, user)},
+            )
     await session.commit()
     if cutoff is not None:
         await publish_sva(get_redis(), user.id, cutoff)
