@@ -58,6 +58,22 @@ async def test_gate_can_be_switched_off(client, admin_engine, monkeypatch):
     assert res.status_code == 200
 
 
+async def test_unverified_user_with_wrong_password_gets_401_not_403(
+    client, admin_engine
+):
+    # Pins the check order: the verification gate is consulted only AFTER the
+    # password has already matched, so "unverified" is never an oracle an
+    # attacker can read off without first proving the password.
+    await _pw_user(admin_engine, verified=False)
+    res = await client.post(
+        "/internal/auth/verify-credentials",
+        json={"email": "g@example.com", "password": "wrong-password"},
+        headers=INTERNAL,
+    )
+    assert res.status_code == 401
+    assert res.json()["detail"] == {"code": "invalid_credentials"}
+
+
 async def test_gate_is_on_when_the_env_var_is_absent(client, admin_engine, monkeypatch):
     # The code default is the security-relevant half: any box whose env omits
     # the var must still gate. conftest's hard-set is removed for this test.

@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import text
+from sqlalchemy.orm.attributes import set_committed_value
 
 import apps.api.routers.auth as auth_router
 from packages.core.auth.email_tokens import hash_token
@@ -136,6 +137,56 @@ async def test_resignup_on_unverified_placeholder_replaces_pending_password(
         if t.live and t.used_at is None
     ]
     assert len(live) == 1  # h1 voided
+
+
+async def test_resignup_loses_to_a_concurrent_verify(
+    client, admin_engine, pw_user, outbox, monkeypatch
+):
+    # Simulates a session that fetched `pw_user` while still unverified, then
+    # lost a race: a concurrent verify-email commits before this request
+    # writes. The conditional UPDATE in replace_pending_password must lose to
+    # it, not overwrite the now-verified row's password.
+    async with admin_engine.begin() as conn:
+        await conn.execute(
+            text("UPDATE users SET email_verified_at = now() WHERE id = :id"),
+            {"id": pw_user.id},
+        )
+    real_get_by_email = auth_router.users_repo.get_by_email
+
+    async def stale_snapshot(session, email):
+        # set_committed_value, not a plain assignment: assigning would mark
+        # the ORM object dirty and autoflush would write NULL back to the
+        # row on the very next session.execute() (void_unused), silently
+        # curing the race this test exists to simulate. This sets the
+        # in-memory value only, as if the row had been read before the
+        # concurrent verify committed.
+        user = await real_get_by_email(session, email)
+        if user is not None:
+            set_committed_value(user, "email_verified_at", None)
+        return user
+
+    monkeypatch.setattr(auth_router.users_repo, "get_by_email", stale_snapshot)
+    res = await client.post(
+        "/api/auth/signup", json={"email": pw_user.email, "password": "newpass99"}
+    )
+    assert res.status_code == 202 and res.json() == BODY
+    assert (await _user_row(admin_engine, pw_user.email)).password_hash == "old-hash"
+    assert outbox == [
+        (
+            pw_user.email,
+            "account_exists",
+            {
+                "login_url": f"{auth_router.app_base_url()}/login",
+                "reset_url": f"{auth_router.app_base_url()}/forgot-password",
+            },
+        )
+    ]
+    live = [
+        t
+        for t in await _tokens(admin_engine, pw_user.id)
+        if t.live and t.used_at is None
+    ]
+    assert live == []
 
 
 async def test_signup_burns_a_hash_on_every_branch(

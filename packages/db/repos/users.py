@@ -9,7 +9,7 @@ pattern to conversations/documents/accounts.
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from packages.db.models import User
@@ -93,17 +93,33 @@ async def mark_email_verified(session: AsyncSession, user: User) -> None:
 
 async def replace_pending_password(
     session: AsyncSession, user: User, password_hash: str, name: str | None
-) -> datetime:
+) -> datetime | None:
     """A signup on a never-verified row takes it over: the earlier password
     was never proven (verification is by link alone, so the LAST submitter
     must own the pending password or a victim's own signup could verify a
-    stranger's), so it's replaced and its sessions revoked. Returns the new
-    cutoff (caller publishes it after commit)."""
+    stranger's), so it's replaced and its sessions revoked. Conditional on
+    the row STILL being unverified at write time — a concurrent verify wins
+    and this returns None (caller treats the row as an existing account).
+    Returns the new cutoff otherwise; caller publishes it after commit."""
     cutoff = datetime.now(UTC)
-    user.password_hash = password_hash
-    user.sessions_valid_after = cutoff
+    values = {"password_hash": password_hash, "sessions_valid_after": cutoff}
     if name:
-        user.name = name
+        values["name"] = name
+    result = await session.execute(
+        update(User)
+        .where(User.id == user.id, User.email_verified_at.is_(None))
+        .values(**values)
+        .returning(User.id)
+        .execution_options(synchronize_session=False)
+    )
+    if result.first() is None:
+        return None
+    # Expire rather than assign: `user` was loaded before this UPDATE ran, so
+    # setting attributes here would mark it dirty against that stale snapshot
+    # and cost a redundant second UPDATE at flush/commit. Expiring instead
+    # means a later access re-reads what we just wrote, with no extra write
+    # and no extra query unless something actually touches the object again.
+    session.expire(user, list(values.keys()))
     return cutoff
 
 
