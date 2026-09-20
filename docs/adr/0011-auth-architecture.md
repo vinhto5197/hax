@@ -183,7 +183,9 @@ ones of that purpose first (`tokens_repo.void_unused`) — the placeholder
 branch of `signup`, `resend-verification`, and `request-password-reset` all
 do; the new-address branch of `signup` does not, because a freshly created
 user has no tokens to void. Consumption (`verify-email`, `reset-password`)
-goes through `tokens_repo.consume`, which is `void_unused` (one `UPDATE …
+goes through one router helper (`_spend_token`: lookup, user, consume, and
+the ONE uniform 400 for every failure, a lost race included) over
+`tokens_repo.consume`, which is `void_unused` (one `UPDATE …
 RETURNING`) plus a membership check on the returned ids — so a double
 click, or two live links for the same purpose, resolve to exactly one
 winner through one lock order (no deadlock, no ORM check-then-set race).
@@ -240,16 +242,30 @@ bumps `sessions_valid_after`, commits, then write-throughs the new cutoff to
 the revocation cache (`publish_sva`) — every prior session dies. It then
 clears the `login_email` rate-limit bucket: the owner just proved control of
 the inbox by setting the password, so the guessing limiter must not block
-the login that follows (the per-IP bucket is untouched). The page then signs
-in immediately; if that sign-in fails anyway (e.g. the limiter's per-IP leg
-still tripped) it lands on `/login?reset=1` instead of a silent bounce.
+the login that follows (the per-IP bucket is untouched). The reset page
+also runs a read-only precheck on load (`reset-password/check`: `get_valid`
+only, nothing written) so a dead link fails before the user types a password
+twice; the verify page has no such check — one Confirm click reveals a dead
+link, and a load-time request there would tax every legitimate visitor and
+is exactly what a link-prefetching mail scanner would trigger. The page
+then signs in immediately; if that sign-in fails anyway (e.g. the limiter's
+per-IP leg still tripped) it lands on `/login?reset=1` instead of a silent
+bounce.
+
+**Resend** re-sends whatever signup would have sent for the address: a
+fresh verify link for an unverified password account, the account-exists
+email for a verified one, nothing for an unknown address or a passwordless
+unverified row. Always the same 202.
 
 **Rate limits**, as shipped: signup 10/h/IP + 3/h/email; resend-verification
 and request-password-reset 3/h/email + 10/h/IP; verify-email and
-reset-password 10/15 min/IP. The IP bucket is always checked first and
-short-circuits on a miss, so a flooding IP burns its own budget before it
-can touch a victim's per-email bucket. Redis errors fail open (existing
-contract, `packages/core/auth/rate_limit.py`).
+reset-password 10/15 min/IP; the reset precheck 30/15 min/IP. The per-email
+caps are **per route** (three separate buckets), so one address can receive
+up to 9 emails an hour across signup, resend and reset-request. The IP
+bucket is always checked first and short-circuits on a miss, so a flooding
+IP burns its own budget before it can touch a victim's per-email bucket.
+Redis errors fail open (existing contract,
+`packages/core/auth/rate_limit.py`).
 
 Alternatives considered:
 
