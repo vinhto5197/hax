@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -42,20 +43,31 @@ def app_base_url() -> str:
     return os.getenv("APP_BASE_URL", "http://localhost:3000").rstrip("/")
 
 
-async def issue_verify_link(session: AsyncSession, user: User) -> str:
-    raw, token_hash = generate()
-    await tokens_repo.create(
-        session, user.id, "verify_email", token_hash, expiry(VERIFY_EMAIL_TTL)
-    )
-    return f"{app_base_url()}/verify-email?token={raw}"
+# purpose -> (token lifetime, web path the emailed link opens)
+_LINKS: dict[str, tuple[timedelta, str]] = {
+    "verify_email": (VERIFY_EMAIL_TTL, "/verify-email"),
+    "reset_password": (RESET_PASSWORD_TTL, "/reset-password"),
+}
 
 
-async def issue_reset_link(session: AsyncSession, user: User) -> str:
+async def _issue_link(session: AsyncSession, user: User, purpose: str) -> str:
+    ttl, path = _LINKS[purpose]
     raw, token_hash = generate()
-    await tokens_repo.create(
-        session, user.id, "reset_password", token_hash, expiry(RESET_PASSWORD_TTL)
-    )
-    return f"{app_base_url()}/reset-password?token={raw}"
+    await tokens_repo.create(session, user.id, purpose, token_hash, expiry(ttl))
+    return f"{app_base_url()}{path}?token={raw}"
+
+
+async def _spend_token(session: AsyncSession, raw: str, purpose: str) -> User:
+    """Token -> its user, spending the token. ONE uniform 400 for every
+    failure — used / expired / wrong-purpose / unknown, a vanished user, or
+    losing the race to a concurrent confirm — indistinguishable to the caller
+    by design. consume() spends `raw`'s token and voids the user's other live
+    tokens of the purpose in one statement (one lock order, no deadlock)."""
+    token = await tokens_repo.get_valid(session, hash_token(raw), purpose)
+    user = await users_repo.get_by_id(session, token.user_id) if token else None
+    if token is None or user is None or not await tokens_repo.consume(session, token):
+        raise HTTPException(400, detail={"code": "invalid_token"})
+    return user
 
 
 def _account_exists_outgoing(email: str) -> tuple[str, str, dict[str, str]]:
@@ -118,7 +130,7 @@ async def signup(
         outgoing = (
             email,
             "verify_email",
-            {"link": await issue_verify_link(session, user)},
+            {"link": await _issue_link(session, user, "verify_email")},
         )
     elif user.email_verified_at is not None:
         outgoing = _account_exists_outgoing(email)
@@ -142,7 +154,7 @@ async def signup(
             outgoing = (
                 email,
                 "verify_email",
-                {"link": await issue_verify_link(session, user)},
+                {"link": await _issue_link(session, user, "verify_email")},
             )
     await session.commit()
     if cutoff is not None:
@@ -173,7 +185,7 @@ async def resend_verification(
     # Same invariant as signup: void earlier links first so the new one is
     # the only live verify link for this user.
     await tokens_repo.void_unused(session, user.id, "verify_email")
-    link = await issue_verify_link(session, user)
+    link = await _issue_link(session, user, "verify_email")
     await session.commit()
     send_email.delay(email, "verify_email", {"link": link})
     return AcceptedOut()
@@ -188,33 +200,10 @@ async def verify_email(
     # Token alone identifies the account, so this is IP-only (no email to
     # bucket on before the token is looked up).
     await _limit(request, "verify", per_ip=10, window_s=900)
-    token = await tokens_repo.get_valid(session, hash_token(body.token), "verify_email")
-    if token is None:
-        raise HTTPException(400, detail={"code": "invalid_token"})
-    user = await users_repo.get_by_id(session, token.user_id)
-    if user is None:
-        raise HTTPException(400, detail={"code": "invalid_token"})
-    if not await tokens_repo.consume(session, token):
-        raise HTTPException(400, detail={"code": "invalid_token"})
+    user = await _spend_token(session, body.token, "verify_email")
     await users_repo.mark_email_verified(session, user)
     await session.commit()
     return EmailOut(email=user.email)
-
-
-@router.post("/verify-email/check", responses={400: {"description": "invalid_token"}})
-async def check_verify_email(
-    body: TokenIn,
-    request: Request,
-    session: AsyncSession = Depends(get_session),
-) -> TokenStatusOut:
-    # Read-only precheck so a page can show "invalid or expired" on load;
-    # consumption happens only on the user's click (mail scanners pre-fetch
-    # links).
-    await _limit(request, "token_check", per_ip=30, window_s=900)
-    token = await tokens_repo.get_valid(session, hash_token(body.token), "verify_email")
-    if token is None:
-        raise HTTPException(400, detail={"code": "invalid_token"})
-    return TokenStatusOut()
 
 
 @router.post("/request-password-reset", status_code=202)
@@ -235,7 +224,7 @@ async def request_password_reset(
     await tokens_repo.void_unused(session, user.id, "reset_password")
     # Google-born accounts (no password) get the link too: this IS how they
     # add a password.
-    link = await issue_reset_link(session, user)
+    link = await _issue_link(session, user, "reset_password")
     await session.commit()
     send_email.delay(email, "reset_password", {"link": link})
     return AcceptedOut()
@@ -266,21 +255,7 @@ async def reset_password(
     session: AsyncSession = Depends(get_session),
 ) -> EmailOut:
     await _limit(request, "reset_confirm", per_ip=10, window_s=900)
-    token = await tokens_repo.get_valid(
-        session, hash_token(body.token), "reset_password"
-    )
-    if token is None:
-        raise HTTPException(400, detail={"code": "invalid_token"})
-    user = await users_repo.get_by_id(session, token.user_id)
-    if user is None:
-        raise HTTPException(400, detail={"code": "invalid_token"})
-    # Strictly single-use, and every other live reset link for this user dies
-    # with it: consume() spends `token` and voids its siblings in one
-    # statement (one lock order — two concurrent confirms for the same user
-    # can't deadlock each other). The loser gets the same 400 as an invalid
-    # token.
-    if not await tokens_repo.consume(session, token):
-        raise HTTPException(400, detail={"code": "invalid_token"})
+    user = await _spend_token(session, body.token, "reset_password")
     cutoff = await users_repo.reset_password(
         session, user, await hash_password_async(body.password)
     )

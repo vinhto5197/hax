@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useRef, useState, type SubmitEvent } from "react";
+import { Suspense, useEffect, useState, type SubmitEvent } from "react";
 import { signIn } from "next-auth/react";
 
 import { AuthCard, buttonClass, fieldClass } from "@/components/auth/AuthCard";
@@ -29,27 +29,23 @@ function ResetPasswordForm() {
   // it is for `errorCode` above, or it would hang in "checking" forever (the
   // effect's own guard bails out on an empty token before ever clearing it).
   const [checking, setChecking] = useState(Boolean(token));
-  // Keyed by token, not just mount: StrictMode's double-invoke is deduped
-  // (same token skipped) but a client-side navigation to a new link's token
-  // still reruns the precheck.
-  const lastCheckedToken = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!token || lastCheckedToken.current === token) return;
-    lastCheckedToken.current = token;
-    // Precheck only — the consuming call still waits for the click.
+    if (!token) return;
+    let ignore = false;
+    // Precheck only — the consuming call still waits for the submit.
     checkResetToken(token).then((result) => {
-      if (!result.ok && result.code === "invalid_token") {
-        setErrorCode("invalid_token");
-      } else {
-        // ok, rate_limited, or unknown: a check failure must not block a
-        // valid link, so fall through to the form and let the consuming
-        // call decide. Explicit reset: a stale "invalid_token" from a
-        // previous token must not survive onto this one.
-        setErrorCode(null);
-      }
+      if (ignore) return;
+      // ok, rate_limited, or unknown: a check failure must not block a valid
+      // link, so fall through to the form and let the consuming call decide.
+      setErrorCode(
+        !result.ok && result.code === "invalid_token" ? "invalid_token" : null,
+      );
       setChecking(false);
     });
+    return () => {
+      ignore = true;
+    };
   }, [token]);
 
   async function handleSubmit(event: SubmitEvent) {

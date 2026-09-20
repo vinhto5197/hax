@@ -5,7 +5,8 @@ import { useState, type SubmitEvent } from "react";
 
 import { AuthCard, buttonClass, fieldClass } from "@/components/auth/AuthCard";
 import { GoogleButton, OrDivider } from "@/components/auth/GoogleButton";
-import { resendVerification, signup } from "@/lib/authApi";
+import { ResendStatus, useResend } from "@/components/auth/useResend";
+import { signup } from "@/lib/authApi";
 
 // A FastAPI 422 detail is an array of { loc: [...] } items; loc names the
 // failing field (["body","email"] | ["body","password"]). Narrow from unknown.
@@ -21,10 +22,6 @@ function pydanticEmailFailed(detail: unknown): boolean {
   );
 }
 
-// Resend is uniform on success (account existence never leaks) but not on
-// rate limiting, which is safe to surface distinctly.
-type ResendState = "idle" | "sending" | "sent" | "rate_limited" | "error";
-
 export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -33,7 +30,7 @@ export default function SignupPage() {
   // Set on a successful signup; its presence swaps the form for the
   // check-your-inbox panel. The gate is on, so there's no auto sign-in here.
   const [sentTo, setSentTo] = useState<string | null>(null);
-  const [resendState, setResendState] = useState<ResendState>("idle");
+  const { state: resendState, resend } = useResend();
 
   async function handleSubmit(event: SubmitEvent) {
     event.preventDefault();
@@ -65,15 +62,7 @@ export default function SignupPage() {
     // Only reachable once sentTo is set (the check-your-inbox panel below);
     // the guard satisfies the type.
     if (!sentTo) return;
-    setResendState("sending");
-    const result = await resendVerification(sentTo);
-    setResendState(
-      result.ok
-        ? "sent"
-        : result.code === "rate_limited"
-          ? "rate_limited"
-          : "error",
-    );
+    await resend(sentTo);
   }
 
   if (sentTo) {
@@ -90,19 +79,7 @@ export default function SignupPage() {
         >
           Didn&apos;t get it? Resend
         </button>
-        {resendState === "sent" && (
-          <p className="text-sm text-black/60 dark:text-white/60">Sent.</p>
-        )}
-        {resendState === "rate_limited" && (
-          <p className="text-sm text-red-600 dark:text-red-400">
-            Too many attempts — try again in a few minutes.
-          </p>
-        )}
-        {resendState === "error" && (
-          <p className="text-sm text-red-600 dark:text-red-400">
-            Something went wrong. Please try again.
-          </p>
-        )}
+        <ResendStatus state={resendState} />
         <p className="text-sm text-black/60 dark:text-white/60">
           <Link href="/login" className="underline">
             Back to log in
