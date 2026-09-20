@@ -1,8 +1,8 @@
 import type { components } from "@/lib/openapi";
 
 // Thin typed fetch wrappers for the public auth routes (signup, resend,
-// verify-email + its precheck, request/reset password + its precheck) — all
-// called before a session cookie exists, so unlike chatApi.ts these carry no
+// verify-email, request/reset password + the reset precheck) — all called
+// before a session cookie exists, so unlike chatApi.ts these carry no
 // credentials.
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -62,8 +62,6 @@ export const resendVerification = (email: string) =>
   post<AcceptedOut>("/api/auth/resend-verification", { email });
 export const verifyEmail = (token: string) =>
   post<EmailOut>("/api/auth/verify-email", { token });
-export const checkVerifyToken = (token: string) =>
-  post<TokenStatusOut>("/api/auth/verify-email/check", { token });
 export const requestPasswordReset = (email: string) =>
   post<AcceptedOut>("/api/auth/request-password-reset", { email });
 export const resetPassword = (token: string, password: string) =>

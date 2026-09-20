@@ -17,15 +17,14 @@ const PUBLIC_PREFIXES = [
 // Gates Next pages only, and crypto-only (req.auth comes from auth.ts's
 // decode): a revoked-but-unexpired session still gets page shells. The API's
 // current_user is the real boundary — every data fetch behind them 401s.
-// Non-auth redirect targets must stay in PUBLIC_PREFIXES or requests loop;
-// /chat doesn't need to (it's below), because only a logged-in req.auth ever
-// lands there, and that request already clears the gate on its next pass.
+// The logged-out target (/login) must stay in PUBLIC_PREFIXES or requests
+// loop; the logged-in target (/chat) needn't — that request carries req.auth
+// and clears the gate below.
 export default auth((req) => {
   const { pathname } = req.nextUrl;
   // Logged-in visits to the auth screens bounce into the app — checked before
-  // the public-prefix pass, which would otherwise let them through. "/" is
-  // still a placeholder landing page (until M4), so send them to the actual
-  // product instead.
+  // the public-prefix pass, which would otherwise let them through. "/" is a
+  // placeholder, so the app's entry is /chat.
   if (
     req.auth &&
     (pathname.startsWith("/login") || pathname.startsWith("/signup"))

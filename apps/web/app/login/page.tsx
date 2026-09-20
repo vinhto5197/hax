@@ -7,7 +7,7 @@ import { signIn } from "next-auth/react";
 
 import { AuthCard, buttonClass, fieldClass } from "@/components/auth/AuthCard";
 import { GoogleButton, OrDivider } from "@/components/auth/GoogleButton";
-import { resendVerification } from "@/lib/authApi";
+import { ResendStatus, useResend } from "@/components/auth/useResend";
 
 // Google failures come back as a redirect to /login?error=... — the two codes
 // below are ours (auth.ts signIn callback); anything else is Auth.js's own
@@ -18,10 +18,6 @@ function oauthErrorMessage(code: string | null): string | null {
     return "Google hasn't verified that email address, so it can't be used to sign in.";
   return "Google sign-in didn't complete. Please try again.";
 }
-
-// Resend is uniform on success (account existence never leaks) but not on
-// rate limiting, which is safe to surface distinctly.
-type ResendState = "idle" | "sending" | "sent" | "rate_limited" | "error";
 
 function LoginForm() {
   const router = useRouter();
@@ -47,7 +43,7 @@ function LoginForm() {
   // Shown only for the generic "Invalid email or password." outcome, never
   // alongside the rate-limit or unverified-email messages.
   const [showGoogleHint, setShowGoogleHint] = useState(false);
-  const [resendState, setResendState] = useState<ResendState>("idle");
+  const { state: resendState, resend, reset: resetResend } = useResend();
 
   async function handleSubmit(event: SubmitEvent) {
     event.preventDefault();
@@ -55,7 +51,7 @@ function LoginForm() {
     setError(null);
     setUnverifiedEmail(null);
     setShowGoogleHint(false);
-    setResendState("idle");
+    resetResend();
     try {
       // redirect:false so failures stay on this page with one generic
       // message (wrong password vs no account is deliberately
@@ -90,15 +86,7 @@ function LoginForm() {
 
   async function handleResend() {
     if (!unverifiedEmail) return;
-    setResendState("sending");
-    const result = await resendVerification(unverifiedEmail);
-    setResendState(
-      result.ok
-        ? "sent"
-        : result.code === "rate_limited"
-          ? "rate_limited"
-          : "error",
-    );
+    await resend(unverifiedEmail);
   }
 
   return (
@@ -144,19 +132,7 @@ function LoginForm() {
                 Resend verification email
               </button>
             )}
-            {resendState === "sent" && (
-              <p className="text-sm text-black/60 dark:text-white/60">Sent.</p>
-            )}
-            {resendState === "rate_limited" && (
-              <p className="text-sm text-red-600 dark:text-red-400">
-                Too many attempts — try again in a few minutes.
-              </p>
-            )}
-            {resendState === "error" && (
-              <p className="text-sm text-red-600 dark:text-red-400">
-                Something went wrong. Please try again.
-              </p>
-            )}
+            <ResendStatus state={resendState} />
           </div>
         )}
         <button type="submit" disabled={submitting} className={buttonClass}>
