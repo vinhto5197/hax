@@ -48,10 +48,6 @@ class EmailOut(BaseModel):
     email: str
 
 
-class TokenStatusOut(BaseModel):
-    status: Literal["valid"] = "valid"
-
-
 class OAuthUpsertIn(BaseModel):
     # Closed set: a provider name is a trust decision (which issuer's
     # email_verified we believe), so adding one is a code change, not data.

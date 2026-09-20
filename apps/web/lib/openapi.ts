@@ -55,23 +55,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/auth/verify-email/check": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Check Verify Email */
-        post: operations["check_verify_email_api_auth_verify_email_check_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/auth/request-password-reset": {
         parameters: {
             query?: never;
@@ -83,23 +66,6 @@ export interface paths {
         put?: never;
         /** Request Password Reset */
         post: operations["request_password_reset_api_auth_request_password_reset_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/auth/reset-password/check": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Check Reset Password */
-        post: operations["check_reset_password_api_auth_reset_password_check_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -461,15 +427,6 @@ export interface components {
             /** Token */
             token: string;
         };
-        /** TokenStatusOut */
-        TokenStatusOut: {
-            /**
-             * Status
-             * @default valid
-             * @constant
-             */
-            status: "valid";
-        };
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -598,46 +555,6 @@ export interface operations {
             };
         };
     };
-    check_verify_email_api_auth_verify_email_check_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TokenIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TokenStatusOut"];
-                };
-            };
-            /** @description invalid_token */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     request_password_reset_api_auth_request_password_reset_post: {
         parameters: {
             query?: never;
@@ -659,46 +576,6 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AcceptedOut"];
                 };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    check_reset_password_api_auth_reset_password_check_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TokenIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TokenStatusOut"];
-                };
-            };
-            /** @description invalid_token */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
             /** @description Validation Error */
             422: {

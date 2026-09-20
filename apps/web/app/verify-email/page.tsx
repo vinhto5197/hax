@@ -2,16 +2,12 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useRef, useState, type SubmitEvent } from "react";
+import { Suspense, useState, type SubmitEvent } from "react";
 
 import { AuthCard, buttonClass, fieldClass } from "@/components/auth/AuthCard";
-import {
-  checkVerifyToken,
-  resendVerification,
-  verifyEmail,
-} from "@/lib/authApi";
+import { resendVerification, verifyEmail } from "@/lib/authApi";
 
-type Status = "checking" | "idle" | "verifying" | "invalid_token";
+type Status = "idle" | "verifying" | "invalid_token";
 // Resend is uniform on success (account existence never leaks) but not on
 // rate limiting, which is safe to surface distinctly.
 type ResendState = "idle" | "sending" | "sent" | "rate_limited" | "error";
@@ -21,10 +17,9 @@ function VerifyEmailForm() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
   // No token behaves exactly like an invalid/expired one — set once, up
-  // front, with nothing to retry. A present token starts "checking" until
-  // the precheck below resolves.
+  // front, with nothing to retry.
   const [status, setStatus] = useState<Status>(
-    token ? "checking" : "invalid_token",
+    token ? "idle" : "invalid_token",
   );
   // A rate-limited or unexpected failure on Confirm is transient, so it's
   // shown above the still-enabled Confirm button rather than switching views
@@ -32,26 +27,6 @@ function VerifyEmailForm() {
   const [confirmError, setConfirmError] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [resendState, setResendState] = useState<ResendState>("idle");
-  // Keyed by token, not just mount: StrictMode's double-invoke is deduped
-  // (same token skipped) but a client-side navigation to a new link's token
-  // still reruns the precheck.
-  const lastCheckedToken = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (!token || lastCheckedToken.current === token) return;
-    lastCheckedToken.current = token;
-    // Precheck only — the consuming call still waits for the click.
-    checkVerifyToken(token).then((result) => {
-      if (!result.ok && result.code === "invalid_token") {
-        setStatus("invalid_token");
-      } else {
-        // ok, rate_limited, or unknown: a check failure must not block a
-        // valid link, so fall through to the Confirm form and let the
-        // consuming call decide.
-        setStatus("idle");
-      }
-    });
-  }, [token]);
 
   // Only ever called from the Confirm click, never on mount: corporate mail
   // scanners pre-fetch links in transit and would burn the single-use token
@@ -89,16 +64,6 @@ function VerifyEmailForm() {
         : result.code === "rate_limited"
           ? "rate_limited"
           : "error",
-    );
-  }
-
-  if (status === "checking") {
-    return (
-      <AuthCard title="Confirm your email">
-        <p className="text-sm text-black/60 dark:text-white/60">
-          Checking your link…
-        </p>
-      </AuthCard>
     );
   }
 

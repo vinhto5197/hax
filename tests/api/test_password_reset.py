@@ -239,39 +239,6 @@ async def test_length_caps(client):
     assert res.status_code == 422
 
 
-async def test_reset_check_reports_validity_without_consuming(client, admin_engine):
-    u = await _make_user(admin_engine, "r@example.com")
-    await make_email_token(admin_engine, u.id, "reset_password", hash_token("raw1"))
-    first = await client.post("/api/auth/reset-password/check", json={"token": "raw1"})
-    second = await client.post("/api/auth/reset-password/check", json={"token": "raw1"})
-    assert first.status_code == second.status_code == 200
-    assert first.json() == second.json() == {"status": "valid"}
-    # The precheck consumed nothing: the token is still live for the real,
-    # consuming call.
-    res = await client.post(
-        "/api/auth/reset-password", json={"token": "raw1", "password": "brand-new-9"}
-    )
-    assert res.status_code == 200 and res.json() == {"email": "r@example.com"}
-
-
-async def test_reset_check_rejects_used_expired_wrong_purpose_unknown(
-    client, admin_engine
-):
-    u = await _make_user(admin_engine, "r@example.com")
-    await make_email_token(
-        admin_engine, u.id, "reset_password", hash_token("used"), used=True
-    )
-    await make_email_token(
-        admin_engine, u.id, "reset_password", hash_token("old"), expires_in_s=-1
-    )
-    await make_email_token(admin_engine, u.id, "verify_email", hash_token("verify"))
-    for raw in ("used", "old", "verify", "unknown"):
-        res = await client.post("/api/auth/reset-password/check", json={"token": raw})
-        assert res.status_code == 400, raw
-        assert res.json()["detail"] == {"code": "invalid_token"}, raw
-    assert (await _row(admin_engine, u.id)).password_hash is None
-
-
 async def test_double_consume_is_strictly_single_use(client, admin_engine):
     # Two concurrent confirms with the SAME token, different passwords:
     # consume()'s atomic conditional UPDATE must let exactly one through.

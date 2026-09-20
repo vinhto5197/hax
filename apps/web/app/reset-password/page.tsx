@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useRef, useState, type SubmitEvent } from "react";
+import { Suspense, useState, type SubmitEvent } from "react";
 import { signIn } from "next-auth/react";
 
 import { AuthCard, buttonClass, fieldClass } from "@/components/auth/AuthCard";
-import { checkResetToken, resetPassword } from "@/lib/authApi";
+import { resetPassword } from "@/lib/authApi";
 
 type ErrorCode = "invalid_token" | "rate_limited" | "validation" | "unknown";
 
@@ -23,34 +23,6 @@ function ResetPasswordForm() {
     token ? null : "invalid_token",
   );
   const [mismatch, setMismatch] = useState(false);
-  // A present, non-empty token starts "checking" until the precheck below
-  // resolves; only then can the form (or the invalid-link view) render.
-  // Boolean(), not `!== null`: an empty "?token=" is falsy here the same way
-  // it is for `errorCode` above, or it would hang in "checking" forever (the
-  // effect's own guard bails out on an empty token before ever clearing it).
-  const [checking, setChecking] = useState(Boolean(token));
-  // Keyed by token, not just mount: StrictMode's double-invoke is deduped
-  // (same token skipped) but a client-side navigation to a new link's token
-  // still reruns the precheck.
-  const lastCheckedToken = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (!token || lastCheckedToken.current === token) return;
-    lastCheckedToken.current = token;
-    // Precheck only — the consuming call still waits for the click.
-    checkResetToken(token).then((result) => {
-      if (!result.ok && result.code === "invalid_token") {
-        setErrorCode("invalid_token");
-      } else {
-        // ok, rate_limited, or unknown: a check failure must not block a
-        // valid link, so fall through to the form and let the consuming
-        // call decide. Explicit reset: a stale "invalid_token" from a
-        // previous token must not survive onto this one.
-        setErrorCode(null);
-      }
-      setChecking(false);
-    });
-  }, [token]);
 
   async function handleSubmit(event: SubmitEvent) {
     event.preventDefault();
@@ -92,16 +64,6 @@ function ResetPasswordForm() {
     } finally {
       setSubmitting(false);
     }
-  }
-
-  if (checking) {
-    return (
-      <AuthCard title="Reset your password">
-        <p className="text-sm text-black/60 dark:text-white/60">
-          Checking your link…
-        </p>
-      </AuthCard>
-    );
   }
 
   if (errorCode === "invalid_token") {
