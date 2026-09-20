@@ -77,31 +77,3 @@ async def test_verify_email_ip_rate_limit(client):
         assert res.status_code == 400
     eleventh = await client.post("/api/auth/verify-email", json={"token": "x"})
     assert eleventh.status_code == 429
-
-
-async def test_check_reports_validity_without_consuming(client, admin_engine):
-    u = await _seed(admin_engine)
-    await make_email_token(admin_engine, u.id, "verify_email", hash_token("raw1"))
-    first = await client.post("/api/auth/verify-email/check", json={"token": "raw1"})
-    second = await client.post("/api/auth/verify-email/check", json={"token": "raw1"})
-    assert first.status_code == second.status_code == 200
-    assert first.json() == second.json() == {"status": "valid"}
-    # The precheck consumed nothing: the token is still live for the real,
-    # consuming call.
-    res = await client.post("/api/auth/verify-email", json={"token": "raw1"})
-    assert res.status_code == 200 and res.json() == {"email": "v@example.com"}
-
-
-async def test_check_rejects_used_expired_wrong_purpose_unknown(client, admin_engine):
-    u = await _seed(admin_engine)
-    await make_email_token(
-        admin_engine, u.id, "verify_email", hash_token("used"), used=True
-    )
-    await make_email_token(
-        admin_engine, u.id, "verify_email", hash_token("old"), expires_in_s=-1
-    )
-    await make_email_token(admin_engine, u.id, "reset_password", hash_token("reset"))
-    for raw in ("used", "old", "reset", "unknown"):
-        res = await client.post("/api/auth/verify-email/check", json={"token": raw})
-        assert res.status_code == 400, raw
-        assert res.json()["detail"] == {"code": "invalid_token"}, raw

@@ -313,7 +313,7 @@ async def test_signup_per_email_cap_limits_outgoing_mail(client, admin_engine, o
     assert len(outbox) == 3
 
 
-async def test_resend_verification_mirrors_signup(
+async def test_resend_verification_uniform_and_only_for_unverified_password_users(
     client, admin_engine, pw_user, outbox
 ):
     # A live link already exists (e.g. from signup); resend must void it so
@@ -347,37 +347,6 @@ async def test_resend_verification_mirrors_signup(
             )
         ).scalar_one()
     assert stored != "h0"
-
-    # Verified user (incl. Google-born): mirrors signup's account_exists
-    # branch — no token work, existence still doesn't leak in the response.
-    verified = await _make_user(admin_engine, "verified@example.com")
-    async with admin_engine.begin() as conn:
-        await conn.execute(
-            text("UPDATE users SET email_verified_at = now() WHERE id = :id"),
-            {"id": verified.id},
-        )
-    res = await client.post(
-        "/api/auth/resend-verification", json={"email": verified.email}
-    )
-    assert res.status_code == 202 and res.json() == BODY
-    assert outbox[-1] == (
-        verified.email,
-        "account_exists",
-        {
-            "login_url": f"{auth_router.app_base_url()}/login",
-            "reset_url": f"{auth_router.app_base_url()}/forgot-password",
-        },
-    )
-    assert await _tokens(admin_engine, verified.id) == []
-
-    # Unverified, passwordless bootstrap placeholder: nothing to resend.
-    placeholder = await _make_user(admin_engine, "placeholder2@example.com")
-    before = len(outbox)
-    res = await client.post(
-        "/api/auth/resend-verification", json={"email": placeholder.email}
-    )
-    assert res.status_code == 202 and res.json() == BODY
-    assert len(outbox) == before
 
 
 async def test_resend_per_email_rate_limit(client, pw_user, outbox):

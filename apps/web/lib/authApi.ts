@@ -1,14 +1,12 @@
 import type { components } from "@/lib/openapi";
 
-// Thin typed fetch wrappers for the public auth routes (signup, resend,
-// verify-email + its precheck, request/reset password + its precheck) — all
-// called before a session cookie exists, so unlike chatApi.ts these carry no
-// credentials.
+// Thin typed fetch wrappers for the five public auth routes (signup, resend,
+// verify-email, request/reset password) — all called before a session cookie
+// exists, so unlike chatApi.ts these carry no credentials.
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 type AcceptedOut = components["schemas"]["AcceptedOut"];
 type EmailOut = components["schemas"]["EmailOut"];
-type TokenStatusOut = components["schemas"]["TokenStatusOut"];
 
 // Server error codes the auth pages branch on. "validation" is a 422 —
 // signup's bad email, or a too-short/too-long password on signup or
@@ -62,11 +60,7 @@ export const resendVerification = (email: string) =>
   post<AcceptedOut>("/api/auth/resend-verification", { email });
 export const verifyEmail = (token: string) =>
   post<EmailOut>("/api/auth/verify-email", { token });
-export const checkVerifyToken = (token: string) =>
-  post<TokenStatusOut>("/api/auth/verify-email/check", { token });
 export const requestPasswordReset = (email: string) =>
   post<AcceptedOut>("/api/auth/request-password-reset", { email });
 export const resetPassword = (token: string, password: string) =>
   post<EmailOut>("/api/auth/reset-password", { token, password });
-export const checkResetToken = (token: string) =>
-  post<TokenStatusOut>("/api/auth/reset-password/check", { token });

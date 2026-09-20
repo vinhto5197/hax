@@ -23,7 +23,6 @@ from packages.core.schemas.auth import (
     ResetPasswordIn,
     SignupIn,
     TokenIn,
-    TokenStatusOut,
 )
 from packages.db.models import User
 from packages.db.repos import email_tokens as tokens_repo
@@ -157,18 +156,10 @@ async def resend_verification(
     request: Request,
     session: AsyncSession = Depends(get_session),
 ) -> AcceptedOut:
-    # Resend re-sends whatever signup would have sent for this address;
-    # existence never leaks (uniform 202), the inbox owner just gets a
-    # useful email.
     email = body.email.strip().lower()
     await _limit(request, "resend", per_ip=10, window_s=3600, email=email, per_email=3)
     user = await users_repo.get_by_email(session, email)
-    if user is None or (user.email_verified_at is None and user.password_hash is None):
-        # Unknown address, or an unverified bootstrap placeholder with no
-        # password yet: nothing to resend.
-        return AcceptedOut()
-    if user.email_verified_at is not None:
-        send_email.delay(*_account_exists_outgoing(email))
+    if user is None or user.email_verified_at is not None or user.password_hash is None:
         return AcceptedOut()
     # Same invariant as signup: void earlier links first so the new one is
     # the only live verify link for this user.
@@ -201,22 +192,6 @@ async def verify_email(
     return EmailOut(email=user.email)
 
 
-@router.post("/verify-email/check", responses={400: {"description": "invalid_token"}})
-async def check_verify_email(
-    body: TokenIn,
-    request: Request,
-    session: AsyncSession = Depends(get_session),
-) -> TokenStatusOut:
-    # Read-only precheck so a page can show "invalid or expired" on load;
-    # consumption happens only on the user's click (mail scanners pre-fetch
-    # links).
-    await _limit(request, "token_check", per_ip=30, window_s=900)
-    token = await tokens_repo.get_valid(session, hash_token(body.token), "verify_email")
-    if token is None:
-        raise HTTPException(400, detail={"code": "invalid_token"})
-    return TokenStatusOut()
-
-
 @router.post("/request-password-reset", status_code=202)
 async def request_password_reset(
     body: EmailIn,
@@ -239,24 +214,6 @@ async def request_password_reset(
     await session.commit()
     send_email.delay(email, "reset_password", {"link": link})
     return AcceptedOut()
-
-
-@router.post("/reset-password/check", responses={400: {"description": "invalid_token"}})
-async def check_reset_password(
-    body: TokenIn,
-    request: Request,
-    session: AsyncSession = Depends(get_session),
-) -> TokenStatusOut:
-    # Read-only precheck so a page can show "invalid or expired" on load;
-    # consumption happens only on the user's click (mail scanners pre-fetch
-    # links).
-    await _limit(request, "token_check", per_ip=30, window_s=900)
-    token = await tokens_repo.get_valid(
-        session, hash_token(body.token), "reset_password"
-    )
-    if token is None:
-        raise HTTPException(400, detail={"code": "invalid_token"})
-    return TokenStatusOut()
 
 
 @router.post("/reset-password", responses={400: {"description": "invalid_token"}})
