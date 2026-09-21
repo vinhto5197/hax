@@ -96,3 +96,40 @@ async def load_history(
         .order_by(Message.created_at)
     )
     return [(role, content) for role, content in rows]
+
+
+async def first_user_message(
+    session: AsyncSession, user_id: uuid.UUID, conversation_id: uuid.UUID
+) -> str | None:
+    """The conversation's first user message — the title task's only input.
+    Owner-scoped: a foreign or missing conversation is None."""
+    return await session.scalar(
+        select(Message.content)
+        .join(Conversation, Conversation.id == Message.conversation_id)
+        .where(
+            Conversation.id == conversation_id,
+            Conversation.user_id == user_id,
+            Message.role == "user",
+        )
+        .order_by(Message.created_at, Message.id)
+        .limit(1)
+    )
+
+
+async def set_title_if_unset(
+    session: AsyncSession, user_id: uuid.UUID, conversation_id: uuid.UUID, title: str
+) -> bool:
+    """First writer wins: redelivered tasks and duplicate enqueues can't churn
+    a title. updated_at is left alone — a title must not reorder the sidebar."""
+    result = await session.execute(
+        update(Conversation)
+        .where(
+            Conversation.id == conversation_id,
+            Conversation.user_id == user_id,
+            Conversation.title.is_(None),
+        )
+        .values(title=title, updated_at=Conversation.updated_at)
+        .returning(Conversation.id)
+        .execution_options(synchronize_session=False)
+    )
+    return result.first() is not None
