@@ -6,7 +6,7 @@ from pydantic import BaseModel, EmailStr, Field
 
 class SignupIn(BaseModel):
     email: EmailStr
-    # Length-only policy (spec: Flows); the cap bounds argon2 work per attempt.
+    # Length-only policy; the cap bounds argon2 work per attempt.
     password: str = Field(min_length=8, max_length=128)
     name: str | None = Field(default=None, max_length=200)
 

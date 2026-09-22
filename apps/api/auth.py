@@ -1,11 +1,11 @@
 """Request authentication for the API.
 
-current_user is the single enforcement point (spec: Flows): cookie (web) or
+current_user is the single enforcement point: cookie (web) or
 Authorization: Bearer (tests now, other clients later) -> pinned-alg JWT decode ->
 revocation check -> CurrentUser. No DB read on the hot path (Redis only;
 DB only on cache miss). internal_only guards the server-to-server endpoints
-Next calls (verify-credentials) — it 404s, not 403s, so probing can't even
-learn the routes exist.
+Next calls (verify-credentials, oauth-upsert) — it 404s, not 403s, so probing
+can't even learn the routes exist.
 """
 
 import hmac

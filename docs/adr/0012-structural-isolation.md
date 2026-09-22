@@ -58,9 +58,11 @@ superuser, so dev now mirrors prod.
   `oauth-upsert` (internal-secret-gated, pre-session) and email-token
   verification during signup/password-reset (pre-login by definition).
   Policying them would zero out the exact flows that need to touch rows
-  before a session exists. Revisit once slices 3/4 land those access
-  patterns and it's clear what identity, if any, is available at that
-  point.
+  before a session exists. Standing decision (2026-09-22, after those flows
+  shipped): they stay un-policied. What bounds them instead is that neither is
+  ever queried by a caller-supplied identity — the lookup key is the provider
+  identity or a hashed single-use token, through one repo module each
+  (`packages/db/repos/accounts.py`, `email_tokens.py`).
 - The authz suite proves the two layers **separately, never blended in one
   assertion**: app-level scoping (repo WHERE / `ToolContext.user_id`) is
   exercised against a superuser session so RLS is out of the picture and

@@ -1,8 +1,8 @@
-"""Fail-closed role probe (AR-2026-09-08 #2): the app must refuse to serve as
-a role that bypasses RLS. Exercised directly against packages.db.session so
-the assertion covers the exact function wired into the API lifespan and the
-worker's worker_process_init, independent of whether either harness actually
-runs it under this test's transport (see test module docstring below)."""
+"""Fail-closed role probe: the app must refuse to serve as a role that
+bypasses RLS. Exercised directly against packages.db.session so the assertion
+covers the exact function wired into the API lifespan and the worker's
+worker_process_init, independent of whether either harness actually runs it
+under this test's transport."""
 
 import pytest
 from celery.signals import worker_process_init

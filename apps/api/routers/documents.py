@@ -63,7 +63,7 @@ async def upload_document(
         raise HTTPException(status_code=413, detail=f"file exceeds {MAX_BYTES} bytes")
 
     # Bounded read caps RAM at MAX_BYTES+1 even when the header lies; the deeper
-    # multipart disk-spool is the reverse proxy's client_max_body_size job (M3).
+    # multipart disk-spool is the reverse proxy's client_max_body_size job.
     content = await file.read(MAX_BYTES + 1)
     if len(content) > MAX_BYTES:
         raise HTTPException(status_code=413, detail=f"file exceeds {MAX_BYTES} bytes")

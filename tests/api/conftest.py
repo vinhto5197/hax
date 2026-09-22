@@ -5,7 +5,7 @@ Two engines with deliberately different power:
   test use; RLS applies to it.
 - ADMIN engine: connects as hax (owner; superuser in dev/CI) for seeding,
   truncation, and cross-user assertions that must see all rows.
-Never seed through the app engine: once RLS lands, un-announced writes fail.
+Never seed through the app engine: RLS rejects un-announced writes.
 """
 
 import asyncio
@@ -170,7 +170,7 @@ async def user_b(admin_engine):
 
 
 def bearer(user) -> dict[str, str]:
-    """Authorization header for `user` — the spec's cheap Bearer test path."""
+    """Authorization header for `user` — the Bearer path, no cookie needed."""
     now = int(time.time())
     token = jwt.encode(
         {

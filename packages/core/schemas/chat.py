@@ -13,8 +13,8 @@ class ChatRequest(BaseModel):
     # conversation. strip_whitespace matters: whitespace-only also 400s.
     # max_length caps the unbounded body that otherwise feeds straight to the
     # paid LLM and an unbounded TEXT column (~20k chars ≈ 5k tokens, well under
-    # the model's context window; large data belongs in M2 file upload, not a
-    # chat turn).
+    # the model's context window; large data belongs in a document upload, not
+    # a chat turn).
     prompt: Annotated[
         str, StringConstraints(strip_whitespace=True, min_length=1, max_length=20000)
     ]

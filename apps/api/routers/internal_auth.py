@@ -18,8 +18,8 @@ from packages.db.repos import accounts as accounts_repo
 from packages.db.repos import users as users_repo
 
 # 404-camouflaged behind internal_only: only Next's server (holding
-# INTERNAL_API_SECRET) can reach these (verify-credentials, oauth-upsert) —
-# spec: verify-credentials must not be a public password oracle.
+# INTERNAL_API_SECRET) can reach these (verify-credentials, oauth-upsert).
+# verify-credentials must never be reachable as a public password oracle.
 router = APIRouter(prefix="/internal/auth", dependencies=[Depends(internal_only)])
 
 
@@ -71,9 +71,9 @@ async def _resolve_oauth_user(
         # email: email is the hax identity key and is never rewritten here.
         return user, None
     if not body.email_verified:
-        # Fail closed (spec: threat model, OAuth takeover). An unverified
-        # provider email proves nothing about who controls the mailbox, so it
-        # may neither attach to an existing account nor reserve the address.
+        # Fail closed against OAuth account takeover: an unverified provider
+        # email proves nothing about who controls the mailbox, so it may
+        # neither attach to an existing account nor reserve the address.
         raise HTTPException(403, detail={"code": "email_unverified"})
     user = await users_repo.get_by_email(session, email)
     cutoff = None

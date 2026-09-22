@@ -96,8 +96,9 @@ export function Sidebar() {
                     active ? "" : "text-black/70 dark:text-white/70"
                   } ${conversation.title ? "" : "italic text-black/40 dark:text-white/40"}`}
                 >
-                  {/* The title is written in the background after the first reply;
-                      until then the entry reads as state, not as a name. */}
+                  {/* Titling runs in the worker off the first user message and
+                      can land mid-stream; until it does, the entry must read as
+                      state, not as a name. */}
                   {conversation.title ?? "Untitled"}
                 </Link>
                 <button

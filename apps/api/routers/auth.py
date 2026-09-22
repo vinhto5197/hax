@@ -35,8 +35,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 def client_ip(request: Request) -> str:
-    # Direct-connect dev value. M3 note (spec): behind the proxy this must come
-    # from X-Forwarded-For or every visitor shares one bucket.
+    # Direct-connect dev value. Behind a reverse proxy this must instead come
+    # from X-Forwarded-For, or every visitor shares one rate-limit bucket.
     return request.client.host if request.client else "unknown"
 
 

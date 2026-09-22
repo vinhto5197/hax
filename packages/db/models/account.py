@@ -11,9 +11,9 @@ from packages.db.session import Base
 class Account(Base):
     """One linked OAuth identity: (provider, provider_account_id) -> user.
 
-    Linking rules live in the API (oauth-upsert, slice 3): an identity may
-    attach to an existing user only when the provider asserts the email is
-    verified — this table just guarantees an identity can't attach twice.
+    Linking rules live in the API (oauth-upsert): an identity may attach to
+    an existing user only when the provider asserts the email is verified —
+    this table just guarantees an identity can't attach twice.
     """
 
     __tablename__ = "accounts"

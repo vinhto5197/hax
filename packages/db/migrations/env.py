@@ -11,14 +11,11 @@ from packages.db.models import *  # noqa: F401, F403
 # Import Base and all models so autogenerate sees the tables.
 from packages.db.session import MIGRATIONS_DATABASE_URL_ASYNC, Base
 
-# this is the Alembic Config object, which provides
-# access to the values within the .ini file in use.
 config = context.config
 
 # Migrations run as the OWNER role — URL policy lives in packages/db/session.py.
 config.set_main_option("sqlalchemy.url", MIGRATIONS_DATABASE_URL_ASYNC)
 
-# Interpret the config file for Python logging.
 if config.config_file_name is not None:
     # disable_existing_loggers=False: this module also runs in-process from
     # tests/api/conftest.py's test_database fixture (migrating hax_test), by
@@ -28,23 +25,11 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
-# other values from the config, defined by the needs of env.py,
-# can be acquired:
-# my_important_option = config.get_main_option("my_important_option")
-# ... etc.
-
 
 def run_migrations_offline() -> None:
-    """Run migrations in 'offline' mode.
+    """Emit the migrations as SQL to stdout instead of running them.
 
-    This configures the context with just a URL
-    and not an Engine, though an Engine is acceptable
-    here as well.  By skipping the Engine creation
-    we don't even need a DBAPI to be available.
-
-    Calls to context.execute() here emit the given string to the
-    script output.
-
+    No Engine and no DBAPI connection — nothing here may read the database.
     """
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
@@ -66,11 +51,6 @@ def do_run_migrations(connection: Connection) -> None:
 
 
 async def run_async_migrations() -> None:
-    """In this scenario we need to create an Engine
-    and associate a connection with the context.
-
-    """
-
     connectable = async_engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",

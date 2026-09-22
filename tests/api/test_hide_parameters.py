@@ -1,4 +1,4 @@
-"""Engine-level parameter hiding (AR-2026-09-08 #3): SQLAlchemy's
+"""Engine-level parameter hiding: SQLAlchemy's
 StatementError.__str__ appends "[parameters: …]" by default, and for the
 chunk insert those parameters are raw user document text. hide_parameters is
 an ENGINE option applied when the engine itself wraps a DBAPI error, so this

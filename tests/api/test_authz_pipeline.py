@@ -39,9 +39,8 @@ def unit_vec(hot: int) -> list[float]:
 async def test_ingest_inherits_owner_and_stays_partitioned(
     user_a, user_b, admin_engine, monkeypatch
 ):
-    # The banked regression (backlog: "ingest regression test owed when
-    # slice-2 DB fixtures land"): chunks inherit doc.user_id through the real
-    # worker code path, announced-identity included.
+    # Chunks inherit doc.user_id through the real worker code path,
+    # announced-identity included.
     from packages.core import storage
     from packages.core.rag import ingest, retrieval
 

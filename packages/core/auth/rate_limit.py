@@ -1,6 +1,6 @@
 """Fixed-window rate limiting on Redis.
 
-Fail-open contract (spec threat table): Redis being down degrades limiting
+Fail-open contract: Redis being down degrades limiting
 (allow + loud log), never availability. Callers pick names/limits; keys are
 rl:{name}:{ident}.
 """

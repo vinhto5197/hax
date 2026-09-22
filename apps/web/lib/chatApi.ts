@@ -101,7 +101,8 @@ export async function deleteDocument(id: string): Promise<void> {
   });
   if (response.ok || response.status === 404) return;
   // Surface FastAPI's `detail` when present — statusText is empty under HTTP/2
-  // behind the ALB, so a bare status is uninformative (mirrors uploadDocument).
+  // (any TLS-terminating proxy), so a bare status is uninformative (mirrors
+  // uploadDocument).
   let detail = `API ${response.status}: ${response.statusText}`;
   try {
     const body = (await response.json()) as { detail?: unknown };

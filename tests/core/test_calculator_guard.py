@@ -1,8 +1,8 @@
-"""Guards _eval_expr against unbounded operand growth (AR-2026-09-08 #1):
-the exponent cap alone doesn't bound the RESULT of a chained pow/mult, so a
-nested expression like ``((9**1000)**1000)**1000`` runs a synchronous
-multi-million-bit big-int op on the event loop. The fix rejects the op before
-computing when the resulting bit length would exceed _MAX_RESULT_BITS.
+"""Guards _eval_expr against unbounded operand growth: the exponent cap alone
+doesn't bound the RESULT of a chained pow/mult, so a nested expression like
+``((9**1000)**1000)**1000`` runs a synchronous multi-million-bit big-int op on
+the event loop. _eval_expr rejects the op before computing when the resulting
+bit length would exceed _MAX_RESULT_BITS.
 """
 
 import ast

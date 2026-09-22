@@ -37,8 +37,8 @@ app.include_router(auth_router, prefix="/api")
 app.include_router(chat_router, prefix="/api")
 app.include_router(conversations_router, prefix="/api")
 app.include_router(documents_router, prefix="/api")
-# No /api prefix: /internal/* is never publicly proxied (M3) and is
-# secret-gated regardless.
+# No /api prefix: /internal/* is never publicly proxied and is secret-gated
+# regardless.
 app.include_router(internal_auth_router)
 
 
