@@ -204,7 +204,13 @@ async def generate_title_async(conversation_id: UUID, user_id: UUID) -> None:
         await session.commit()
 
 
-@celery_app.task(bind=True, name="generate_title", max_retries=MAX_RETRIES)
+# ignore_result: nobody reads this task's result, and without it every publish
+# also subscribes to the result backend — which is what makes an enqueue hang
+# for many seconds when Redis is unreachable. Consequence: this task's state
+# is never visible in the result backend.
+@celery_app.task(
+    bind=True, name="generate_title", max_retries=MAX_RETRIES, ignore_result=True
+)
 def generate_title(self, conversation_id: str, user_id: str) -> None:
     """Write a conversation's title from its first user message, once.
 

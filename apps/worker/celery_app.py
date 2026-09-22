@@ -42,6 +42,11 @@ celery_app.conf.update(
     worker_prefetch_multiplier=1,
     task_time_limit=300,
     task_track_started=True,
+    # Producers (the API) must fail fast when the broker is unreachable: with
+    # no connect timeout a publish hangs on the OS TCP timeout, pinning a
+    # thread per enqueue. Connect only — established-connection reads (the
+    # worker's blocking pop) are untouched.
+    broker_transport_options={"socket_connect_timeout": 2},
 )
 
 

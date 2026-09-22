@@ -54,7 +54,7 @@ async def chat(
         ctx=ToolContext(user_id=user.id),
     )
     return StreamingResponse(
-        event_stream(event_fn, messages, conversation_id),
+        event_stream(event_fn, messages, conversation_id, user.id),
         media_type="text/event-stream",
         headers=SSE_HEADERS,
     )
