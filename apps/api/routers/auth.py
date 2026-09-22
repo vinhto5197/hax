@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.deps import get_session
+from apps.api.enqueue import fire_and_forget
 from apps.api.redis_client import get_redis
 from apps.worker.tasks import send_email
 from packages.core.auth import rate_limit
@@ -68,6 +69,17 @@ async def _spend_token(session: AsyncSession, raw: str, purpose: str) -> User:
     if token is None or user is None or not await tokens_repo.consume(session, token):
         raise HTTPException(400, detail={"code": "invalid_token"})
     return user
+
+
+def _mail(to: str, template: str, params: dict[str, str]) -> None:
+    """Queue one outgoing email. Every caller MUST be past the commit — the
+    link it carries is only real once its token row is committed.
+
+    The routes here are uniform-202 anti-enumeration surfaces, so the publish
+    can neither raise nor be waited on. The template, never the address, is
+    what the publisher may log.
+    """
+    fire_and_forget(send_email, to, template, params, log_ref=template)
 
 
 def _account_exists_outgoing(email: str) -> tuple[str, str, dict[str, str]]:
@@ -159,7 +171,7 @@ async def signup(
     await session.commit()
     if cutoff is not None:
         await publish_sva(get_redis(), user.id, cutoff)
-    send_email.delay(*outgoing)
+    _mail(*outgoing)
     return AcceptedOut()
 
 
@@ -180,14 +192,14 @@ async def resend_verification(
         # password yet: nothing to resend.
         return AcceptedOut()
     if user.email_verified_at is not None:
-        send_email.delay(*_account_exists_outgoing(email))
+        _mail(*_account_exists_outgoing(email))
         return AcceptedOut()
     # Same invariant as signup: void earlier links first so the new one is
     # the only live verify link for this user.
     await tokens_repo.void_unused(session, user.id, "verify_email")
     link = await _issue_link(session, user, "verify_email")
     await session.commit()
-    send_email.delay(email, "verify_email", {"link": link})
+    _mail(email, "verify_email", {"link": link})
     return AcceptedOut()
 
 
@@ -226,7 +238,7 @@ async def request_password_reset(
     # add a password.
     link = await _issue_link(session, user, "reset_password")
     await session.commit()
-    send_email.delay(email, "reset_password", {"link": link})
+    _mail(email, "reset_password", {"link": link})
     return AcceptedOut()
 
 

@@ -166,8 +166,13 @@ Transport errors (`SMTPException`/`OSError`) retry at
 resend path; render errors (bad template/params) propagate immediately, no
 retry. The route enqueues only **after** its `commit()`, never before: a
 failed commit must not mail a link whose token doesn't exist. The residual
-"commit succeeded, enqueue failed" case (Redis down, worker unreachable)
-surfaces as a 500 to the caller, who re-requests. Why a worker and not a
+"commit succeeded, publish failed" case (broker unreachable) is swallowed and
+logged (exception type only): the caller still gets the uniform 202 and
+recovers via the resend path. A broker outage must not become an existence
+oracle — only the mailing branches would ever have failed. Publishing goes
+through `apps/api/enqueue.py`, off the event loop, after the commit, so an
+unreachable broker cannot change a route's status or timing. Why a worker
+and not a
 synchronous send: relay latency and failures must not sit on the request
 path.
 

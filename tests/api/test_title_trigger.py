@@ -5,12 +5,12 @@ before the commit and never fatal.
 Drives the service functions directly with identity announced exactly as a
 request announces it (RLS is on for the app engine); seeds and asserts go
 through admin_engine. `generate_title.apply_async` is always replaced by a
-recorder — no broker, no network.
+recorder — no broker, no network. The publisher's own behaviour (pool,
+backlog cap, retry flag) lives in tests/api/test_enqueue.py.
 """
 
 import asyncio
 import logging
-import threading
 import uuid
 from types import SimpleNamespace
 
@@ -19,6 +19,7 @@ from fastapi import HTTPException
 from sqlalchemy import text
 
 import apps.api.chat_service as chat_service
+from apps.api import enqueue
 from packages.db import engine as app_engine
 from packages.db.user_context import current_user_id
 from tests.api.factories import make_conversation, make_message
@@ -26,18 +27,16 @@ from tests.api.factories import make_conversation, make_message
 PROMPT = "plan a trip to hanoi"
 
 
-_retry_flags: list[bool] = []
-
-
 def _publisher(monkeypatch, fn):
     """Replace the task with a recorder taking the payload tuple."""
 
     def apply_async(args, retry):
-        _retry_flags.append(retry)
         fn(*args)
 
     monkeypatch.setattr(
-        chat_service, "generate_title", SimpleNamespace(apply_async=apply_async)
+        chat_service,
+        "generate_title",
+        SimpleNamespace(name="generate_title", apply_async=apply_async),
     )
 
 
@@ -45,12 +44,12 @@ def _publisher(monkeypatch, fn):
 async def no_enqueue_outlives_its_test():
     # A leaked publish would run after monkeypatch is undone, i.e. against the
     # real task and a real broker connection.
-    _retry_flags.clear()
     yield
-    await asyncio.gather(*chat_service._pending_enqueues, return_exceptions=True)
-    assert chat_service._pending_enqueues == set()
-    # A dead broker must fail fast: the publish is never retried in-process.
-    assert all(flag is False for flag in _retry_flags)
+    await asyncio.gather(*enqueue._pending, return_exceptions=True)
+    # gather returns when the tasks are done; the done-callback that discards
+    # them is scheduled via call_soon and needs one more loop iteration.
+    await asyncio.sleep(0)
+    assert enqueue._pending == set()
 
 
 @pytest.fixture
@@ -68,7 +67,7 @@ async def _as(user, coro):
         result = await coro
     finally:
         current_user_id.reset(token)
-    await asyncio.gather(*chat_service._pending_enqueues)
+    await asyncio.gather(*enqueue._pending)
     return result
 
 
@@ -130,59 +129,6 @@ async def test_enqueue_happens_after_the_commit(
         user_a, chat_service.persist_assistant_turn(conv_id, user_a.id, "the answer")
     )
     assert checked_out == [0, 0]
-
-
-async def test_a_blocked_broker_holds_up_neither_the_turn_nor_the_shared_pool(
-    admin_engine, user_a, monkeypatch
-):
-    release = threading.Event()
-    threads: list[str] = []
-
-    def stuck(conversation_id: str, user_id: str) -> None:
-        threads.append(threading.current_thread().name)
-        release.wait(timeout=30)
-
-    _publisher(monkeypatch, stuck)
-    token = current_user_id.set(user_a.id)
-    try:
-        conv_id = await asyncio.wait_for(
-            chat_service.persist_user_turn(PROMPT, None, user_a.id), timeout=5
-        )
-        assert len(chat_service._pending_enqueues) == 1
-        # The default executor (password hashing, storage I/O) still serves.
-        assert await asyncio.wait_for(asyncio.to_thread(lambda: "free"), 5) == "free"
-    finally:
-        current_user_id.reset(token)
-        release.set()
-    await asyncio.gather(*chat_service._pending_enqueues)
-    assert threads and threads[0].startswith("title-publish")
-    assert await _messages(admin_engine, conv_id) == [("user", PROMPT)]
-
-
-async def test_a_full_backlog_drops_the_enqueue(
-    admin_engine, user_a, monkeypatch, caplog
-):
-    release = threading.Event()
-    published: list[str] = []
-
-    def stuck(conversation_id: str, user_id: str) -> None:
-        release.wait(timeout=30)
-        published.append(conversation_id)
-
-    _publisher(monkeypatch, stuck)
-    monkeypatch.setattr(chat_service, "MAX_PENDING_ENQUEUES", 1)
-    caplog.set_level(logging.WARNING)
-    token = current_user_id.set(user_a.id)
-    try:
-        first = await chat_service.persist_user_turn(PROMPT, None, user_a.id)
-        second = await chat_service.persist_user_turn(PROMPT, None, user_a.id)
-    finally:
-        current_user_id.reset(token)
-        release.set()
-    await asyncio.gather(*chat_service._pending_enqueues)
-    assert published == [str(first)]
-    assert "backlog full" in caplog.text and str(second) in caplog.text
-    assert await _messages(admin_engine, second) == [("user", PROMPT)]
 
 
 async def test_existing_conversation_does_not_enqueue(admin_engine, user_a, enqueued):
@@ -273,7 +219,7 @@ async def test_event_stream_forwards_the_user_id(admin_engine, user_a, enqueued)
         ]
     finally:
         current_user_id.reset(token)
-    await asyncio.gather(*chat_service._pending_enqueues)
+    await asyncio.gather(*enqueue._pending)
 
     assert "[DONE]" in chunks[-1]
     assert await _messages(admin_engine, conv) == [("assistant", "hello")]
