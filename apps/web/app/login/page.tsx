@@ -6,6 +6,7 @@ import { Suspense, useState, type SubmitEvent } from "react";
 import { signIn } from "next-auth/react";
 
 import { AuthCard, buttonClass, fieldClass } from "@/components/auth/AuthCard";
+import { PasswordField } from "@/components/auth/PasswordField";
 import { GoogleButton, OrDivider } from "@/components/auth/GoogleButton";
 import { ResendStatus, useResend } from "@/components/auth/useResend";
 
@@ -105,13 +106,11 @@ function LoginForm() {
           onChange={(e) => setEmail(e.target.value)}
           className={fieldClass}
         />
-        <input
-          type="password"
+        <PasswordField
           required
           placeholder="Password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className={fieldClass}
         />
         {error && (
           <div className="space-y-1">

@@ -5,7 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState, type SubmitEvent } from "react";
 import { signIn } from "next-auth/react";
 
-import { AuthCard, buttonClass, fieldClass } from "@/components/auth/AuthCard";
+import { AuthCard, buttonClass } from "@/components/auth/AuthCard";
+import { PasswordField } from "@/components/auth/PasswordField";
 import { checkResetToken, resetPassword } from "@/lib/authApi";
 
 type ErrorCode = "invalid_token" | "rate_limited" | "validation" | "unknown";
@@ -15,14 +16,12 @@ function ResetPasswordForm() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
   const [password, setPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
   const [submitting, setSubmitting] = useState(false);
   // No token behaves exactly like an invalid/expired one — set once, up
   // front, with nothing to retry.
   const [errorCode, setErrorCode] = useState<ErrorCode | null>(
     token ? null : "invalid_token",
   );
-  const [mismatch, setMismatch] = useState(false);
   // A present, non-empty token starts "checking" until the precheck below
   // resolves; only then can the form (or the invalid-link view) render.
   // Boolean(), not `!== null`: an empty "?token=" is falsy here the same way
@@ -50,11 +49,6 @@ function ResetPasswordForm() {
 
   async function handleSubmit(event: SubmitEvent) {
     event.preventDefault();
-    if (password !== confirm) {
-      setMismatch(true);
-      return;
-    }
-    setMismatch(false);
     if (!token) {
       setErrorCode("invalid_token");
       return;
@@ -118,31 +112,14 @@ function ResetPasswordForm() {
   return (
     <AuthCard title="Choose a new password">
       <form onSubmit={handleSubmit} className="space-y-3">
-        <input
-          type="password"
+        <PasswordField
           required
           minLength={8}
           maxLength={128}
           placeholder="New password (8+ characters)"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className={fieldClass}
         />
-        <input
-          type="password"
-          required
-          minLength={8}
-          maxLength={128}
-          placeholder="Confirm new password"
-          value={confirm}
-          onChange={(e) => setConfirm(e.target.value)}
-          className={fieldClass}
-        />
-        {mismatch && (
-          <p className="text-sm text-red-600 dark:text-red-400">
-            Passwords don&apos;t match.
-          </p>
-        )}
         {errorCode && (
           <p className="text-sm text-red-600 dark:text-red-400">
             {errorCode === "rate_limited"
