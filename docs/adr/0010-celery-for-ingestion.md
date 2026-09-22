@@ -105,3 +105,78 @@ without re-upload.
 - [0002](0002-anthropic-sdk-not-agent-sdk.md) — "the harness" overhead framing.
 - [0006](0006-async-sqlalchemy-asyncpg-alembic.md) — the async-end-to-end stance
   that makes "don't block the web event loop" matter.
+
+## Addendum (2026-09-22): background titles, and how the API publishes
+
+### The third task: `generate_title`
+
+A conversation's title is generated from its **first user message only**, by a
+small model (`TITLE_MODEL`, default `claude-haiku-4-5`) in one non-streaming
+call whose reply is constrained to a JSON schema (`{"title": string}`), so a
+preamble or label has nowhere to go. The payload is two ids as strings
+(`conversation_id`, `user_id`); the worker announces the owner for RLS from the
+payload and resets it in `finally` (prefork children are long-lived), reads the
+message, releases its connection, calls the model, and writes with
+`UPDATE … SET title WHERE id = … AND user_id = … AND title IS NULL`. First
+writer wins, so at-least-once delivery and duplicate enqueues are harmless, and
+`title IS NULL` stays the one meaning of "needs a title" (nothing else is ever
+stored there).
+
+Retry classification: 429/5xx, connection and DB/socket errors back off
+5/10/20 s (the helper shared with `send_email`) then give up quietly; anything
+else — a non-429 4xx, or any other exception — is our bug and is logged (type,
+status, conversation id — never the message or the title) with no retry. The **real** retry is structural: the
+API enqueues at conversation creation (right after the first user message
+commits) and again on every persisted assistant turn while the title is still
+NULL. A refusal therefore costs one small call per turn on that conversation;
+a counter column was judged not worth a migration at that price.
+
+The sidebar shows a muted italic "Untitled" until the title lands, which is
+normally before the first reply ends (the existing end-of-stream refresh picks
+it up). Built, reviewed and **dropped** as not worth their cost: a server-side
+placeholder (first 60 characters of the first message via a correlated
+subquery) and a mid-stream `title` SSE event polled from `event_stream`. If a
+live title is ever wanted, the shape is worker → Redis pub/sub → stream, not
+polling on the token path. Holding the reply stream open for the title was
+rejected outright.
+
+### The producer side: `apps/api/enqueue.py`
+
+Titles were the first producer on the chat hot path, and measuring
+`.delay()` against a dead broker changed the ingestion-era assumption that a
+publish is free: with Redis refusing connections it blocked ~19 s (the
+result-backend subscription every publish opens), and on an unroutable host
+40 s+ (the OS TCP timeout). A publish is a blocking network call made from the
+event loop, so that would have frozen the whole API for every user — and the
+public auth routes, whose rate limiter deliberately fails open when Redis is
+down, would have been an unthrottled way to do it.
+
+Every publish from the API now goes through one module:
+
+- `fire_and_forget(task, *args, log_ref=…)` for work whose loss has its own
+  recovery path (titles: the next turn re-enqueues; email: every link has a
+  resend). An asyncio task hands the publish to a small dedicated thread pool
+  (`ENQUEUE_THREADS`), so neither the request nor the loop waits; a bounded
+  backlog (`ENQUEUE_MAX_PENDING`) drops with a log line when the broker is
+  down rather than queueing without limit; failures are logged by exception
+  type plus the caller-chosen `log_ref` (a conversation id, or a template
+  name — never an address).
+- `publish(task, *args)` (awaited, off the loop, re-raises) where the caller
+  must know: an upload marks its document `failed` if the task could not be
+  queued, so `pending` always means a task really exists.
+- `retry=False` on every publish (an in-process retry only holds the caller
+  against a broker that is already refusing), `ignore_result=True` on every
+  task published this way (nobody reads a result; the subscription was most
+  of the hang), and a 2 s broker connect timeout in `celery_app` (connect
+  only — the worker's blocking pop is untouched). Measured after: ~6 s per
+  publish against a dead broker, on one thread, off the request path; about a
+  millisecond healthy.
+- The pool has its own threads because the default executor also runs
+  password hashing and storage I/O; stuck publishes must never starve those.
+
+Contract for callers, unchanged from email: publish only **after** the DB
+commit — the worker sees only committed rows.
+
+Consequence recorded in ADR 0011: a broker outage on the auth routes now
+yields the uniform 202 (logged), not a 500 that only the mailing branches
+could produce.

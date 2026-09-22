@@ -94,10 +94,11 @@ export function Sidebar() {
                   href={`/chat/${conversation.id}`}
                   className={`min-w-0 flex-1 truncate px-3 py-2 text-sm ${
                     active ? "" : "text-black/70 dark:text-white/70"
-                  }`}
+                  } ${conversation.title ? "" : "italic text-black/40 dark:text-white/40"}`}
                 >
-                  {/* Titles are generated async (M2.5); placeholder til then. */}
-                  {conversation.title ?? "New conversation"}
+                  {/* The title is written in the background after the first reply;
+                      until then the entry reads as state, not as a name. */}
+                  {conversation.title ?? "Untitled"}
                 </Link>
                 <button
                   type="button"

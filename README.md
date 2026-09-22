@@ -67,9 +67,10 @@ Start everything (Postgres, Redis, MinIO, Mailpit, FastAPI, Next.js):
 make dev
 ```
 
-Ingestion runs in a **Celery worker** (a separate process). Run it in a second
-terminal so uploaded documents actually get processed — otherwise an upload just
-sits at `pending` (`make dev` prints this reminder too):
+Ingestion, transactional email and conversation titles run in a **Celery
+worker** (a separate process). Run it in a second terminal — otherwise an upload
+just sits at `pending`, no email arrives, and new conversations stay "Untitled"
+(`make dev` prints this reminder too):
 
 ```bash
 make worker
@@ -199,7 +200,7 @@ Check what's running at any time with `make status` (a TCP probe of each service
 
 1. **Streaming chat** *(shipped)* — Next.js + FastAPI + SSE, conversation history in Postgres, Docker Compose (Postgres, Redis, all services). Auth + background titles deferred to M2.5.
 2. **Data + RAG** *(shipped)* — User data upload (files), Celery ingestion (chunk → embed → pgvector), conversation memory, and chat as a single **agentic** route: retrieval is a model-invoked tool (`search_documents`, alongside a calculator, datetime, and a mocked email send) behind a hand-rolled tool-use harness with prompt caching and a model selector.
-2.5. **Auth + background titles** *(next)* — email/password + Google via NextAuth/Auth.js, `users` table, conversations + documents scoped to a user; background chat title generation (Celery + Redis).
+2.5. **Auth + background titles** *(shipped)* — email/password + Google via NextAuth/Auth.js, `users` table, Postgres row-level security, email verification + password reset, conversations + documents scoped to a user; background chat title generation (Celery + Redis, `TITLE_MODEL`), with every API-side publish off the event loop (`apps/api/enqueue.py`).
 3. **AWS deploy + CI/CD** *(brought forward — deploy early, then continuous)* — hybrid alpha deploy provisioned with Terraform: a free-tier EC2 app box running the containers against managed RDS (Postgres + pgvector), ElastiCache Redis, and S3; Fargate/ALB deferred to post-alpha. CI/CD pipeline so later milestones auto-deploy.
 4. **Structured outputs + polish** — table/structured view for results, citation/source display, cohesive UI.
 5. **Cleanup + hardening + eval** — test + eval infrastructure, drain backlogs, tighten deferred foot-guns.
