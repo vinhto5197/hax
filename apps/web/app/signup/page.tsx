@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, type SubmitEvent } from "react";
 
 import { AuthCard, buttonClass, fieldClass } from "@/components/auth/AuthCard";
+import { PasswordField } from "@/components/auth/PasswordField";
 import { GoogleButton, OrDivider } from "@/components/auth/GoogleButton";
 import { ResendStatus, useResend } from "@/components/auth/useResend";
 import { signup } from "@/lib/authApi";
@@ -100,15 +101,13 @@ export default function SignupPage() {
           onChange={(e) => setEmail(e.target.value)}
           className={fieldClass}
         />
-        <input
-          type="password"
+        <PasswordField
           required
           minLength={8}
           maxLength={128}
           placeholder="Password (8+ characters)"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className={fieldClass}
         />
         {error && (
           <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
