@@ -45,7 +45,7 @@ async def test_upload_stamps_owner(client, user_a, admin_engine, monkeypatch):
     monkeypatch.setattr(
         documents_router,
         "ingest_document",
-        SimpleNamespace(delay=lambda *args: None),
+        SimpleNamespace(name="ingest_document", apply_async=lambda args, retry: None),
     )
     r = await client.post(
         "/api/documents",
@@ -61,3 +61,30 @@ async def test_upload_stamps_owner(client, user_a, admin_engine, monkeypatch):
             )
         ).scalar_one()
     assert owner == user_a.id
+
+
+async def test_upload_marks_failed_when_the_broker_is_down(
+    client, user_a, admin_engine, monkeypatch
+):
+    # 'pending' must always mean a task is really queued, so the upload route
+    # awaits its publish and records the outage on the row.
+    import apps.api.routers.documents as documents_router
+    from packages.core import storage
+
+    def unreachable(args, retry):
+        raise OSError("broker down")
+
+    monkeypatch.setattr(storage, "put", lambda key, content, mime: None)
+    monkeypatch.setattr(
+        documents_router,
+        "ingest_document",
+        SimpleNamespace(name="ingest_document", apply_async=unreachable),
+    )
+    r = await client.post(
+        "/api/documents",
+        files={"file": ("mine.txt", b"hello world", "text/plain")},
+        headers=bearer(user_a),
+    )
+    assert r.status_code == 200
+    assert r.json()["status"] == "failed"
+    assert r.json()["error"] == "could not start ingestion (task queue unavailable)"

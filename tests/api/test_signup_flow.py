@@ -1,7 +1,8 @@
 """Signup is an anti-enumeration surface: one 202 for every input; only the
-email differs. All asserts go through the admin engine; enqueue is recorded,
-never executed (the worker is Task 1's concern)."""
+email differs. All asserts go through the admin engine; the publish is
+recorded, never executed."""
 
+import asyncio
 from types import SimpleNamespace
 
 import pytest
@@ -9,6 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.orm.attributes import set_committed_value
 
 import apps.api.routers.auth as auth_router
+from apps.api import enqueue
 from packages.core.auth.email_tokens import hash_token
 from tests.api.conftest import _make_user
 from tests.api.factories import make_email_token
@@ -19,9 +21,13 @@ BODY = {"status": "check_inbox"}
 @pytest.fixture
 def outbox(monkeypatch):
     calls: list[tuple] = []
-    monkeypatch.setattr(
-        auth_router, "send_email", SimpleNamespace(delay=lambda *a: calls.append(a))
-    )
+
+    def record(task, *args, log_ref):
+        # The loggable ref is the template, never arg 0 — that's the address.
+        assert task is auth_router.send_email and log_ref == args[1]
+        calls.append(args)
+
+    monkeypatch.setattr(auth_router, "fire_and_forget", record)
     return calls
 
 
@@ -293,6 +299,30 @@ async def test_no_email_sent_when_commit_fails(
             "/api/auth/signup", json={"email": "x@example.com", "password": "password1"}
         )
     assert outbox == []
+
+
+async def test_a_dead_broker_leaves_the_202_untouched(client, pw_user, monkeypatch):
+    # Uniform 202 is the anti-enumeration contract; a broker outage must not
+    # break it (nor make the caller wait for the publish). The real publisher
+    # runs here — only the task is faked.
+    def unreachable(args, retry):
+        raise OSError("broker down")
+
+    monkeypatch.setattr(
+        auth_router,
+        "send_email",
+        SimpleNamespace(name="send_email", apply_async=unreachable),
+    )
+    signup = await client.post(
+        "/api/auth/signup", json={"email": "dead@example.com", "password": "password1"}
+    )
+    resend = await client.post(
+        "/api/auth/resend-verification", json={"email": pw_user.email}
+    )
+    await asyncio.gather(*enqueue._pending, return_exceptions=True)
+
+    assert signup.status_code == resend.status_code == 202
+    assert signup.json() == resend.json() == BODY
 
 
 async def test_signup_per_email_cap_limits_outgoing_mail(client, admin_engine, outbox):

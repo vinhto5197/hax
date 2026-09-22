@@ -133,6 +133,7 @@ this repo. Write prod-level comments only:
 - Redis is the Celery broker AND cache/session store (one service, two roles).
 - Chat responses are streamed (SSE) directly from FastAPI — never queued through Celery.
 - Celery handles background work: title generation, data ingestion, embedding, index rebuilds.
+- Every Celery publish from the API goes through `apps/api/enqueue.py` (off the event loop, after the DB commit, `retry=False`; `fire_and_forget` for work with its own recovery path — titles, email — and awaited `publish` where the caller must know, e.g. uploads marking a document failed). Tasks published from there declare `ignore_result=True`.
 - Transactional email goes through the Celery `send_email` task (`packages/core/email/`: templates + smtplib transport); dev sends to Mailpit (compose, inbox at :8025), prod to a real relay via the same `SMTP_*` env. Emails are enqueued only after the DB commit.
 - pgvector keeps vector search inside Postgres (no extra vector DB service).
 - `packages/db` is the persistence layer: async SQLAlchemy 2.0 over asyncpg, schema managed by Alembic (`make migrate` applies, `make migration m="..."` generates). Models live in `packages/db/models`; user-scoped queries live in `packages/db/repos/` (required `user_id`; ownership miss → 404). See ADR 0006/0012.

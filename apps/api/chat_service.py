@@ -1,16 +1,13 @@
-import asyncio
 import json
 import logging
-import os
 from collections.abc import AsyncIterator, Callable
-from concurrent.futures import ThreadPoolExecutor
-from functools import partial
 from uuid import UUID
 
 import anyio
 from anthropic.types import MessageParam
 from fastapi import HTTPException
 
+from apps.api.enqueue import fire_and_forget
 from apps.worker.tasks import generate_title
 from packages.db import AsyncSessionLocal
 from packages.db.repos import conversations as conversations_repo
@@ -21,65 +18,18 @@ logger = logging.getLogger(__name__)
 SSE_HEADERS = {"Cache-Control": "no-cache", "Connection": "keep-alive"}
 
 
-# --- Title enqueue ---------------------------------------------------------
-# Publishing a Celery task is a BLOCKING network call to the broker: about a
-# millisecond when it is healthy, seconds when it is unreachable. This module
-# runs on the event loop, on every chat turn, so the publish is handed off
-# twice before it touches the network:
-#   1. _enqueue_title -> an asyncio task, so the request never waits for it;
-#   2. that task -> a _publisher thread, so the event loop never blocks on it.
-# The thread pushes the message to the broker; the worker process picks it up
-# from there. Nothing here generates a title.
-
-# A pool of its own: the default executor also runs password hashing and
-# storage I/O, and stuck publishes must never be able to starve those. The
-# threads wait on the network, not the CPU, so the size does not track core
-# count — it bounds how many publishes can be stuck at once in this process.
-_publisher = ThreadPoolExecutor(
-    max_workers=int(os.getenv("ENQUEUE_THREADS", "2")),
-    thread_name_prefix="title-publish",
-)
-# Beyond this many waiting publishes the broker is down, not slow: drop instead
-# of queueing without bound. The next persisted assistant turn re-enqueues.
-MAX_PENDING_ENQUEUES = int(os.getenv("ENQUEUE_MAX_PENDING", "100"))
-# In-flight publishes only: each task removes itself when it finishes. The set
-# exists because the loop holds only weak references to tasks, so one that
-# nothing else references can be collected mid-flight. Process-wide and touched
-# only from the event-loop thread.
-_pending_enqueues: set[asyncio.Task[None]] = set()
-
-
-async def _publish_title_task(conversation_id: UUID, user_id: UUID) -> None:
-    publish = partial(
-        generate_title.apply_async,
-        args=(str(conversation_id), str(user_id)),
-        retry=False,  # the re-enqueue on a later turn is the retry
-    )
-    try:
-        await asyncio.get_running_loop().run_in_executor(_publisher, publish)
-    except Exception as exc:
-        logger.warning(
-            "title enqueue failed for %s: %s", conversation_id, type(exc).__name__
-        )
-
-
 def _enqueue_title(conversation_id: UUID, user_id: UUID) -> None:
     """Hand titling to the worker without making the request wait for it.
     Callers MUST be past the commit: the task reads the first user message
     from Postgres, and the worker can see only committed rows.
 
-    Fire-and-forget: neither the first token nor the end of a stream may wait
-    on the broker. Never fatal: a lost or dropped enqueue only costs a title
-    until the next persisted assistant turn, which re-enqueues while the title
-    is still NULL. Logs the exception TYPE only — the payload and the
-    surrounding turn carry user content.
+    Neither the first token nor the end of a stream may wait on the broker,
+    and a lost publish only costs a title until the next persisted assistant
+    turn, which re-enqueues while the title is still NULL — so this is the
+    fire-and-forget hand-off, never the awaited one.
     """
-    if len(_pending_enqueues) >= MAX_PENDING_ENQUEUES:
-        logger.warning("title enqueue dropped for %s: backlog full", conversation_id)
-        return
-    task = asyncio.create_task(_publish_title_task(conversation_id, user_id))
-    _pending_enqueues.add(task)
-    task.add_done_callback(_pending_enqueues.discard)
+    cid = str(conversation_id)
+    fire_and_forget(generate_title, cid, str(user_id), log_ref=cid)
 
 
 def sse_event(data: dict) -> str:

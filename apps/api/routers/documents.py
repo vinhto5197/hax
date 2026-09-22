@@ -2,6 +2,7 @@ import asyncio
 import logging
 from uuid import UUID
 
+import anyio
 from fastapi import (
     APIRouter,
     Depends,
@@ -15,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.auth import CurrentUser, current_user
 from apps.api.deps import get_session
+from apps.api.enqueue import publish
 from apps.worker.tasks import ingest_document
 from packages.core import storage
 from packages.core.schemas.document import DocumentOut
@@ -92,17 +94,20 @@ async def upload_document(
 
     # Enqueue ingestion (Celery) and return at 'pending'; the UI polls for the
     # status flip. The id goes as a str — the JSON broker can't carry a UUID.
-    try:
-        ingest_document.delay(str(doc.id), str(user.id))
-    except Exception:
-        # The row is already committed, so a broker outage here would strand the
-        # doc at 'pending' with no task enqueued. Mark it 'failed' so 'pending'
-        # always means a task is really queued.
-        logger.exception("failed to enqueue ingestion for document %s", doc.id)
-        doc.status = "failed"
-        doc.error = "could not start ingestion (task queue unavailable)"
-        await session.commit()
-        await session.refresh(doc)
+    # Shielded: a client disconnect during a slow publish must not cancel the
+    # handler between the commit and the mark-failed below.
+    with anyio.CancelScope(shield=True):
+        try:
+            await publish(ingest_document, str(doc.id), str(user.id))
+        except Exception:
+            # The row is already committed, so a broker outage here would
+            # strand the doc at 'pending' with no task enqueued. Mark it
+            # 'failed' so 'pending' always means a task is really queued.
+            logger.exception("failed to enqueue ingestion for document %s", doc.id)
+            doc.status = "failed"
+            doc.error = "could not start ingestion (task queue unavailable)"
+            await session.commit()
+            await session.refresh(doc)
     return DocumentOut.model_validate(doc)
 
 

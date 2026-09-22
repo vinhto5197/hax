@@ -12,6 +12,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import apps.api.routers.auth as auth_router
+from apps.api import enqueue
 from packages.core.auth.email_tokens import hash_token
 from packages.core.auth.passwords import hash_password, verify_password
 from packages.db.repos import email_tokens as tokens_repo
@@ -25,9 +26,13 @@ INTERNAL = {"X-Internal-Secret": os.environ["INTERNAL_API_SECRET"]}
 @pytest.fixture
 def outbox(monkeypatch):
     calls: list[tuple] = []
-    monkeypatch.setattr(
-        auth_router, "send_email", SimpleNamespace(delay=lambda *a: calls.append(a))
-    )
+
+    def record(task, *args, log_ref):
+        # The loggable ref is the template, never arg 0 — that's the address.
+        assert task is auth_router.send_email and log_ref == args[1]
+        calls.append(args)
+
+    monkeypatch.setattr(auth_router, "fire_and_forget", record)
     return calls
 
 
@@ -101,6 +106,29 @@ async def test_request_is_uniform_and_only_emails_real_accounts(
     row = rows[0]
     assert row.purpose == "reset_password" and 3500 < row.ttl.total_seconds() <= 3600
     assert row.token_hash != hash_token("h0")
+
+
+async def test_a_dead_broker_leaves_the_202_untouched(
+    client, admin_engine, monkeypatch
+):
+    # Same uniform-202 contract as signup/resend: the real publisher runs,
+    # only the task is faked.
+    await _make_user(admin_engine, "r@example.com")
+
+    def unreachable(args, retry):
+        raise OSError("broker down")
+
+    monkeypatch.setattr(
+        auth_router,
+        "send_email",
+        SimpleNamespace(name="send_email", apply_async=unreachable),
+    )
+    res = await client.post(
+        "/api/auth/request-password-reset", json={"email": "r@example.com"}
+    )
+    await asyncio.gather(*enqueue._pending, return_exceptions=True)
+
+    assert res.status_code == 202 and res.json() == BODY
 
 
 async def test_confirm_sets_password_verifies_and_revokes_sessions(

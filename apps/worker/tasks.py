@@ -99,7 +99,12 @@ def _record_failed(doc_id: UUID, error: str) -> None:
         logger.exception("failed to record 'failed' status for document %s", doc_id)
 
 
-@celery_app.task(bind=True, name="ingest_document", max_retries=MAX_RETRIES)
+# ignore_result: the UI polls documents.status, nobody reads the task result,
+# and the result-backend subscription is what makes a publish hang when Redis
+# is unreachable (see apps/api/enqueue.py).
+@celery_app.task(
+    bind=True, name="ingest_document", max_retries=MAX_RETRIES, ignore_result=True
+)
 def ingest_document(self, document_id: str, user_id: str) -> None:
     """Sync Celery entrypoint: run the async pipeline and own retry + terminal status.
 
@@ -155,7 +160,12 @@ def ingest_document(self, document_id: str, user_id: str) -> None:
 EMAIL_MAX_RETRIES = 3
 
 
-@celery_app.task(bind=True, name="send_email", max_retries=EMAIL_MAX_RETRIES)
+# ignore_result, as for generate_title below: nobody reads this task's result,
+# and the result-backend subscription every publish would otherwise open is
+# what makes an enqueue hang for many seconds when Redis is unreachable.
+@celery_app.task(
+    bind=True, name="send_email", max_retries=EMAIL_MAX_RETRIES, ignore_result=True
+)
 def send_email(self, to: str, template: str, params: dict[str, str]) -> None:
     # Sync on purpose: smtplib is blocking and the worker is a prefork process.
     # Rendering errors are ours (bad template/params) — no retry. Transport
