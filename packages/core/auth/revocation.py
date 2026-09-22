@@ -1,7 +1,7 @@
 """Session revocation: auth_time vs users.sessions_valid_after.
 
 Redis is a write-through cache over the DB column — anything that bumps the
-cutoff (password reset, slice 4) MUST write both, via publish_sva, so
+cutoff (password reset) MUST write both, via publish_sva, so
 revocation is instant for cached users. Missing user => revoked on the next
 cache miss (a deleted account's tokens die within SVA_CACHE_TTL_S unless the
 deleter purges the key). RedisError => fail open (core auth still

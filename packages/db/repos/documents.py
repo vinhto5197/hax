@@ -1,5 +1,5 @@
-"""Document queries, scoped by owner (M2.5 slice 2). Same contract as the
-conversations repo: user_id required; ownership miss -> None -> route 404."""
+"""Document queries, scoped by owner. Same contract as the conversations
+repo: user_id required; ownership miss -> None -> route 404."""
 
 import uuid
 from collections.abc import Sequence

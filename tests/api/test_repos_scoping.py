@@ -1,4 +1,4 @@
-"""Layer-1 proof for packages.db.repos (AR-2026-09-08 #4): exercised over an
+"""Layer-1 proof for packages.db.repos: exercised over an
 async_sessionmaker(admin_engine) session — a superuser connection RLS cannot
 answer for — so only the repo's own user_id predicates can produce a
 correctly scoped result; route-level tests alone cannot detect a dropped

@@ -36,7 +36,7 @@ services:
       retries: 5
 
   minio:
-    # S3-compatible object storage for raw uploaded files (slice 2a). boto3
+    # S3-compatible object storage for raw uploaded files. boto3
     # talks to this in dev and real AWS S3 in prod — same client, swapped
     # endpoint (the Postgres↔RDS dev/prod-parity pattern).
     image: minio/minio
@@ -62,7 +62,7 @@ services:
   mailpit:
     # Dev SMTP sink + inbox (http://localhost:8025). The worker's send_email
     # task points at it via SMTP_HOST/SMTP_PORT; prod swaps the env for a real
-    # relay (M3), same code path.
+    # relay, same code path.
     image: axllent/mailpit:v1.27.0
     container_name: hax-mailpit
     ports:

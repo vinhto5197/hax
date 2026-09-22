@@ -23,7 +23,7 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     """Upgrade schema."""
     # Self-sufficient: init.sql enables this on a fresh local container, but a
-    # managed Postgres (M4) won't run init.sql, so guarantee the extension here.
+    # managed Postgres won't run init.sql, so guarantee the extension here.
     op.execute("CREATE EXTENSION IF NOT EXISTS vector")
 
     op.create_table(

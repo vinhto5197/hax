@@ -1,4 +1,4 @@
-"""SMTP transport (Mailpit in dev, SES-over-SMTP at M3 via the same env).
+"""SMTP transport (Mailpit in dev, a real relay in prod, via the same SMTP_* env).
 
 Header safety is the EmailMessage API's: it raises on CR/LF in header values,
 so a forged header can never be emitted — callers must not pre-format

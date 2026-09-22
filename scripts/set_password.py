@@ -1,7 +1,7 @@
 """Dev utility: set or replace a user's password directly.
 
-Exists to claim the bootstrap user before slice 4's proper reset flow ships
-(and as a local admin escape hatch after). Never wired into the app.
+A local admin escape hatch — the product path is the password-reset flow.
+Never wired into the app.
 
 Usage: .venv/bin/python scripts/set_password.py you@example.com
 """

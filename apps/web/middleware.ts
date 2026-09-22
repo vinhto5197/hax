@@ -3,8 +3,9 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 
 // Session-gate every page except the auth surfaces. /verify-email,
-// /forgot-password, /reset-password are the slice-4 email-flow pages.
-// /auth/* is Auth.js's own machinery (signin/callback).
+// /forgot-password and /reset-password are reached from emailed links, so they
+// must stay open to logged-out visitors; /auth/* is Auth.js's own machinery
+// (signin/callback).
 const PUBLIC_PREFIXES = [
   "/login",
   "/signup",

@@ -104,9 +104,9 @@ def upgrade() -> None:
     )
 
     # ── Backfill: assign the pre-auth corpus to a bootstrap user ──────────
-    # Runs while user_id is still nullable and RLS doesn't exist (slice 2),
-    # so nothing can interfere. Wiping instead of assigning would burn real
-    # Voyage credits on re-embedding — preservation is deliberate.
+    # Runs while user_id is still nullable and before RLS exists, so nothing
+    # can interfere. Wiping instead of assigning would burn real Voyage
+    # credits on re-embedding — preservation is deliberate.
     conn = op.get_bind()
     legacy = conn.execute(
         sa.text(

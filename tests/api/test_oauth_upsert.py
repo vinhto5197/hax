@@ -1,4 +1,4 @@
-"""Linking rules for /internal/auth/oauth-upsert (spec: Flows → Google).
+"""Linking rules for /internal/auth/oauth-upsert.
 
 Every request here carries NO session and announces NO identity — the caller
 is mid-sign-in. That the writes succeed as hax_app is itself an assertion:

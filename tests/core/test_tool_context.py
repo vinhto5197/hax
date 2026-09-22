@@ -9,8 +9,8 @@ from packages.core.agent.tools import (
 
 
 def test_user_id_is_not_a_model_parameter():
-    # The prompt-injection fence (spec threat table): identity rides the
-    # request context; the model's input schema must never expose it.
+    # The prompt-injection fence: identity rides the request context; the
+    # model's input schema must never expose it.
     schema = SearchDocumentsInput.model_json_schema()
     assert "user_id" not in schema.get("properties", {})
 

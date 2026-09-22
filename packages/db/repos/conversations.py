@@ -1,10 +1,10 @@
-"""Conversation + message queries, scoped by owner (M2.5 slice 2).
+"""Conversation + message queries, scoped by owner.
 
-Repo-layer contract (spec: Isolation): every user-facing query REQUIRES the
-caller's user_id; an ownership miss returns None/False/[] and routes map it to
-404 (never 403 — don't confirm existence). add_message/touch take no user_id:
-messages are only ever reached through a conversation the caller proved they
-own earlier in the same request; RLS re-checks at the DB from slice 2 on.
+Repo-layer contract: every user-facing query REQUIRES the caller's user_id;
+an ownership miss returns None/False/[] and routes map it to 404 (never 403 —
+don't confirm existence). add_message/touch take no user_id: messages are only
+ever reached through a conversation the caller proved they own earlier in the
+same request, and RLS re-checks at the DB.
 """
 
 import uuid

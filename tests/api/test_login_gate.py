@@ -1,5 +1,5 @@
-"""AUTH_REQUIRE_EMAIL_VERIFICATION is ON by default from slice 4 (hard-set
-in tests/conftest.py): unverified password users can't mint a session."""
+"""AUTH_REQUIRE_EMAIL_VERIFICATION is ON by default (hard-set in
+tests/conftest.py): unverified password users can't mint a session."""
 
 import os
 

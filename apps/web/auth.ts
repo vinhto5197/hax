@@ -29,7 +29,8 @@ const MAX_AGE_S = 7 * 24 * 60 * 60;
 const key = () => new TextEncoder().encode(process.env.AUTH_SECRET);
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  // /auth, NOT /api/auth: /api/* belongs to FastAPI (one proxy rule at M3).
+  // /auth, NOT /api/auth: /api/* belongs to FastAPI, so a single reverse-proxy
+  // rule can route the whole prefix there.
   basePath: "/auth",
   session: { strategy: "jwt", maxAge: MAX_AGE_S },
   pages: { signIn: "/login" },
@@ -136,7 +137,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   jwt: {
     maxAge: MAX_AGE_S,
-    // Both halves overridden together or sessions break (spec: Auth.js config).
+    // Auth.js pairs encode/decode: override both together or sessions break.
     async encode({ token }) {
       const { sub, email, auth_time, jti } = (token ?? {}) as Record<
         string,

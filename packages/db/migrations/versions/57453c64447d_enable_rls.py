@@ -20,28 +20,30 @@ depends_on: Union[str, Sequence[str], None] = None
 # user_id by design — always reached via its conversation).
 #
 # accounts and email_tokens also carry user_id but are deliberately NOT
-# policied here: their consumers run pre-identity / without an announced
-# user (oauth-upsert reached via internal_only's shared-secret auth,
-# email-token verification during signup/password-reset before login), so
-# RLS on them would zero out the exact flows that need to touch other users'
-# rows before a session exists. Revisit once slices 3/4 land those access
-# patterns and it's clear what identity (if any) is available at that point.
+# policied: their consumers run pre-identity / without an announced user
+# (oauth-upsert reached via internal_only's shared-secret auth, email-token
+# verification during signup/password-reset before login), so RLS on them
+# would zero out the exact flows that must touch a user's rows before a
+# session exists. They stay un-policied; what bounds them instead is that
+# neither is ever queried by a caller-supplied identity — the lookup key is
+# the provider identity or a hashed single-use token, through one repo
+# module each (packages/db/repos/accounts.py, email_tokens.py). ADR 0012.
 OWNED_TABLES = ("conversations", "documents", "chunks")
 
 # NULLIF: after a SET LOCAL-bearing transaction ends, a custom GUC can read
 # back as '' rather than NULL; ''::uuid would error every query. Either way
 # the comparison is against NULL => no rows => fail-closed. A non-empty,
-# non-UUID value (unreachable from the two verified writers — the begin
-# listener always sets a real uuid.UUID; possible only via ContextVar misuse
-# elsewhere) raises a cast ERROR instead of an empty result — still
-# fail-closed, just via exception rather than zero rows.
+# non-UUID value (unreachable through the one GUC writer, the begin listener
+# in packages/db/session.py, which always sets a real uuid.UUID; possible only
+# via ContextVar misuse elsewhere) raises a cast ERROR instead of an empty
+# result — still fail-closed, just via exception rather than zero rows.
 _IDENT = "NULLIF(current_setting('app.current_user_id', true), '')::uuid"
 
 
 def upgrade() -> None:
     # The app role must exist before policies are worth anything. Created by
     # infra/docker-compose/postgres/init.sql (dev), tests/api/conftest.py
-    # (test/CI), Terraform at M3 (prod). Fail with instructions, not mid-way.
+    # (test/CI), Terraform (prod). Fail with instructions, not mid-way.
     op.execute(
         """
         DO $$ BEGIN
@@ -85,8 +87,8 @@ def upgrade() -> None:
     )
 
     # Idempotent re-run of the app-role grants: covers databases where
-    # init.sql never ran (hax_test via fixtures already grants; RDS at M3
-    # gets them here).
+    # init.sql never ran (hax_test via fixtures already grants; a managed
+    # Postgres gets them here).
     op.execute("GRANT USAGE ON SCHEMA public TO hax_app")
     op.execute(
         "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO hax_app"

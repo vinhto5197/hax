@@ -15,7 +15,8 @@ class EmailToken(Base):
 
     Only the sha256 of the 256-bit random token is stored; the raw token
     exists solely in the emailed link. used_at marks consumption — a token is
-    valid iff unused, unexpired, and purpose-matched (slice 4 enforces).
+    valid iff unused, unexpired, and purpose-matched — enforced in
+    packages/db/repos/email_tokens.py, not by any caller.
     """
 
     __tablename__ = "email_tokens"

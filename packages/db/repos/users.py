@@ -1,9 +1,8 @@
-"""User queries — the first repo module (M2.5 slice 1).
+"""User queries.
 
-Repo-layer contract (spec: Isolation): this is the only place the app reads or
-writes user rows; emails are normalized to lowercase HERE so every caller gets
-case-insensitive semantics without remembering to. Slices 2–3 extend the repo
-pattern to conversations/documents/accounts.
+Repo-layer contract: this is the only place the app reads or writes user rows;
+emails are normalized to lowercase HERE so every caller gets case-insensitive
+semantics without remembering to.
 """
 
 import uuid
@@ -127,8 +126,8 @@ async def reset_password(
     session: AsyncSession, user: User, password_hash: str
 ) -> datetime:
     """Inbox-proven password set. Stamps verified if NULL (the link proved
-    the inbox) and revokes every prior session (spec: a stolen token must not
-    outlive a reset). Returns the cutoff; caller publishes it after commit."""
+    the inbox) and revokes every prior session — a stolen token must not
+    outlive a reset. Returns the cutoff; caller publishes it after commit."""
     cutoff = datetime.now(UTC)
     user.password_hash = password_hash
     user.sessions_valid_after = cutoff

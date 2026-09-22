@@ -33,8 +33,8 @@ def _bootstrap() -> None:
             key, _, val = line.partition("=")
             os.environ.setdefault(key.strip(), val.strip().strip("\"'"))
 
-    # Inspection needs the all-rows view: under RLS (slice 2) the app role with
-    # no announced identity sees zero rows — correct for the app, useless here.
+    # Inspection needs the all-rows view: under RLS the app role with no
+    # announced identity sees zero rows — correct for the app, useless here.
     if os.environ.get("MIGRATIONS_DATABASE_URL"):
         os.environ["DATABASE_URL"] = os.environ["MIGRATIONS_DATABASE_URL"]
 
@@ -96,12 +96,6 @@ async def get_corpus(filename: str) -> None:
 
 def main() -> None:
     _bootstrap()
-    # asyncio.run is the sync->async entry point: it spawns a fresh event loop,
-    # drives the coroutine to completion on THIS thread, then closes the loop —
-    # right for a short-lived command that runs one thing and exits. (Contrast a
-    # long-lived server like uvicorn, which creates ONE loop and runs it forever,
-    # serving request after request; here the loop lives only for this command.)
-    # Can't use a bare `await` here — main() is sync, so no loop exists yet.
     if len(sys.argv) > 1:
         asyncio.run(get_corpus(sys.argv[1]))
     else:

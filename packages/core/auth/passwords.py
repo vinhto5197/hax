@@ -2,7 +2,7 @@
 
 Cross-module contract: hashes written by hash_password are verified only by
 verify_password; dummy_verify exists so an unknown-email login burns the same
-argon2 work as a real mismatch (timing-equalized checks — spec threat table).
+argon2 work as a real mismatch, so timing cannot enumerate registered emails.
 Routers must use the *_async wrappers: argon2 never runs inline on the event
 loop, and the semaphore caps concurrent hashing memory.
 """

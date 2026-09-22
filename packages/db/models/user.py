@@ -24,7 +24,7 @@ class User(Base):
     email: Mapped[str]
     name: Mapped[str | None] = mapped_column(nullable=True)
     # NULL = no password method attached (Google-born account); the reset flow
-    # (slice 4) is what adds a password to such an account.
+    # is what adds a password to such an account.
     password_hash: Mapped[str | None] = mapped_column(nullable=True)
     # NULL = unverified. The login gate on this defaults ON
     # (AUTH_REQUIRE_EMAIL_VERIFICATION); verification, reset, and a

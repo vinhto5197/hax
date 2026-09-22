@@ -43,7 +43,7 @@ from packages.db.user_context import current_user_id  # noqa: E402
 @event.listens_for(engine.sync_engine, "begin")
 def _announce_rls_identity(conn) -> None:
     # One central place instead of per-callsite SET LOCAL: forgetting at a
-    # callsite is exactly the leak class this slice removes. set_config(...,
+    # callsite is exactly the leak class this listener removes. set_config(...,
     # true) == SET LOCAL — dies at transaction end, so pooled connections are
     # handed back identity-free (pool-bleed fence).
     uid = current_user_id.get()
