@@ -61,7 +61,7 @@ api:
 # ── Worker (Celery) ───────────────────────────────────────────
 .PHONY: worker
 
-# Background-job worker (slice 2a: document ingestion). Needs infra (Redis) up —
+# Background-job worker (ingestion, email, conversation titles). Needs infra (Redis) up —
 # run `make infra-up` or `make dev` first. Separate process from the API.
 worker:
 	celery -A apps.worker.celery_app worker --loglevel=info
@@ -101,7 +101,7 @@ sync-web:
 
 dev: infra-up types
 	@echo "Starting API and Web servers..."
-	@echo "For document ingestion, run 'make worker' in a separate terminal."
+	@echo "For ingestion, email and chat titles, run 'make worker' in a separate terminal."
 	@$(MAKE) -j2 api web
 
 dev-stop:

@@ -25,13 +25,15 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
      REGRESSION 7/8 — the one fail is a known Haiku-tier limit, not pipeline).
      The **eval harness** itself is an M5 deliverable.
 
-2.5. **Milestone 2.5 — Auth + background titles** *(next up; deferred from M1)*
+2.5. **Milestone 2.5 — Auth + background titles** *(shipped 2026-09-22; deferred from M1)*
    - Auth via **NextAuth/Auth.js** (self-hosted, no per-user cost) — email/password
      + Google, sessions, `users` table, FastAPI verifies the NextAuth JWT;
-     conversations + documents scoped to a user. Own ADR.
-   - Background chat title generation (Celery + Redis — worker exists from M2)
+     email verification + password reset; conversations + documents scoped to
+     a user, enforced structurally (repo layer + Postgres RLS). ADRs 0011, 0012.
+   - Background chat title generation (Celery + Redis — worker exists from M2),
+     and one off-loop publisher for every API-side enqueue. ADR 0010 addendum.
 
-3. **Milestone 3 — AWS deploy + CI/CD** *(brought forward — deploy early, then continuous)*
+3. **Milestone 3 — AWS deploy + CI/CD** *(next up; brought forward — deploy early, then continuous)*
    - **Hybrid deploy for alpha** (product > portfolio now; near-zero, gated
      traffic): a **free-tier EC2 app box** (public subnet) runs the FastAPI /
      Next / Celery-worker containers, pointed at managed **RDS Postgres +
@@ -133,6 +135,7 @@ this repo. Write prod-level comments only:
 - Redis is the Celery broker AND cache/session store (one service, two roles).
 - Chat responses are streamed (SSE) directly from FastAPI — never queued through Celery.
 - Celery handles background work: title generation, data ingestion, embedding, index rebuilds.
+- Conversation titles: `generate_title` (worker) titles a conversation from its first user message only, with a conditional `UPDATE … WHERE title IS NULL` (first writer wins; nothing else is ever stored in `title`). The API enqueues at conversation creation and re-enqueues on each persisted assistant turn while untitled — that re-enqueue is the retry. The sidebar shows "Untitled" until then. See ADR 0010 addendum.
 - Every Celery publish from the API goes through `apps/api/enqueue.py` (off the event loop, after the DB commit, `retry=False`; `fire_and_forget` for work with its own recovery path — titles, email — and awaited `publish` where the caller must know, e.g. uploads marking a document failed). Tasks published from there declare `ignore_result=True`.
 - Transactional email goes through the Celery `send_email` task (`packages/core/email/`: templates + smtplib transport); dev sends to Mailpit (compose, inbox at :8025), prod to a real relay via the same `SMTP_*` env. Emails are enqueued only after the DB commit.
 - pgvector keeps vector search inside Postgres (no extra vector DB service).
