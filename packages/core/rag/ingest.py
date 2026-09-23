@@ -3,6 +3,7 @@ from uuid import UUID
 
 from sqlalchemy import delete
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm.exc import StaleDataError
 
 from packages.core import storage
 from packages.core.rag.embeddings import embed_documents
@@ -87,12 +88,16 @@ async def ingest_document_async(document_id: UUID) -> None:
         )
         doc.status = "ready"
         doc.error = None
-        # A constraint violation here is schema/code drift, not a transient fault
-        # — fail permanent on attempt 1 instead of re-paying the embed on retries.
+        # Neither failure here is transient — fail permanent on attempt 1 instead
+        # of re-paying the embed on retries. A constraint violation is schema/
+        # code drift; a stale UPDATE means the document was deleted mid-ingest
+        # (the unit of work flushes the parent row before the chunk inserts).
         try:
             await session.commit()
         except IntegrityError as exc:
             raise PermanentIngestError("chunk insert violated a constraint") from exc
+        except StaleDataError as exc:
+            raise PermanentIngestError("document deleted during ingestion") from exc
 
 
 async def mark_document_failed(document_id: UUID, error: str) -> None:

@@ -192,3 +192,42 @@ async def test_constraint_violation_message_is_static(
     message = str(excinfo.value)
     assert message == "chunk insert violated a constraint"
     assert "LEAKED-CHUNK-TEXT" not in message and "[SQL" not in message
+
+
+async def test_delete_mid_ingest_fails_permanently_and_leaves_no_chunks(
+    user_a, admin_engine, monkeypatch
+):
+    # The real race: the document is deleted while its embeddings are being
+    # computed. The final commit's status UPDATE then matches no row. That must
+    # be a permanent failure (no retries re-paying the embed) with no orphaned
+    # chunks, not a transient one.
+    from packages.core import storage
+    from packages.core.rag import ingest
+
+    doc_id = await make_document(
+        admin_engine, user_a.id, status="pending", storage_key="documents/x/a.md"
+    )
+    monkeypatch.setattr(storage, "get", lambda key: b"alpha secret " * 40)
+
+    async def embed_then_delete(chunks):
+        async with admin_engine.begin() as conn:
+            await conn.execute(
+                text("DELETE FROM documents WHERE id = :i"), {"i": doc_id}
+            )
+        return [unit_vec(0) for _ in chunks]
+
+    monkeypatch.setattr(ingest, "embed_documents", embed_then_delete)
+
+    token = current_user_id.set(user_a.id)
+    try:
+        with pytest.raises(PermanentIngestError) as excinfo:
+            await ingest.ingest_document_async(doc_id)
+    finally:
+        current_user_id.reset(token)
+
+    assert str(excinfo.value) == "document deleted during ingestion"
+    async with admin_engine.connect() as conn:
+        chunks = await conn.scalar(
+            text("SELECT count(*) FROM chunks WHERE document_id = :i"), {"i": doc_id}
+        )
+    assert chunks == 0
