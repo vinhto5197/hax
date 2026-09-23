@@ -6,8 +6,7 @@ from sqlalchemy import text
 
 import apps.api.routers.auth as auth_router
 from packages.core.auth.email_tokens import hash_token
-from tests.api.conftest import _make_user
-from tests.api.factories import make_email_token
+from tests.api.factories import make_email_token, make_user
 
 
 @pytest.fixture
@@ -27,7 +26,7 @@ def _token_from(call) -> str:
 
 
 async def _seed(admin_engine, email="v@example.com"):
-    return await _make_user(admin_engine, email)
+    return await make_user(admin_engine, email)
 
 
 async def _user_id(admin_engine, email):

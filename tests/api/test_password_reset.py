@@ -16,8 +16,7 @@ from apps.api import enqueue
 from packages.core.auth.email_tokens import hash_token
 from packages.core.auth.passwords import hash_password, verify_password
 from packages.db.repos import email_tokens as tokens_repo
-from tests.api.conftest import _make_user
-from tests.api.factories import make_email_token
+from tests.api.factories import make_email_token, make_user
 
 BODY = {"status": "check_inbox"}
 INTERNAL = {"X-Internal-Secret": os.environ["INTERNAL_API_SECRET"]}
@@ -74,7 +73,7 @@ async def test_request_is_uniform_and_only_emails_real_accounts(
     client, admin_engine, user_a, outbox
 ):
     # user_a is a@test.local (raw SQL) — use an example.com user for the API.
-    u = await _make_user(admin_engine, "r@example.com")
+    u = await make_user(admin_engine, "r@example.com")
     await make_email_token(admin_engine, u.id, "reset_password", hash_token("h0"))
     unknown = await client.post(
         "/api/auth/request-password-reset", json={"email": "nobody@example.com"}
@@ -113,7 +112,7 @@ async def test_a_dead_broker_leaves_the_202_untouched(
 ):
     # Same uniform-202 contract as signup/resend: the real publisher runs,
     # only the task is faked.
-    await _make_user(admin_engine, "r@example.com")
+    await make_user(admin_engine, "r@example.com")
 
     def unreachable(args, retry):
         raise OSError("broker down")
@@ -134,7 +133,7 @@ async def test_a_dead_broker_leaves_the_202_untouched(
 async def test_confirm_sets_password_verifies_and_revokes_sessions(
     client, admin_engine, fake_redis
 ):
-    u = await _make_user(admin_engine, "r@example.com")
+    u = await make_user(admin_engine, "r@example.com")
     async with admin_engine.begin() as conn:
         # sessions_valid_after defaults to creation time (~now); backdate it
         # so the "old" bearer (auth_time = now-120s) is valid pre-reset, the
@@ -183,7 +182,7 @@ async def test_cutoff_is_committed_before_it_is_published(
     publish time a separate connection — which sees committed rows only —
     already reads back exactly the cutoff being published. Publishing first
     would advertise a cutoff a failed commit could still roll back."""
-    u = await _make_user(admin_engine, "r@example.com")
+    u = await make_user(admin_engine, "r@example.com")
     await make_email_token(admin_engine, u.id, "reset_password", hash_token("raw1"))
     observed: list[tuple] = []
 
@@ -210,7 +209,7 @@ async def test_cutoff_is_committed_before_it_is_published(
 
 
 async def test_google_born_account_gains_a_password(client, admin_engine):
-    u = await _make_user(admin_engine, "g@example.com")  # password_hash NULL
+    u = await make_user(admin_engine, "g@example.com")  # password_hash NULL
     await make_email_token(admin_engine, u.id, "reset_password", hash_token("raw1"))
     res = await client.post(
         "/api/auth/reset-password", json={"token": "raw1", "password": "brand-new-9"}
@@ -222,7 +221,7 @@ async def test_google_born_account_gains_a_password(client, admin_engine):
 
 
 async def test_invalid_tokens_rejected_and_nothing_changes(client, admin_engine):
-    u = await _make_user(admin_engine, "r@example.com")
+    u = await make_user(admin_engine, "r@example.com")
     await make_email_token(
         admin_engine, u.id, "reset_password", hash_token("used"), used=True
     )
@@ -248,7 +247,7 @@ async def test_reset_password_length_policy(client):
 
 
 async def test_request_per_email_rate_limit(client, admin_engine, outbox):
-    await _make_user(admin_engine, "r@example.com")
+    await make_user(admin_engine, "r@example.com")
     for _ in range(3):
         await client.post(
             "/api/auth/request-password-reset", json={"email": "r@example.com"}
@@ -301,7 +300,7 @@ async def test_length_caps(client):
 
 
 async def test_reset_check_reports_validity_without_consuming(client, admin_engine):
-    u = await _make_user(admin_engine, "r@example.com")
+    u = await make_user(admin_engine, "r@example.com")
     await make_email_token(admin_engine, u.id, "reset_password", hash_token("raw1"))
     first = await client.post("/api/auth/reset-password/check", json={"token": "raw1"})
     second = await client.post("/api/auth/reset-password/check", json={"token": "raw1"})
@@ -318,7 +317,7 @@ async def test_reset_check_reports_validity_without_consuming(client, admin_engi
 async def test_reset_check_rejects_used_expired_wrong_purpose_unknown(
     client, admin_engine
 ):
-    u = await _make_user(admin_engine, "r@example.com")
+    u = await make_user(admin_engine, "r@example.com")
     await make_email_token(
         admin_engine, u.id, "reset_password", hash_token("used"), used=True
     )
@@ -336,7 +335,7 @@ async def test_reset_check_rejects_used_expired_wrong_purpose_unknown(
 async def test_double_consume_is_strictly_single_use(client, admin_engine):
     # Two concurrent confirms with the SAME token, different passwords:
     # consume()'s atomic conditional UPDATE must let exactly one through.
-    u = await _make_user(admin_engine, "r@example.com")
+    u = await make_user(admin_engine, "r@example.com")
     await make_email_token(admin_engine, u.id, "reset_password", hash_token("raw1"))
 
     results = await asyncio.gather(
@@ -363,7 +362,7 @@ async def test_double_consume_is_single_use_hermetic(client, admin_engine, monke
     # Hermetic variant: force get_valid to keep returning the same live token
     # object on both calls (as it would mid-race) and run the confirms
     # sequentially. With atomic consume() the second call still loses.
-    u = await _make_user(admin_engine, "r@example.com")
+    u = await make_user(admin_engine, "r@example.com")
     await make_email_token(admin_engine, u.id, "reset_password", hash_token("raw1"))
     # Fetch the live token via a throwaway session (admin-bound; email_tokens
     # is outside RLS) so the monkeypatch below can hand back the SAME ORM
@@ -394,7 +393,7 @@ async def test_reset_clears_login_rate_limit(client, admin_engine):
     # Inbox proof: a reset must clear the login_email guessing bucket, or the
     # "failed a few logins -> forgot password -> reset" path 429s at the very
     # login the user just earned.
-    u = await _make_user(admin_engine, "r@example.com")
+    u = await make_user(admin_engine, "r@example.com")
     async with admin_engine.begin() as conn:
         await conn.execute(
             text("UPDATE users SET password_hash = :h WHERE id = :id"),

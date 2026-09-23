@@ -6,13 +6,13 @@ import os
 from sqlalchemy import text
 
 from packages.core.auth.passwords import hash_password
-from tests.api.conftest import _make_user
+from tests.api.factories import make_user
 
 INTERNAL = {"X-Internal-Secret": os.environ["INTERNAL_API_SECRET"]}
 
 
 async def _pw_user(admin_engine, verified):
-    u = await _make_user(admin_engine, "g@example.com")
+    u = await make_user(admin_engine, "g@example.com")
     async with admin_engine.begin() as conn:
         await conn.execute(
             text(

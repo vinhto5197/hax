@@ -12,8 +12,7 @@ from sqlalchemy.orm.attributes import set_committed_value
 import apps.api.routers.auth as auth_router
 from apps.api import enqueue
 from packages.core.auth.email_tokens import hash_token
-from tests.api.conftest import _make_user
-from tests.api.factories import make_email_token
+from tests.api.factories import make_email_token, make_user
 
 BODY = {"status": "check_inbox"}
 
@@ -33,7 +32,7 @@ def outbox(monkeypatch):
 
 @pytest.fixture
 async def pw_user(admin_engine):
-    u = await _make_user(admin_engine, "pw@example.com")
+    u = await make_user(admin_engine, "pw@example.com")
     async with admin_engine.begin() as conn:
         await conn.execute(
             text("UPDATE users SET password_hash = 'old-hash' WHERE id = :id"),
@@ -255,7 +254,7 @@ async def test_signup_burns_a_hash_on_every_branch(
             text("UPDATE users SET email_verified_at = now() WHERE id = :id"),
             {"id": pw_user.id},
         )
-    placeholder = await _make_user(admin_engine, "placeholder@example.com")
+    placeholder = await make_user(admin_engine, "placeholder@example.com")
     async with admin_engine.begin() as conn:
         await conn.execute(
             text("UPDATE users SET password_hash = 'old-hash' WHERE id = :id"),
@@ -311,7 +310,7 @@ async def test_stale_unverified_placeholder_is_reclaimed(
 async def test_google_born_user_is_verified_so_signup_says_account_exists(
     client, admin_engine, outbox
 ):
-    u = await _make_user(admin_engine, "g@example.com")
+    u = await make_user(admin_engine, "g@example.com")
     async with admin_engine.begin() as conn:
         await conn.execute(
             text("UPDATE users SET email_verified_at = now() WHERE id = :id"),
@@ -420,7 +419,7 @@ async def test_resend_verification_mirrors_signup(
 
     # Verified user (incl. Google-born): mirrors signup's account_exists
     # branch — no token work, existence still doesn't leak in the response.
-    verified = await _make_user(admin_engine, "verified@example.com")
+    verified = await make_user(admin_engine, "verified@example.com")
     async with admin_engine.begin() as conn:
         await conn.execute(
             text("UPDATE users SET email_verified_at = now() WHERE id = :id"),
@@ -441,7 +440,7 @@ async def test_resend_verification_mirrors_signup(
     assert await _tokens(admin_engine, verified.id) == []
 
     # Unverified, passwordless bootstrap placeholder: nothing to resend.
-    placeholder = await _make_user(admin_engine, "placeholder2@example.com")
+    placeholder = await make_user(admin_engine, "placeholder2@example.com")
     before = len(outbox)
     res = await client.post(
         "/api/auth/resend-verification", json={"email": placeholder.email}
