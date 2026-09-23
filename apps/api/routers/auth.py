@@ -1,7 +1,8 @@
 import os
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.deps import get_session
@@ -129,50 +130,61 @@ async def signup(
     await _limit(request, "signup", per_ip=10, window_s=3600, email=email, per_email=3)
     # Decide the email BEFORE commit, send it AFTER: a failed commit must never
     # mail a link whose token doesn't exist. Response is identical in all cases.
-    outgoing: tuple[str, str, dict[str, str]]
-    cutoff = None
     # Hash on EVERY branch (timing): an existing address must cost the same
     # argon2 work as a new one, or response time says which it is.
     password_hash = await hash_password_async(body.password)
-    user = await users_repo.get_by_email(session, email)
-    if user is None:
-        user = await users_repo.create_password_user(
+    try:
+        user, outgoing, cutoff = await _signup_outcome(
             session, email, password_hash, body.name
         )
-        outgoing = (
-            email,
-            "verify_email",
-            {"link": await _issue_link(session, user, "verify_email")},
+        await session.commit()
+    except IntegrityError:
+        # Lost a first-signup race: a concurrent signup inserted the same
+        # address between our lookup and our INSERT. Postgres holds the
+        # colliding INSERT until the winner commits, so the winner's placeholder
+        # is visible now and one re-run takes the re-signup branch — the same
+        # outcome as the two requests arriving in sequence.
+        await session.rollback()
+        user, outgoing, cutoff = await _signup_outcome(
+            session, email, password_hash, body.name
         )
-    elif user.email_verified_at is not None:
-        outgoing = _account_exists_outgoing(email)
-    else:
-        # Unverified placeholder (fresh or stale): the last submitter owns the
-        # pending password — verification is by link alone, so keeping an
-        # earlier, unproven password would let this signup verify it.
-        # Tokens before users: every writer takes locks in the same order as
-        # consume() → no deadlock between a re-signup and a Confirm.
-        await tokens_repo.void_unused(session, user.id, "verify_email")
-        cutoff = await users_repo.replace_pending_password(
-            session, user, password_hash, body.name
-        )
-        if cutoff is None:
-            # A concurrent verify won the race: the row is now an existing,
-            # verified account, so this submission is treated the same as
-            # the verified branch — no new link for an account that's no
-            # longer pending.
-            outgoing = _account_exists_outgoing(email)
-        else:
-            outgoing = (
-                email,
-                "verify_email",
-                {"link": await _issue_link(session, user, "verify_email")},
-            )
-    await session.commit()
+        await session.commit()
     if cutoff is not None:
         await publish_sva(get_redis(), user.id, cutoff)
     _mail(*outgoing)
     return AcceptedOut()
+
+
+async def _signup_outcome(
+    session: AsyncSession, email: str, password_hash: str, name: str | None
+) -> tuple[User, tuple[str, str, dict[str, str]], datetime | None]:
+    """Resolve the address to a user and decide the one email to send.
+    Writes but never commits; the route owns the commit and the retry."""
+    user = await users_repo.get_by_email(session, email)
+    if user is None:
+        user = await users_repo.create_password_user(
+            session, email, password_hash, name
+        )
+        link = await _issue_link(session, user, "verify_email")
+        return user, (email, "verify_email", {"link": link}), None
+    if user.email_verified_at is not None:
+        return user, _account_exists_outgoing(email), None
+    # Unverified placeholder (fresh or stale): the last submitter owns the
+    # pending password — verification is by link alone, so keeping an
+    # earlier, unproven password would let this signup verify it.
+    # Tokens before users: every writer takes locks in the same order as
+    # consume() → no deadlock between a re-signup and a Confirm.
+    await tokens_repo.void_unused(session, user.id, "verify_email")
+    cutoff = await users_repo.replace_pending_password(
+        session, user, password_hash, name
+    )
+    if cutoff is None:
+        # A concurrent verify won the race: the row is now an existing,
+        # verified account, so this submission is treated the same as the
+        # verified branch — no new link for an account that's no longer pending.
+        return user, _account_exists_outgoing(email), None
+    link = await _issue_link(session, user, "verify_email")
+    return user, (email, "verify_email", {"link": link}), cutoff
 
 
 @router.post("/resend-verification", status_code=202)

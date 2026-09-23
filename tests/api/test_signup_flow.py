@@ -145,6 +145,46 @@ async def test_resignup_on_unverified_placeholder_replaces_pending_password(
     assert len(live) == 1  # h1 voided
 
 
+async def test_lost_first_signup_race_takes_the_resignup_branch(
+    client, admin_engine, pw_user, outbox, fake_redis, monkeypatch
+):
+    # Two signups for the same NEW address race. Simulate the loser: its
+    # lookup ran before the winner committed (patched to miss once), so its
+    # INSERT collides with the winner's unique email. The route must roll back
+    # and re-run — landing on the re-signup branch, as if the requests had
+    # arrived in sequence: one user, the loser's pending password, one live
+    # link, the winner's link voided, a 202 either way.
+    await make_email_token(
+        admin_engine, pw_user.id, "verify_email", "winner", expires_in_s=3600
+    )
+    real = auth_router.users_repo.get_by_email
+    calls = {"n": 0}
+
+    async def miss_once(session, email):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return None
+        return await real(session, email)
+
+    monkeypatch.setattr(auth_router.users_repo, "get_by_email", miss_once)
+    res = await client.post(
+        "/api/auth/signup", json={"email": pw_user.email, "password": "loser-pw1"}
+    )
+    assert res.status_code == 202 and res.json() == BODY
+    assert calls["n"] == 2
+    async with admin_engine.connect() as conn:
+        assert (await conn.scalar(text("SELECT count(*) FROM users"))) == 1
+    row = await _user_row(admin_engine, pw_user.email)
+    assert row.id == pw_user.id and row.password_hash != "old-hash"
+    assert [c[1] for c in outbox] == ["verify_email"]
+    live = [
+        t
+        for t in await _tokens(admin_engine, pw_user.id)
+        if t.live and t.used_at is None
+    ]
+    assert len(live) == 1  # the winner's link is voided; the loser's is live
+
+
 async def test_resignup_loses_to_a_concurrent_verify(
     client, admin_engine, pw_user, outbox, monkeypatch
 ):
