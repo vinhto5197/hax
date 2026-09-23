@@ -13,8 +13,7 @@ import pytest
 from sqlalchemy import text
 
 import apps.api.routers.internal_auth as internal_auth
-from tests.api.conftest import _make_user
-from tests.api.factories import make_account
+from tests.api.factories import make_account, make_user
 
 INTERNAL = {"X-Internal-Secret": os.environ["INTERNAL_API_SECRET"]}
 
@@ -34,7 +33,7 @@ async def pw_user(admin_engine):
     # Password-style account (unverified, no name, no Google link yet).
     # Crosses pydantic's EmailStr (unlike the raw-SQL-only user_a/user_b
     # fixtures), which rejects the special-use .local domain.
-    user = await _make_user(admin_engine, "pw@example.com")
+    user = await make_user(admin_engine, "pw@example.com")
     async with admin_engine.begin() as conn:
         await conn.execute(
             text("UPDATE users SET password_hash = 'not-a-real-hash' WHERE id = :id"),

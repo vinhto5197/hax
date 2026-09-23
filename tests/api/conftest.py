@@ -12,7 +12,6 @@ import asyncio
 import os
 import time
 from pathlib import Path
-from types import SimpleNamespace
 
 import fakeredis.aioredis
 import httpx
@@ -26,6 +25,7 @@ import apps.api.redis_client as redis_client
 from packages.db import engine
 from packages.db.session import to_async_url
 from packages.db.user_context import current_user_id
+from tests.api.factories import make_user
 
 ROOT = Path(__file__).resolve().parents[2]
 # tests/conftest.py hard-sets this to the hax_test owner connection — derive
@@ -149,24 +149,14 @@ async def client():
         yield c
 
 
-async def _make_user(admin_engine, email: str) -> SimpleNamespace:
-    async with admin_engine.begin() as conn:
-        row = await conn.execute(
-            text("INSERT INTO users (email) VALUES (:email) RETURNING id, email"),
-            {"email": email},
-        )
-        uid, email = row.one()
-    return SimpleNamespace(id=uid, email=email)
-
-
 @pytest.fixture
 async def user_a(admin_engine):
-    return await _make_user(admin_engine, "a@test.local")
+    return await make_user(admin_engine, "a@test.local")
 
 
 @pytest.fixture
 async def user_b(admin_engine):
-    return await _make_user(admin_engine, "b@test.local")
+    return await make_user(admin_engine, "b@test.local")
 
 
 def bearer(user) -> dict[str, str]:

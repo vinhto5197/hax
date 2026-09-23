@@ -7,9 +7,20 @@ test — a repo bug must never be able to seed its own passing data — and the
 admin engine deliberately bypasses the app engine's identity machinery."""
 
 import uuid
+from types import SimpleNamespace
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
+
+
+async def make_user(admin_engine: AsyncEngine, email: str) -> SimpleNamespace:
+    async with admin_engine.begin() as conn:
+        row = await conn.execute(
+            text("INSERT INTO users (email) VALUES (:email) RETURNING id, email"),
+            {"email": email},
+        )
+        uid, email = row.one()
+    return SimpleNamespace(id=uid, email=email)
 
 
 async def make_conversation(
