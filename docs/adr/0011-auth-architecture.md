@@ -178,16 +178,20 @@ path.
 
 **Tokens.** `packages/core/auth/email_tokens.py` generates a 256-bit
 `secrets.token_urlsafe(32)`; `packages/db/repos/email_tokens.py` stores only
-`sha256(raw)`, with a TTL (24 h verify, 1 h reset) and a purpose. The raw
-token is never logged. It exists in the emailed link and in the broker
-message that carries that link to the worker (a Redis compromise exposes
-live links until they expire), and the page sends it back only in a POST
-body. Invariant: **zero or one live token per user per purpose.** Any
-issuing path that can add a second live token voids the user's existing
-ones of that purpose first (`tokens_repo.void_unused`) — the placeholder
-branch of `signup`, `resend-verification`, and `request-password-reset` all
-do; the new-address branch of `signup` does not, because a freshly created
-user has no tokens to void. Consumption (`verify-email`, `reset-password`)
+`sha256(raw)`, with a TTL (24 h verify, 1 h reset) and a purpose. The API
+never logs the raw token; it does appear in the page's `GET …?token=` URL,
+so Next's and any proxy's access logs hold it until the link expires or is
+spent. It exists in the emailed link and in the broker message that carries
+that link to the worker (a Redis compromise exposes live links until they
+expire), and the page sends it back only in a POST body. Invariant:
+**at most one live token per user per purpose survives any consume** —
+two concurrent issuers can briefly leave two live tokens, and the first
+consume voids everything else of that purpose. Any issuing path that can
+add a second live token voids the user's existing ones of that purpose
+first (`tokens_repo.void_unused`) — the placeholder branch of `signup`,
+`resend-verification`, and `request-password-reset` all do; the new-address
+branch of `signup` does not, because a freshly created user has no tokens to
+void. Consumption (`verify-email`, `reset-password`)
 goes through one router helper (`_spend_token`: lookup, user, consume, and
 the ONE uniform 400 for every failure, a lost race included) over
 `tokens_repo.consume`, which is `void_unused` (one `UPDATE …
