@@ -1,3 +1,4 @@
+import logging
 import smtplib
 from unittest.mock import MagicMock
 
@@ -28,6 +29,28 @@ def test_transient_smtp_failure_retries_with_backoff(monkeypatch):
             args=("to@example.com", "verify_email", {"link": "l"}), throw=True
         ).get()
     assert retry.call_args.kwargs["countdown"] == 5  # base * 2**0
+
+
+def test_refused_connection_retries_like_an_smtp_error(monkeypatch, caplog):
+    """A relay that isn't listening raises a bare OSError, not an SMTPException:
+    it is transient too (same 5s first backoff), and the log carries the
+    exception type only — never its message or the recipient."""
+    monkeypatch.setattr(
+        tasks.smtp,
+        "send",
+        MagicMock(side_effect=ConnectionRefusedError(61, "Connection refused")),
+    )
+    retry = MagicMock(side_effect=Retry())
+    monkeypatch.setattr(tasks.send_email, "retry", retry)
+    with caplog.at_level(logging.WARNING, logger=tasks.logger.name):
+        with pytest.raises(Retry):
+            tasks.send_email.apply(
+                args=("to@example.com", "verify_email", {"link": "l"}), throw=True
+            ).get()
+    assert retry.call_args.kwargs["countdown"] == 5  # base * 2**0
+    logged = [r.getMessage() for r in caplog.records if r.name == tasks.logger.name]
+    assert any("ConnectionRefusedError" in m for m in logged)
+    assert not any("Connection refused" in m or "to@example.com" in m for m in logged)
 
 
 def test_bad_template_is_permanent_no_retry(monkeypatch, caplog):

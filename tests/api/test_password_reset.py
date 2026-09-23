@@ -176,6 +176,39 @@ async def test_confirm_sets_password_verifies_and_revokes_sessions(
     assert used == 0  # raw2 voided too
 
 
+async def test_cutoff_is_committed_before_it_is_published(
+    client, admin_engine, monkeypatch
+):
+    """The revocation cutoff reaches the cache only after it is durable: at
+    publish time a separate connection — which sees committed rows only —
+    already reads back exactly the cutoff being published. Publishing first
+    would advertise a cutoff a failed commit could still roll back."""
+    u = await _make_user(admin_engine, "r@example.com")
+    await make_email_token(admin_engine, u.id, "reset_password", hash_token("raw1"))
+    observed: list[tuple] = []
+
+    async def recording_publish(redis, user_id, cutoff):
+        async with admin_engine.connect() as conn:
+            committed = (
+                await conn.execute(
+                    text("SELECT sessions_valid_after FROM users WHERE id = :id"),
+                    {"id": user_id},
+                )
+            ).scalar_one()
+        observed.append((cutoff, committed))
+
+    monkeypatch.setattr(auth_router, "publish_sva", recording_publish)
+
+    res = await client.post(
+        "/api/auth/reset-password", json={"token": "raw1", "password": "brand-new-9"}
+    )
+    assert res.status_code == 200
+
+    assert len(observed) == 1
+    cutoff, committed = observed[0]
+    assert committed == cutoff
+
+
 async def test_google_born_account_gains_a_password(client, admin_engine):
     u = await _make_user(admin_engine, "g@example.com")  # password_hash NULL
     await make_email_token(admin_engine, u.id, "reset_password", hash_token("raw1"))
