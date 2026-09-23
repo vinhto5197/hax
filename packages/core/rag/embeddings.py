@@ -24,7 +24,11 @@ VOYAGE_MODEL = "voyage-3.5"
 # Chunks per Voyage request (the API caps inputs per call).
 _BATCH = 100
 
-# Lazy singleton: importing this module never requires VOYAGE_API_KEY.
+# Lazy singleton: importing this module never requires VOYAGE_API_KEY. Safe to
+# share across the worker's per-task event loops because the SDK opens and
+# closes an aiohttp session per request; it holds no loop-bound connection.
+# That stops being true if `voyageai.aiosession` is ever set to a shared
+# session — then build the client per call, as packages/core/titles.py does.
 _client: voyageai.AsyncClient | None = None
 
 
