@@ -13,6 +13,20 @@ def test_link_templates_include_link_and_expiry(name):
     assert ("1 hour" in r.text) == (name == "reset_password")
 
 
+@pytest.mark.parametrize("name", ["verify_email", "reset_password"])
+def test_link_is_exactly_one_anchor_with_unmangled_text(name):
+    """The HTML body carries the link once as an href and once as that anchor's
+    visible text (unescaped, so it reads as the URL it is) and nowhere else —
+    no bare, unclickable copy — while the plain-text alternative carries the
+    raw link once."""
+    link = "http://app/x?token=abc"
+    r = templates.render(name, {"link": link})
+    assert r.html.count(f'href="{link}"') == 1
+    assert r.html.count(f">{link}</a>") == 1
+    assert r.html.count(link) == 2  # the href and the anchor text, nothing more
+    assert r.text.count(link) == 1
+
+
 def test_account_exists_mentions_both_paths():
     r = templates.render(
         "account_exists",
