@@ -4,7 +4,7 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import async_engine_from_config
+from sqlalchemy.ext.asyncio import create_async_engine
 
 from packages.db.models import *  # noqa: F401, F403
 
@@ -14,7 +14,9 @@ from packages.db.session import MIGRATIONS_DATABASE_URL_ASYNC, Base
 config = context.config
 
 # Migrations run as the OWNER role — URL policy lives in packages/db/session.py.
-config.set_main_option("sqlalchemy.url", MIGRATIONS_DATABASE_URL_ASYNC)
+# The URL is passed to SQLAlchemy directly and never stored in the ini config:
+# ConfigParser reads "%" as interpolation, and a percent-encoded password
+# contains one.
 
 if config.config_file_name is not None:
     # disable_existing_loggers=False: this module also runs in-process from
@@ -31,9 +33,8 @@ def run_migrations_offline() -> None:
 
     No Engine and no DBAPI connection — nothing here may read the database.
     """
-    url = config.get_main_option("sqlalchemy.url")
     context.configure(
-        url=url,
+        url=MIGRATIONS_DATABASE_URL_ASYNC,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
@@ -51,10 +52,8 @@ def do_run_migrations(connection: Connection) -> None:
 
 
 async def run_async_migrations() -> None:
-    connectable = async_engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
+    connectable = create_async_engine(
+        MIGRATIONS_DATABASE_URL_ASYNC, poolclass=pool.NullPool
     )
 
     async with connectable.connect() as connection:
