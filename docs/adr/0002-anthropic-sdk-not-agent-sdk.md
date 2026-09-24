@@ -118,3 +118,33 @@ untrusted retrieved document content with autonomously-invocable action tools �
 v0 mitigations: `send_email` is mocked with a hardcoded recipient, tool results
 are structured blocks (no prompt fence to escape), and the corpus is
 single-tenant until M2.5 auth lands.
+
+## Addendum (2026-09-24) — indirect prompt injection: entry vs exit
+
+Text a tool returns is untrusted input, not instruction: `search_documents`
+hands the model passages from files the user uploaded, verbatim, and those files
+may have been authored by someone else. The harness therefore treats injection
+as a given and splits the defence in two.
+
+**Entry-side (likelihood).** Tool results travel as structured `tool_result`
+blocks, so there is no prompt fence for injected text to close; tool identity
+comes from `ToolContext`, never from model-supplied arguments, so a successful
+injection cannot re-target another user's data; `send_email`'s recipient is
+hardcoded; and the system prompt states plainly that tool text is material to
+answer from, never instructions to follow. These reduce the odds of the model
+complying — none of them can be relied on, because they all ask a model to
+behave.
+
+**Exit-side (impact), structural.** The channel an injection needs is an
+automatic, zero-click request from the rendered reply to an attacker's origin —
+markdown's image syntax is exactly that, since the browser fetches `src` on
+render and the URL can carry whatever the model has in context. Two walls close
+it: the chat renderer (`apps/web/components/chat/Markdown.tsx`) allows only
+same-origin image sources, and the app ships a CSP
+(`apps/web/next.config.ts`) whose `img-src`/`connect-src`/`default-src` forbid
+every other automatic cross-origin fetch a reply could provoke. Neither depends
+on model behaviour.
+
+Links are deliberately left clickable and may point anywhere: a click is user
+consent, and stripping links would cost the product a real affordance to buy
+little — the zero-click path is the one that had to close.
