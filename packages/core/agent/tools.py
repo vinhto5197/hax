@@ -198,11 +198,12 @@ class SendEmailInput(BaseModel):
 async def _run_send_email(inp: SendEmailInput, ctx: ToolContext) -> str:  # ctx unused
     # v0 stub: logs the would-be send, sends nothing (real Gmail is v1). The
     # hardcoded recipient bounds prompt-injection blast radius.
+    # Subject and body are model-authored (and can be injected): sizes only.
     logger.info(
-        "send_email (MOCKED) → to=%s | subject=%r | body=%r",
+        "send_email (MOCKED) → to=%s | subject_len=%d | body_len=%d",
         EMAIL_RECIPIENT,
-        inp.subject,
-        inp.body,
+        len(inp.subject),
+        len(inp.body),
     )
     return f"Email sent to {EMAIL_RECIPIENT} (subject: {inp.subject!r})."
 

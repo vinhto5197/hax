@@ -132,18 +132,20 @@ async def stream_completion_agentic(
             # _run_tool turns it into an is_error result.
             tool = TOOLS.get(block.name)
             yield {"status": tool.label if tool else "Working…"}
+            # Argument names, sizes and flags only — never values: tool inputs
+            # are model-authored and tool output is the user's document text.
             logger.info(
-                "agentic tool_use: iter=%d name=%s input=%s",
+                "agentic tool_use: iter=%d name=%s input_keys=%s",
                 iteration,
                 block.name,
-                block.input,
+                sorted(block.input) if isinstance(block.input, dict) else "?",
             )
             out, is_error = await _run_tool(block.name, block.input, ctx)
             logger.info(
-                "agentic tool_result: name=%s is_error=%s out=%r",
+                "agentic tool_result: name=%s is_error=%s out_len=%d",
                 block.name,
                 is_error,
-                out[:200],
+                len(out),
             )
             tool_results.append(
                 {
