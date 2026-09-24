@@ -77,3 +77,13 @@ def _check_rls_bound_role(**kwargs) -> None:
             exc,
         )
         raise SystemExit(1) from exc
+    except Exception as exc:
+        # A guard that cannot run must fail closed too: an unreachable database
+        # at process init (cold stack, security group not yet open) is not
+        # permission to consume tasks with the role unverified.
+        logger.critical(
+            "worker process init: could not verify the database role (%s) — "
+            "refusing to start",
+            type(exc).__name__,
+        )
+        raise SystemExit(1) from exc

@@ -59,3 +59,20 @@ def test_worker_process_init_signal_aborts_worker_with_superuser_role(
     monkeypatch.setattr(session_module, "engine", admin_engine)
     with pytest.raises(SystemExit):
         worker_process_init.send(sender=None)
+
+
+def test_worker_process_init_signal_aborts_worker_when_the_db_is_unreachable(
+    monkeypatch,
+):
+    # The guard cannot run at all (cold stack: the database is not reachable
+    # yet). That must fail closed exactly like a wrong role — an OperationalError
+    # is a plain Exception that Celery's Signal.send would otherwise swallow,
+    # leaving the child consuming tasks with the role never verified.
+    from sqlalchemy.exc import OperationalError
+
+    async def unreachable():
+        raise OperationalError("connect", {}, ConnectionRefusedError())
+
+    monkeypatch.setattr(apps.worker.celery_app, "assert_rls_bound_role", unreachable)
+    with pytest.raises(SystemExit):
+        worker_process_init.send(sender=None)
