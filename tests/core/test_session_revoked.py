@@ -8,6 +8,7 @@ from redis.exceptions import RedisError
 
 from packages.core.auth.revocation import (
     SVA_CACHE_TTL_S,
+    publish_sva,
     session_revoked,
     sva_cache_key,
 )
@@ -101,3 +102,22 @@ async def test_a_cutoff_written_without_an_expiry_reads_as_ttl_minus_one(redis):
     key = sva_cache_key(uuid.uuid4())
     await redis.set(key, "0")
     assert await redis.ttl(key) == -1
+
+
+async def test_a_cache_fill_never_reinstates_an_older_cutoff(redis):
+    # Interleaving: the miss path reads the old cutoff from the DB, then a
+    # password reset bumps and publishes a newer one before the fill lands.
+    # The fill must not overwrite it — the reset's revocation must hold.
+    now = datetime.now(timezone.utc)
+    old_cutoff = now - timedelta(hours=1)
+    new_cutoff = now - timedelta(seconds=1)
+    c = claims(int((now - timedelta(minutes=30)).timestamp()))
+
+    async def fetch_then_reset(uid):
+        await publish_sva(redis, uid, new_cutoff)  # the reset wins the race
+        return old_cutoff
+
+    await session_revoked(redis, c, fetch_then_reset)
+    assert await redis.get(sva_cache_key(c.sub)) == str(int(new_cutoff.timestamp()))
+    # And a later check for that session sees the reset, not the stale fill.
+    assert await session_revoked(redis, c, fetch_then_reset) is True

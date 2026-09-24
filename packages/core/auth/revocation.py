@@ -57,6 +57,12 @@ async def session_revoked(
         cutoff = await fetch_sva(claims.sub)
         if cutoff is None:
             return True
-        await publish_sva(redis, claims.sub, cutoff)
+        # Fill only if still absent: a bump that landed between the DB read
+        # and this write is newer than what was read, and cutoffs only move
+        # forward — so an unconditional SET could reinstate a revoked window.
+        try:
+            await redis.set(key, _encode_cutoff(cutoff), ex=SVA_CACHE_TTL_S, nx=True)
+        except RedisError:
+            logger.warning("sva cache fill failed; DB cutoff stands", exc_info=True)
         cached = _encode_cutoff(cutoff)
     return claims.auth_time < int(cached)
