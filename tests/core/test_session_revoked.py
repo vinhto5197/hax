@@ -66,7 +66,9 @@ async def test_cutoff_cached_after_first_check(redis):
     await session_revoked(redis, c, fetch)
     await session_revoked(redis, c, fetch)
     assert calls == 1
-    assert await redis.ttl(sva_cache_key(c.sub)) <= SVA_CACHE_TTL_S
+    # -1 (no expiry) must fail: the TTL is what retires a deleted or externally
+    # revoked account's cached cutoff.
+    assert 0 < await redis.ttl(sva_cache_key(c.sub)) <= SVA_CACHE_TTL_S
 
 
 async def test_same_second_mint_not_revoked(redis):
@@ -90,3 +92,12 @@ async def test_fails_open_on_redis_error():
         raise AssertionError("must not reach the DB when failing open")
 
     assert await session_revoked(BrokenRedis(), claims(0), fetch) is False
+
+
+async def test_a_cutoff_written_without_an_expiry_reads_as_ttl_minus_one(redis):
+    # Redis returns -1 for a key that exists with no expiry (and -2 for a
+    # missing key) — the value the cache-TTL assertion above must reject.
+    assert await redis.ttl(sva_cache_key(uuid.uuid4())) == -2
+    key = sva_cache_key(uuid.uuid4())
+    await redis.set(key, "0")
+    assert await redis.ttl(key) == -1
