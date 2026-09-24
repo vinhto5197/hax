@@ -1,6 +1,7 @@
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from packages.core.rag import retrieval
+from packages.db.user_context import current_user_id
 from tests.api.factories import make_chunk, make_document
 
 DIM = 1024
@@ -69,3 +70,28 @@ async def test_no_corpus_for_user_skips_embed(
 
     assert await retrieval.retrieve("anything", user_b.id) == []
     assert called is False
+
+
+async def test_no_connection_is_held_across_the_embed_call(
+    user_a, admin_engine, monkeypatch
+):
+    from packages.db import engine as app_engine
+
+    doc = await make_document(admin_engine, user_a.id, filename="a.md")
+    await make_chunk(admin_engine, doc, user_a.id, 0, "alpha secret", unit_vec(0))
+    checked_out: list[int] = []
+
+    async def spy_embed_query(query: str) -> list[float]:
+        checked_out.append(app_engine.pool.checkedout())
+        return unit_vec(0)
+
+    monkeypatch.setattr(retrieval, "embed_query", spy_embed_query)
+    token = current_user_id.set(user_a.id)
+    try:
+        hits = await retrieval.retrieve("alpha", user_a.id)
+    finally:
+        current_user_id.reset(token)
+    # The readiness session is closed before the embed runs; the search
+    # session opens after it. A stalled embedding call therefore pins nothing.
+    assert checked_out == [0]
+    assert [c.content for c in hits] == ["alpha secret"]

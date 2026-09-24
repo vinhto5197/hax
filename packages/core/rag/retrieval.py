@@ -41,6 +41,9 @@ async def retrieve(
     chunks farther than the cutoff.
     """
     try:
+        # Two short sessions, none held across the embed call: a slow or
+        # stalled embedding request must not pin a pooled connection, or the
+        # agent's repeated searches drain the pool for every other request.
         async with AsyncSessionLocal() as session:
             # Skip the paid embed unless at least one retrievable chunk exists.
             ready_chunk = (
@@ -52,8 +55,9 @@ async def retrieve(
             if await session.scalar(ready_chunk) is None:
                 logger.debug("retrieval: no ready chunks yet; skipping embed")
                 return []
-            qvec = await embed_query(query)
+        qvec = await embed_query(query)
 
+        async with AsyncSessionLocal() as session:
             # Lazy SQL expression (embedding <=> qvec), evaluated per row by
             # Postgres; the HNSW index serves the nearest-k ordering.
             distance = Chunk.embedding.cosine_distance(qvec)

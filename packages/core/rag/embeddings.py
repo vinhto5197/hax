@@ -35,7 +35,9 @@ _client: voyageai.AsyncClient | None = None
 def _get_client() -> voyageai.AsyncClient:
     global _client
     if _client is None:
-        _client = voyageai.AsyncClient(max_retries=2)  # reads VOYAGE_API_KEY from env
+        # Bounded per attempt: the SDK default is 600 s, and retrieval runs on
+        # the request path. Reads VOYAGE_API_KEY from env.
+        _client = voyageai.AsyncClient(max_retries=2, timeout=15)
     return _client
 
 
