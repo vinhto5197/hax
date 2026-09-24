@@ -27,3 +27,18 @@ def test_tool_context_is_immutable():
         raise AssertionError("ToolContext must be frozen")
     except AttributeError:
         pass
+
+
+async def test_mocked_send_email_logs_no_model_authored_text(caplog):
+    import logging
+
+    from packages.core.agent.tools import SendEmailInput, _run_send_email
+
+    caplog.set_level(logging.INFO, logger="packages.core.agent.tools")
+    ctx = ToolContext(user_id=uuid.uuid4())
+    await _run_send_email(
+        SendEmailInput(subject="Quarterly secret", body="salary is 120k"), ctx
+    )
+    assert "send_email" in caplog.text
+    assert "Quarterly secret" not in caplog.text
+    assert "salary" not in caplog.text
