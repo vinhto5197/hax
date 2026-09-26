@@ -1,3 +1,5 @@
+import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -19,18 +21,27 @@ async def lifespan(app: FastAPI):
     yield
 
 
+# Application logs go to stdout; the environment (terminal, docker logs, a log
+# shipper) decides where they land. Level from env so prod stays at INFO.
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+
 app = FastAPI(lifespan=lifespan)
 
-# Required in dev, not a backstop: the browser calls this API cross-origin at
-# NEXT_PUBLIC_API_URL because Next's dev rewrite buffers SSE (ADR 0005). In
-# prod the reverse proxy puts web and API on one origin.
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Dev only: the browser talks to FastAPI cross-origin (ADR 0005 — Next's dev
+# rewrite buffers SSE). Behind the production reverse proxy web and API share
+# one origin, so no CORS middleware is installed and no origin is trusted.
+_cors_origins = [o for o in os.getenv("CORS_ALLOW_ORIGINS", "").split(",") if o]
+if _cors_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 # /api prefix lets the reverse proxy route by path without colliding with
 # Next's pages (Next's /chat page vs this /api/chat endpoint).
