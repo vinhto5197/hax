@@ -36,7 +36,7 @@ Implementation: FastAPI's `StreamingResponse` wraps an async generator that yiel
 - Works with stock HTTP — debuggable via `curl -N`, visible in browser DevTools EventStream tab
 - Composes with FastAPI's `StreamingResponse` and async generators (`async def events()` + `yield`)
 - AWS ALB and most reverse proxies pass SSE through correctly (with one notable exception — see [0005](0005-bypass-next-dev-rewrite-for-sse.md))
-- Same protocol works in dev (FastAPI) and prod (FastAPI behind ALB)
+- Same protocol works in dev (FastAPI) and prod (FastAPI behind the reverse proxy)
 
 **Negative / accepted:**
 

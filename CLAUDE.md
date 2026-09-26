@@ -33,23 +33,26 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
    - Background chat title generation (Celery + Redis — worker exists from M2),
      and one off-loop publisher for every API-side enqueue. ADR 0010 addendum.
 
-3. **Milestone 3 — AWS deploy + CI/CD** *(next up; brought forward — deploy early, then continuous)*
-   - **Hybrid deploy for alpha** (product > portfolio now; near-zero, gated
-     traffic): a **free-tier EC2 app box** (public subnet) runs the FastAPI /
-     Next / Celery-worker containers, pointed at managed **RDS Postgres +
-     pgvector**, **ElastiCache Redis**, and **S3** (all free-tier for 12 months).
-     **No Fargate / NAT / ALB cost yet** (the EC2 box is public-subnet → direct
-     IGW, secured by security groups). Provisioned with Terraform.
-   - CI/CD pipeline so every later milestone **auto-deploys** — the value of
+3. **Milestone 3 — Live on AWS** *(next up; deploy early, then continuous)*
+   - The smallest live stack first: one EC2 box running the compose topology
+     (api, worker, web, Redis, Caddy for TLS and single-origin routing),
+     managed **RDS Postgres + pgvector**, **S3** for uploads — all provisioned
+     with Terraform. No ALB, NAT, ElastiCache or SES yet: at this volume they
+     add cost without capability, and each has a config-level upgrade path.
+   - CI/CD: every merge to `main` builds images and rolls the box. The value of
      CI/CD is a running pipeline, not a one-off deploy.
-   - **Fargate deferred to post-alpha** (see `local/V1_CHECKLIST.local.md`): the
-     dev/prod-parity design (boto3↔S3, `DATABASE_URL`↔RDS, `REDIS_URL`↔
-     ElastiCache) makes the EC2→Fargate switch a **config + data migration, not a
-     code change** — so there's no reason to pay for Fargate/NAT/ALB during a
-     quiet alpha.
-   - Why deploy here, not last: surfaces infra issues (SSE, secrets, networking)
-     early and keeps a live demo URL from M3 on. M4 + M5 ride the pipeline. The
-     deploy ADR records the hybrid + the Fargate-later rationale.
+   - An **anonymous demo**: try the chat without an account for a few turns,
+     then sign up and keep the conversation. A minimal public landing page.
+   - Why deploy here, not last: surfaces infra issues (SSE, secrets,
+     networking) early and keeps a live URL from M3 on. M4 + M5 ride the
+     pipeline. The deploy ADR records every thin choice and its upgrade.
+
+3.5. **Milestone 3.5 — Grow the live stack** *(after M3; each item when it earns its cost)*
+   - ALB + ACM + Route 53 when a second box exists; ElastiCache when Redis
+     leaves the box; SES after sandbox exit; CloudWatch alarms; the Fargate
+     path (`local/V1_CHECKLIST.local.md`); a staging environment variable;
+     the hardening items deferred from M3 (RDS CA verification, CSP nonce,
+     anonymous-user cleanup, limiter redesign).
 
 4. **Milestone 4 — Structured outputs + polish** *(built against live infra, auto-deployed)*
    - Table / structured view for results (not only free-form text)
@@ -57,8 +60,9 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
    - Cohesive UI — feels like a product, not a demo collection
 
 5. **Milestone 5 — Cleanup + hardening + eval** *(final pass before v0 is "done")*
-   - Test infrastructure: stand up pytest (+ async DB/API fixtures), backfill
-     coverage for the chat + RAG paths that were verified by hand during M1/M2
+   - Test infrastructure: extend the pytest suite (async DB/API fixtures and a
+     real-Postgres authz suite exist since M2.5) to cover the chat + RAG paths
+     that were verified by hand during M1/M2
    - **Eval infrastructure**: a measurable harness for RAG/agent quality
      (Q/A dataset → run → score via exact-match or LLM-as-judge) so retrieval
      and agent changes are tuned and regression-checked by **number, not vibes**.
@@ -98,7 +102,7 @@ this repo. Write prod-level comments only:
   history, or narration of what the next line visibly does.
 # Tech stack
 - Frontend: Next.js (SSR + routing) + React + TypeScript
-- Backend: FastAPI + LangChain
+- Backend: FastAPI (LangChain only for text splitting — ADR 0009)
 - Streaming: SSE (FastAPI StreamingResponse) for chat
 - Async: Celery (tasks) + Redis (broker + cache)
 - Data: Postgres + pgvector (embeddings)
@@ -117,11 +121,11 @@ this repo. Write prod-level comments only:
 │  └─ worker/       Celery worker for async/long-running jobs (broker = Redis)
 │
 ├─ packages/
-│  ├─ core/         Shared product brain: agent harness + tools, RAG, schemas
+│  ├─ core/         Shared product brain: agent harness + tools, RAG, auth, email, schemas
 │  └─ db/           Shared Postgres layer: session/engine, models, migrations, repos
 │
 ├─ infra/
-│  └─ docker-compose/   Local service orchestration: Postgres, Redis
+│  └─ docker-compose/   Local service orchestration: Postgres, Redis, MinIO, Mailpit
 │
 ├─ scripts/         Ad-hoc dev utilities (read-mostly; e.g. corpus inspection)
 │
@@ -132,9 +136,9 @@ this repo. Write prod-level comments only:
 - `apps/*` are runnable services (web/api/worker).
 - `packages/*` are internal libraries shared across services.
 - `scripts/*` are standalone, read-mostly dev utilities (e.g. `corpus.py`); not imported by the app.
-- Redis is the Celery broker AND cache/session store (one service, two roles).
+- Redis is the Celery broker AND the auth cache — rate-limit buckets and revocation cutoffs (one service, two roles). Sessions themselves are stateless JWTs, not Redis rows.
 - Chat responses are streamed (SSE) directly from FastAPI — never queued through Celery.
-- Celery handles background work: title generation, data ingestion, embedding, index rebuilds.
+- Celery handles background work — three tasks today: `generate_title`, `ingest_document` (chunk → embed → store), `send_email`.
 - Conversation titles: `generate_title` (worker) titles a conversation from its first user message only, with a conditional `UPDATE … WHERE title IS NULL` (first writer wins; nothing else is ever stored in `title`). The API enqueues at conversation creation and re-enqueues on each persisted assistant turn while untitled — that re-enqueue is the retry. The sidebar shows "Untitled" until then. See ADR 0010 addendum.
 - Every Celery publish from the API goes through `apps/api/enqueue.py` (off the event loop, after the DB commit, `retry=False`; `fire_and_forget` for work with its own recovery path — titles, email — and awaited `publish` where the caller must know, e.g. uploads marking a document failed). Tasks published from there declare `ignore_result=True`.
 - Transactional email goes through the Celery `send_email` task (`packages/core/email/`: templates + smtplib transport); dev sends to Mailpit (compose, inbox at :8025), prod to a real relay via the same `SMTP_*` env. Emails are enqueued only after the DB commit.

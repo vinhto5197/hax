@@ -21,7 +21,7 @@ Persist with **async SQLAlchemy 2.0 over asyncpg, managed by Alembic**:
 
 2. **Typed declarative models** (`DeclarativeBase`, `Mapped[...]`, `mapped_column`). Models are type-checked and double as the single source of schema truth shared across services.
 
-3. **Alembic with the async migration template** ([`packages/db/migrations/env.py`](../../packages/db/migrations/env.py)). `env.py` injects `DATABASE_URL_ASYNC` (so `alembic.ini` hard-codes no URL), imports all models so autogenerate sees them, and runs migrations over the async engine via `connection.run_sync(do_run_migrations)`.
+3. **Alembic with the async migration template** ([`packages/db/migrations/env.py`](../../packages/db/migrations/env.py)). `env.py` passes the owner-role URL (`MIGRATIONS_DATABASE_URL_ASYNC`) straight to SQLAlchemy — never through `alembic.ini`, whose ConfigParser would read the `%` of a percent-encoded password as interpolation. It imports all models so autogenerate sees them, and runs migrations over the async engine via `connection.run_sync(do_run_migrations)`.
 
 4. **Postgres-native schema conventions.** UUID primary keys defaulted **server-side** (`gen_random_uuid()`), timestamps as `timestamptz` defaulted on the **DB clock** (`now()`, plus `onupdate=now()` for `updated_at`), a `role IN ('user','assistant')` CHECK, an `ON DELETE CASCADE` FK from messages to conversations, and a composite `(conversation_id, created_at)` index for the hot "load a conversation's messages in order" query.
 

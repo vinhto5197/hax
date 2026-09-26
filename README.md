@@ -100,9 +100,9 @@ After a fresh clone, a Docker version bump, or anything else that touches the da
 **Shortcut:** `make infra-verify` runs the equivalent checks non-interactively via [infra/docker-compose/verify.sh](infra/docker-compose/verify.sh). The script uses `docker exec` directly instead of `make infra-psql` / `make infra-redis-cli`, because those open interactive shells (`-it`) which don't work from a script. Same coverage; the breakdown below is the human-friendly form for debugging a specific failure.
 
 1. `make infra-clean` — start from a known-empty state (deletes named volumes).
-2. `make infra-up` — bring postgres + redis up in the background.
-3. `make infra-ps` — both services should report `(healthy)` (~20s on cold start).
-4. `make infra-psql`, then `SELECT * FROM pg_extension WHERE extname='vector';` — expect one row (confirms the M2-bound `vector` extension is loaded). Exit with `\q`.
+2. `make infra-up` — bring the compose services up in the background (postgres, redis, minio, mailpit).
+3. `make infra-ps` — postgres, redis and minio should report `(healthy)` (~20s on cold start); mailpit declares no healthcheck.
+4. `make infra-psql`, then `SELECT * FROM pg_extension WHERE extname='vector';` — expect one row (confirms the `vector` extension is loaded). Exit with `\q`.
 5. `make infra-redis-cli`, then `PING` — expect `PONG`. Exit with `exit`.
 6. Confirm host-side connectivity (this is the URL `apps/api` uses). With `psql` on the host: `psql postgresql://hax:hax@localhost:5432/hax -c '\dx'`. Without `psql`, via the venv: `.venv/bin/python -c "from sqlalchemy import create_engine, text; print(create_engine('postgresql://hax:hax@localhost:5432/hax').connect().execute(text('SELECT 1')).scalar())"` (expect `1`).
 7. Volume-persistence check: in `make infra-psql`, run `CREATE TABLE _probe (x int); INSERT INTO _probe VALUES (1);`. Then `make infra-down`, `make infra-up`, `make infra-psql`, `SELECT * FROM _probe;` — expect the row. Clean up with `DROP TABLE _probe;`.
@@ -127,7 +127,7 @@ make migrate-down              # roll back the most recent migration
 
 ### Auth setup
 
-All API routes require login (M2.5) — the app is unusable without these steps.
+Chat, conversations and documents all require login (M2.5) — the app is unusable without these steps.
 
 1. **Generate secrets** in `.env`:
 
@@ -177,7 +177,7 @@ Then in VS Code: **Run & Debug** → **"Full stack (API + Web)"** → **F5**. Th
 
 > **Don't run `make dev` and F5 together.** `make dev` already binds `:8000`, so the debugger's uvicorn fails to start and your backend breakpoints silently never fire. Use `make debug` (or `make dev-stop` first).
 
-Check what's running at any time with `make status` (a TCP probe of each service's port).
+Check what's running at any time with `make status` (a TCP probe of each service's port, plus a process check for the port-less Celery worker).
 
 ## Stack
 
@@ -201,7 +201,7 @@ Check what's running at any time with `make status` (a TCP probe of each service
 1. **Streaming chat** *(shipped)* — Next.js + FastAPI + SSE, conversation history in Postgres, Docker Compose (Postgres, Redis, all services). Auth + background titles deferred to M2.5.
 2. **Data + RAG** *(shipped)* — User data upload (files), Celery ingestion (chunk → embed → pgvector), conversation memory, and chat as a single **agentic** route: retrieval is a model-invoked tool (`search_documents`, alongside a calculator, datetime, and a mocked email send) behind a hand-rolled tool-use harness with prompt caching and a model selector.
 2.5. **Auth + background titles** *(shipped)* — email/password + Google via NextAuth/Auth.js, `users` table, Postgres row-level security, email verification + password reset, conversations + documents scoped to a user; background chat title generation (Celery + Redis, `TITLE_MODEL`), with every API-side publish off the event loop (`apps/api/enqueue.py`).
-3. **AWS deploy + CI/CD** *(brought forward — deploy early, then continuous)* — hybrid alpha deploy provisioned with Terraform: a free-tier EC2 app box running the containers against managed RDS (Postgres + pgvector), ElastiCache Redis, and S3; Fargate/ALB deferred to post-alpha. CI/CD pipeline so later milestones auto-deploy.
+3. **Live on AWS** *(next)* — the smallest live stack first: one EC2 box running the compose topology (api, worker, web, Redis, Caddy) against managed RDS Postgres + pgvector and S3, all in Terraform; CI/CD that rolls the box on every merge; an anonymous demo of the chat. **3.5** grows it when each piece earns its cost: ALB, ElastiCache, SES, alarms, Fargate.
 4. **Structured outputs + polish** — table/structured view for results, citation/source display, cohesive UI.
 5. **Cleanup + hardening + eval** — test + eval infrastructure, drain backlogs, tighten deferred foot-guns.
 
@@ -213,8 +213,9 @@ graph TB
     Browser
     NextJS[Next.js]
     FastAPI
-    Browser -->|HTTP SSE| NextJS
-    NextJS -->|fetch| FastAPI
+    Browser -->|pages| NextJS
+    Browser -->|"fetch /api/* (SSE)"| FastAPI
+    NextJS -->|"server-side /internal/auth/*"| FastAPI
   end
   FastAPI -->|stream chat| LLM[LLM API]
   FastAPI -->|read write| PG["Postgres + pgvector"]
@@ -230,7 +231,7 @@ graph TB
 
 - `/api/chat` is the single, **agentic** chat route: the model invokes tools in a loop (document search over pgvector, calculator, datetime, mocked email) — retrieval is never injected, always model-invoked.
 - Chat responses stream (SSE) directly from FastAPI to the browser; they are not queued through Celery.
-- Celery + Redis handle background work: title generation, data ingestion, embedding, index rebuilds.
+- Celery + Redis handle background work — three tasks today: conversation titles, document ingestion (chunk → embed → store), transactional email.
 - pgvector lives in Postgres; no separate vector DB.
 
 ## Built with Claude Code + community skills

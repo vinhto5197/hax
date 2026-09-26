@@ -17,7 +17,6 @@ dependencies = [
   "uvicorn[standard]>=0.32.0",
   # LLM
   "anthropic>=0.40.0",
-  "claude-agent-sdk>=0.1.0",
   # RAG: LangChain is used ONLY for text splitting (ADR 0009); langchain-core
   # comes transitively. Embeddings call the Voyage SDK directly (ADR 0007/0009),
   # not langchain-voyageai (which pins langchain-core <0.4, incompatible with 1.x).

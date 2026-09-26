@@ -80,7 +80,9 @@ without re-upload.
 
 - Upload is instant (`pending`); ingestion is durable + retried + isolated from
   request-serving; the worker scales independently and is reused for title-gen.
-- Production-shaped: maps 1:1 to ECS web + ECS worker + ElastiCache + S3.
+- Production-shaped: the standard web-tier + worker-tier + broker + S3 split —
+  one box running all three at first, separate managed services (ECS,
+  ElastiCache) when volume earns them.
 
 **Negative / accepted:**
 

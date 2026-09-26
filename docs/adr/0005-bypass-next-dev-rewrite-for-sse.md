@@ -5,7 +5,7 @@
 
 ## Context
 
-The chat frontend (Next.js) and the chat backend (FastAPI) run as separate processes in development — `next dev` on `:3000`, `uvicorn` on `:8000`. The browser is cross-origin to FastAPI in dev but same-origin in prod (where ALB does path-based routing).
+The chat frontend (Next.js) and the chat backend (FastAPI) run as separate processes in development — `next dev` on `:3000`, `uvicorn` on `:8000`. The browser is cross-origin to FastAPI in dev but same-origin in prod (where the reverse proxy does path-based routing).
 
 Initial design (per [0003](0003-monorepo-apps-and-packages.md) intent) was to make dev mirror prod path-routing via Next's [`rewrites()`](https://nextjs.org/docs/app/api-reference/config/next-config-js/rewrites):
 
@@ -16,7 +16,7 @@ async rewrites() {
 }
 ```
 
-The frontend would `fetch("/api/chat")` (relative URL). In dev, Next's rewrite proxies to FastAPI; in prod, the ALB routes `/api/*` to FastAPI. Same code, no env var, no CORS in either env.
+The frontend would `fetch("/api/chat")` (relative URL). In dev, Next's rewrite proxies to FastAPI; in prod, the reverse proxy routes `/api/*` to FastAPI. Same code, no env var, no CORS in either env.
 
 This worked for non-streaming endpoints. For SSE streaming, **Next's dev rewrite buffers the response** — it accumulates all chunks server-side before forwarding to the browser, killing the live-token UX.
 
@@ -38,7 +38,7 @@ const response = await fetch(`${BASE_URL}/api/chat`, ...);
 ```
 
 - **Dev:** `.env` sets `NEXT_PUBLIC_API_URL=http://localhost:8000` → fetch hits FastAPI directly. CORS handles cross-origin (FastAPI's `CORSMiddleware` allows `http://localhost:3000`).
-- **Prod:** env var unset → `BASE_URL=""` → fetch hits `/api/chat` (relative) → ALB routes to FastAPI.
+- **Prod:** env var unset → `BASE_URL=""` → fetch hits `/api/chat` (relative) → the reverse proxy routes to FastAPI.
 
 The Next dev rewrite was **removed** rather than kept as a no-op for the streaming case. There are no other API endpoints today; reintroducing the rewrite (or any proxy) for SSE would silently break streaming again.
 
@@ -58,7 +58,7 @@ The Next dev rewrite was **removed** rather than kept as a no-op for the streami
 
 - Streaming works in dev with no protocol changes
 - Single env var (`NEXT_PUBLIC_API_URL`) controls dev vs prod routing
-- Prod path is unchanged (relative URL + ALB)
+- Prod path is unchanged (relative URL + reverse proxy)
 - No long-running dev proxy to maintain
 
 **Negative / accepted:**

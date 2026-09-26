@@ -14,8 +14,9 @@ _RAW_URL = os.getenv("DATABASE_URL", "postgresql://hax_app:hax_app@localhost:543
 DATABASE_URL_ASYNC = to_async_url(_RAW_URL)
 
 # Owner-role URL for Alembic/admin tooling (DDL needs ownership; the runtime
-# role deliberately can't). Falls back to the app URL so a fresh clone
-# without the split still migrates — single-role.
+# role deliberately can't). Falls back to DATABASE_URL, which only migrates
+# when that URL is itself an owner role — the RLS migration's DDL is refused
+# for hax_app.
 MIGRATIONS_DATABASE_URL_ASYNC = to_async_url(
     os.getenv("MIGRATIONS_DATABASE_URL") or _RAW_URL
 )
