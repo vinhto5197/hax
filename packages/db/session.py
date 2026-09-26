@@ -1,4 +1,5 @@
 import os
+import re
 
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
@@ -7,7 +8,10 @@ from sqlalchemy.orm import DeclarativeBase
 def to_async_url(url: str) -> str:
     # SQLAlchemy needs an explicit driver scheme for async; rewrite here so
     # .env stays driver-agnostic. The ONLY place this rewrite may live.
-    return url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    # Managed Postgres URLs are written libpq-style (?sslmode=require); asyncpg
+    # takes the same intent as ?ssl=require and rejects the libpq spelling.
+    url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    return re.sub(r"([?&])sslmode=", r"\1ssl=", url)
 
 
 _RAW_URL = os.getenv("DATABASE_URL", "postgresql://hax_app:hax_app@localhost:5432/hax")
@@ -25,7 +29,11 @@ MIGRATIONS_DATABASE_URL_ASYNC = to_async_url(
 # which for the chunk insert is raw user document text — this is the
 # load-bearing control against that leaking into worker/CloudWatch logs, not
 # any individual log-call tweak.
-engine = create_async_engine(DATABASE_URL_ASYNC, hide_parameters=True)
+# pool_pre_ping: a pooled connection the server already dropped (restart,
+# failover, idle reaper) is replaced at checkout instead of surfacing as a 500.
+engine = create_async_engine(
+    DATABASE_URL_ASYNC, hide_parameters=True, pool_pre_ping=True
+)
 # expire_on_commit=False: the default's post-commit lazy reload isn't awaited in
 # async and raises MissingGreenlet. Trade-off: objects keep pre-commit values,
 # so refresh() explicitly where DB-computed state is needed.

@@ -37,7 +37,7 @@ const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 const response = await fetch(`${BASE_URL}/api/chat`, ...);
 ```
 
-- **Dev:** `.env` sets `NEXT_PUBLIC_API_URL=http://localhost:8000` → fetch hits FastAPI directly. CORS handles cross-origin (FastAPI's `CORSMiddleware` allows `http://localhost:3000`).
+- **Dev:** `.env` sets `NEXT_PUBLIC_API_URL=http://localhost:8000` → fetch hits FastAPI directly. CORS handles cross-origin (FastAPI installs `CORSMiddleware` only when `CORS_ALLOW_ORIGINS` is set; dev sets it to `http://localhost:3000`).
 - **Prod:** env var unset → `BASE_URL=""` → fetch hits `/api/chat` (relative) → the reverse proxy routes to FastAPI.
 
 The Next dev rewrite was **removed** rather than kept as a no-op for the streaming case. There are no other API endpoints today; reintroducing the rewrite (or any proxy) for SSE would silently break streaming again.
@@ -63,7 +63,7 @@ The Next dev rewrite was **removed** rather than kept as a no-op for the streami
 
 **Negative / accepted:**
 
-- Dev requires CORS to be configured on FastAPI (`localhost:3000` allowlisted). Already in place.
+- Dev requires CORS to be configured on FastAPI (`CORS_ALLOW_ORIGINS=http://localhost:3000`); prod leaves it unset, since web and API share one origin behind the reverse proxy.
 - Slight env divergence between dev and prod (env var set in one, unset in the other). Documented in `.env.example`.
 - If we ever add a non-streaming endpoint, we'll need to decide: also use direct URL (consistent), or re-introduce the rewrite specifically for non-streaming (avoid CORS, dev-prod parity). Current preference: keep using `${BASE_URL}/api/...` for everything, accept CORS in dev.
 
