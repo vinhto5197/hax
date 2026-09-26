@@ -60,10 +60,3 @@ async def chat(
         media_type="text/event-stream",
         headers=SSE_HEADERS,
     )
-
-
-"""
-curl -N -X POST http://localhost:8000/api/chat \
-    -H 'Content-Type: application/json' \
-    -d '{"prompt": "what is 19381 * 22.5?"}'
-"""

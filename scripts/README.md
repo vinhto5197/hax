@@ -1,9 +1,9 @@
 # scripts/ — ad-hoc dev utilities
 
 One-off, **read-mostly** tools for poking at a running local stack (DB, etc.)
-while developing. Not part of the app; not imported by it. Each script
-bootstraps its own path + `.env`, so you can run it from anywhere with the
-venv's deps available.
+while developing. Not part of the app; not imported by it. Each script loads
+the root `.env` itself, so you can run it from anywhere with the venv's deps
+available (`packages`/`apps.api` resolve via the editable install).
 
 | Script | What it does | Example |
 |---|---|---|

@@ -23,7 +23,8 @@ verbatim, so re-embedding is mechanical, just not free.)
 
 1. **Voyage AI** is the embedding provider. Model: the current
    general-purpose tier (`voyage-4` family as of writing; `voyage-3.5`
-   equivalent) — pin the exact model string when slice 1 lands.
+   equivalent) — pin the exact model string when slice 1 lands. *(Pinned:
+   `VOYAGE_MODEL = "voyage-3.5"` in `packages/core/rag/embeddings.py`.)*
 2. **1024 dimensions** (the Voyage default across voyage-3.5 and voyage-4),
    stored as `vector(1024)` with an HNSW index using cosine distance.
    1024 sits comfortably under pgvector's 2000-dim HNSW indexing cap.

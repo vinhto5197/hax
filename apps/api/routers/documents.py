@@ -63,7 +63,7 @@ async def upload_document(
         raise HTTPException(status_code=413, detail=f"file exceeds {MAX_BYTES} bytes")
 
     # Bounded read caps RAM at MAX_BYTES+1 even when the header lies; the deeper
-    # multipart disk-spool is the reverse proxy's client_max_body_size job.
+    # multipart disk-spool is the reverse proxy's request-size-limit job.
     content = await file.read(MAX_BYTES + 1)
     if len(content) > MAX_BYTES:
         raise HTTPException(status_code=413, detail=f"file exceeds {MAX_BYTES} bytes")
@@ -123,7 +123,7 @@ async def delete_document(
 
     # DB row first (source of truth), storage second and best-effort: a storage
     # failure after commit only leaks an orphaned object — log, don't 500.
-    # storage_key is None for docs ingested before object storage existed.
+    # storage_key is None when the put never succeeded (the row is flushed first).
     storage_key = doc.storage_key
     await session.commit()
 

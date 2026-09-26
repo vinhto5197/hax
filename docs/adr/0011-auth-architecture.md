@@ -84,7 +84,7 @@ per failure mode."
 
 **Known slice-1 gap:** login rate limiting is currently a per-account
 bucket, which is itself a lockout lever (anyone who knows a victim's email
-can trip it). Redesign deferred to M3 (tracked in
+can trip it). Redesign deferred to M3.5 (tracked in
 `local/DEV_BACKLOG.local.md`, "Login rate limiting is architecturally
 blind") — not a blocker pre-deploy, since nothing public depends on it yet.
 

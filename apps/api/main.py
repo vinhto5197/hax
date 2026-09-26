@@ -21,8 +21,9 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-# CORS is a defensive backstop: normal traffic is same-origin (dev rewrites /
-# prod reverse proxy), not cross-origin.
+# Required in dev, not a backstop: the browser calls this API cross-origin at
+# NEXT_PUBLIC_API_URL because Next's dev rewrite buffers SSE (ADR 0005). In
+# prod the reverse proxy puts web and API on one origin.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],

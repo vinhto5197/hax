@@ -39,7 +39,8 @@ class Document(Base):
     mime_type: Mapped[str]
     size_bytes: Mapped[int]
     # Object-storage key for the raw bytes; the worker reads the file back by it.
-    # Nullable: docs ingested before object storage existed have none.
+    # Nullable: the row is flushed (for its id) before the bytes are stored, so
+    # the key is set only after a successful put.
     storage_key: Mapped[str | None] = mapped_column(nullable=True)
     status: Mapped[str] = mapped_column(server_default="pending")
     error: Mapped[str | None] = mapped_column(nullable=True)
