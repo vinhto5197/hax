@@ -6,7 +6,10 @@ the IAM role that ties them together — all in the default VPC of `us-east-1`.
 The box is managed through SSM Session Manager; there is no SSH.
 
 Every command below runs on the laptop with AWS credentials for the account
-(`aws configure`, region `us-east-1`), unless it says "on the box".
+(`aws configure`, region `us-east-1`), unless it says "on the box". The
+`.envrc` here unsets the dev MinIO `AWS_*` keys that the root `.envrc`
+exports; without it the CLI and Terraform would use those and get
+`InvalidClientTokenId`.
 
 ## What costs money
 
@@ -51,7 +54,9 @@ remote state.
 cp terraform.tfvars.example terraform.tfvars
 ```
 
-Set `domain` and a strong `db_master_password` (e.g. `openssl rand -base64 32 |
+On the Free account plan also set `db_backup_retention_days = 1` (its
+maximum; RDS rejects more with `FreeTierRestrictionError`). Set `domain` and a
+strong `db_master_password` (e.g. `openssl rand -base64 32 |
 tr -d '/+='`; RDS rejects `/`, `@`, `"` and spaces). `terraform.tfvars` is
 gitignored. The password also lands in the remote state, which is why the state
 bucket is private and encrypted.
