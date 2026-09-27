@@ -98,15 +98,38 @@ terraform output
 
 ## 7. RDS bootstrap
 
-RDS is reachable only from the box. From an SSM session on the box, run
-`rds-bootstrap.sql` as the master user: it enables `vector` and creates the
-least-privilege `hax_app` role the app connects as (the same block
-`infra/compose/postgres/init.sql` runs in dev). The exact commands sit next to
-that file.
+RDS is reachable only from the box, so this runs there, once, before the
+first migration (the RLS migration grants to `hax_app` and needs the role).
+`rds-bootstrap.sql` enables `vector` and creates the least-privilege
+`hax_app` role the app connects as — the block `infra/compose/postgres/init.sql`
+runs in dev.
+
+On the laptop, generate the app password and keep it for the box's `.env`:
+
+```sh
+openssl rand -base64 32 | tr -d '/+='
+```
+
+Open a session (`ssm_command` output), `sudo -iu ubuntu`, then paste, with
+the three placeholders filled (`rds_endpoint` without the `:5432`):
+
+```sh
+docker run --rm -i -e PGPASSWORD='<master password>' postgres:16 \
+  psql -h <rds host> -U hax -d hax -v ON_ERROR_STOP=1 \
+  -v app_password='<app password>' -f - <<'SQL'
+<contents of rds-bootstrap.sql>
+SQL
+```
+
+The heredoc feeds the file to `psql -f -`; `docker run` pulls the `postgres:16`
+image the first time (~150 MB). psql negotiates TLS on its own — RDS forces
+it. The last two statements print the check: `hax_app | f | f` and
+`vector | 0.8.x`. Passwords are given on the command line only inside the
+SSM session; they land in that shell's history, so `history -c` afterwards.
 
 ## 8. Box setup and first deploy
 
-The compose file, Caddyfile and filled `.env` go to `/opt/hax` on the box, then
-`docker compose pull` and `up -d` (on the box it is the `docker compose` plugin;
-the laptop's standalone `docker-compose` is equivalent). The runbook is
+The filled `.env` goes to `/opt/hax` on the box by hand, once; everything
+else — images, compose file, Caddyfile, `pull` and `up` — is
+`infra/deploy/deploy.sh`, run from the laptop (later from CI). The runbook is
 `infra/deploy/README.md`.
