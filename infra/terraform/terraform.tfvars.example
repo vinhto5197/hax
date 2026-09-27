@@ -1,0 +1,10 @@
+# Copy to terraform.tfvars (gitignored) and fill in.
+project            = "hax"
+region             = "us-east-1"
+domain             = "example.com"
+instance_type      = "t4g.small"
+db_instance_class  = "db.t4g.micro"
+db_master_username = "hax"
+db_master_password = "set in terraform.tfvars, never committed"
+db_allocated_gb    = 20
+root_volume_gb     = 20
