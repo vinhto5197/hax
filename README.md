@@ -93,11 +93,39 @@ make infra-verify    # run the full end-to-end infra check (see below)
 make setup           # re-run setup.sh without sourcing
 ```
 
+### Run the production stack locally
+
+The production box runs `infra/compose/compose.prod.yml` — Caddy in front of
+web + api on one origin, plus the worker, Redis and a migrate one-shot. Running
+that exact topology on a laptop catches container, proxy and same-origin issues
+before they reach the box. `infra/compose/compose.prod.local.yml` swaps in local
+Postgres, MinIO and Mailpit for RDS, S3 and the SMTP relay.
+
+1. Create the env file (gitignored) from the template, with local values:
+   `cp .env.prod.example infra/compose/.env.local`, then follow the "Local
+   production run" note at its top (postgres/minio/mailpit hostnames,
+   `SITE_ADDRESS=localhost`, `https://localhost` origins, fresh
+   `openssl rand -base64 32` secrets, your model API keys).
+2. Build and start:
+
+   ```bash
+   make prod-build   # api/worker/migrate image + web image
+   make prod-up      # whole stack, detached
+   make prod-logs    # tail every service
+   make prod-down    # stop (volumes are kept)
+   ```
+
+3. Open <https://localhost>. Caddy serves it with its own internal CA, so the
+   browser shows a certificate warning once — accept it. Mailpit for this
+   stack is at <http://localhost:8026>.
+
+It publishes only 80/443 and 8026, so it runs alongside `make dev`.
+
 ### Verify local infra
 
 After a fresh clone, a Docker version bump, or anything else that touches the data services, run this end-to-end pass to confirm Postgres + Redis are wired up correctly. Stop and diagnose if any step fails.
 
-**Shortcut:** `make infra-verify` runs the equivalent checks non-interactively via [infra/docker-compose/verify.sh](infra/docker-compose/verify.sh). The script uses `docker exec` directly instead of `make infra-psql` / `make infra-redis-cli`, because those open interactive shells (`-it`) which don't work from a script. Same coverage; the breakdown below is the human-friendly form for debugging a specific failure.
+**Shortcut:** `make infra-verify` runs the equivalent checks non-interactively via [infra/compose/verify.sh](infra/compose/verify.sh). The script uses `docker exec` directly instead of `make infra-psql` / `make infra-redis-cli`, because those open interactive shells (`-it`) which don't work from a script. Same coverage; the breakdown below is the human-friendly form for debugging a specific failure.
 
 1. `make infra-clean` — start from a known-empty state (deletes named volumes).
 2. `make infra-up` — bring the compose services up in the background (postgres, redis, minio, mailpit).

@@ -1,0 +1,18 @@
+{$SITE_ADDRESS} {
+	encode zstd gzip
+
+	# FastAPI owns /api/*. flush_interval -1: the chat SSE stream is written
+	# through as it arrives, never buffered.
+	handle /api/* {
+		reverse_proxy api:8000 {
+			flush_interval -1
+		}
+	}
+
+	# Everything else is Next, including /auth/* (Auth.js). FastAPI's
+	# /internal/* is deliberately NOT routed: Next's server reaches it over the
+	# compose network (API_INTERNAL_URL), so it never needs a public path.
+	handle {
+		reverse_proxy web:3000
+	}
+}

@@ -1,0 +1,88 @@
+# The production box: one host, one origin. Caddy terminates TLS and routes by
+# path; only caddy publishes ports. Postgres and object storage are managed
+# services here (RDS, S3) — compose.prod.local.yml supplies stand-ins for a laptop.
+# ${...} below are interpolated from the shell or --env-file, not from env_file.
+# Images are pulled by tag; compose.prod.local.yml adds the build recipes.
+name: hax
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443", "443:443/udp"]
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?set the public hostname, e.g. hax-demo.dev}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Issued certificates + ACME account; losing it means re-issuing and
+      # risking Let's Encrypt rate limits.
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web: { condition: service_started }
+      api: { condition: service_healthy }
+
+  api:
+    image: ${HAX_PYTHON_IMAGE:-hax-python}
+    restart: unless-stopped
+    env_file: ${HAX_ENV_FILE:-/opt/hax/.env}
+    # --forwarded-allow-ips=*: api:8000 is published nowhere, so the only
+    # client that can reach it is caddy (and web, which sends no forwarding
+    # headers); trusting every immediate peer is trusting caddy. Caddy replaces
+    # any client-sent X-Forwarded-For with the real peer address, so
+    # request.client.host — the key the rate limits use — is the visitor and
+    # cannot be spoofed from outside.
+    command: >
+      uvicorn apps.api.main:app --host 0.0.0.0 --port 8000 --workers 1
+      --proxy-headers --forwarded-allow-ips=*
+    # The image has no curl/wget.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    depends_on:
+      redis: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+    expose: ["8000"]
+
+  worker:
+    image: ${HAX_PYTHON_IMAGE:-hax-python}
+    restart: unless-stopped
+    env_file: ${HAX_ENV_FILE:-/opt/hax/.env}
+    command: celery -A apps.worker.celery_app worker --loglevel=info --concurrency=2
+    depends_on:
+      redis: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+
+  # One-shot: schema to head before api/worker start. Needs
+  # MIGRATIONS_DATABASE_URL (the owner role); the app role cannot run DDL.
+  migrate:
+    image: ${HAX_PYTHON_IMAGE:-hax-python}
+    env_file: ${HAX_ENV_FILE:-/opt/hax/.env}
+    command: alembic -c alembic.ini upgrade head
+    restart: "no"
+
+  web:
+    image: ${HAX_WEB_IMAGE:-hax-web}
+    restart: unless-stopped
+    env_file: ${HAX_ENV_FILE:-/opt/hax/.env}
+    expose: ["3000"]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # noeviction: Redis is the Celery broker, and an evicted queue message is a
+    # lost job. Memory stays bounded by the API's own caps (enqueue backlog,
+    # rate-limit key TTLs), not by eviction.
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy noeviction
+    volumes: [redis_data:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  caddy_data: {}
+  caddy_config: {}
+  redis_data: {}
