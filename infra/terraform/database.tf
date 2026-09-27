@@ -25,7 +25,7 @@ resource "aws_db_instance" "postgres" {
   availability_zone   = aws_instance.box.availability_zone
   publicly_accessible = false
 
-  backup_retention_period = 7
+  backup_retention_period = var.db_backup_retention_days
   apply_immediately       = true
   deletion_protection     = false
   # A demo database: destroy should not leave a billable snapshot behind. The

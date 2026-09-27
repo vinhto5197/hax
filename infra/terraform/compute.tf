@@ -16,9 +16,12 @@ resource "aws_instance" "box" {
   iam_instance_profile   = aws_iam_instance_profile.box.name
   user_data              = file("${path.module}/user-data.sh")
 
+  # Encrypted like RDS and the buckets: this disk holds .env and Redis's data.
+  # Cannot be turned on in place, so it has to be set before the first apply.
   root_block_device {
     volume_type = "gp3"
     volume_size = var.root_volume_gb
+    encrypted   = true
   }
 
   # IMDSv2 only: a session token is required, so an SSRF in any container

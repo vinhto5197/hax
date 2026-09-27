@@ -1,10 +1,11 @@
 # Copy to terraform.tfvars (gitignored) and fill in.
-project            = "hax"
-region             = "us-east-1"
-domain             = "example.com"
-instance_type      = "t4g.small"
-db_instance_class  = "db.t4g.micro"
-db_master_username = "hax"
-db_master_password = "set in terraform.tfvars, never committed"
-db_allocated_gb    = 20
-root_volume_gb     = 20
+project                  = "hax"
+region                   = "us-east-1"
+domain                   = "example.com"
+instance_type            = "t4g.small"
+db_instance_class        = "db.t4g.micro"
+db_master_username       = "hax"
+db_master_password       = "set in terraform.tfvars, never committed"
+db_allocated_gb          = 20
+db_backup_retention_days = 7   # 1 on the Free account plan (its maximum)
+root_volume_gb           = 20

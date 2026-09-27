@@ -52,3 +52,9 @@ variable "root_volume_gb" {
   type        = number
   default     = 20
 }
+
+variable "db_backup_retention_days" {
+  description = "Days of RDS automated backups. The Free account plan caps this at 1; set it in terraform.tfvars there."
+  type        = number
+  default     = 7
+}
