@@ -125,7 +125,7 @@ this repo. Write prod-level comments only:
 │  └─ db/           Shared Postgres layer: session/engine, models, migrations, repos
 │
 ├─ infra/
-│  └─ docker-compose/   Local service orchestration: Postgres, Redis, MinIO, Mailpit
+│  └─ compose/       compose.dev.yml (Postgres, Redis, MinIO, Mailpit for local dev), compose.prod.yml (+ the laptop override), Caddyfile
 │
 ├─ scripts/         Ad-hoc dev utilities (read-mostly; e.g. corpus inspection)
 │

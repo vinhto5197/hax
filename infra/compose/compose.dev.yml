@@ -1,3 +1,6 @@
+# Pinned project name: compose would otherwise derive it from this folder's
+# name, and renaming the folder would orphan the running containers.
+name: hax-dev
 services:
   postgres:
     image: pgvector/pgvector:pg16
@@ -70,7 +73,9 @@ services:
       - "127.0.0.1:1025:1025" # SMTP
       - "127.0.0.1:8025:8025" # web UI
 
+# Volume names predate the project name and are kept so existing dev data
+# survives; a fresh clone simply creates them under these names.
 volumes:
-  postgres_data:
-  redis_data:
-  minio_data:
+  postgres_data: { name: docker-compose_postgres_data }
+  redis_data: { name: docker-compose_redis_data }
+  minio_data: { name: docker-compose_minio_data }

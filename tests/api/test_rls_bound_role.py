@@ -13,7 +13,7 @@ import packages.db.session as session_module
 
 async def test_app_role_passes():
     # packages.db.session.engine connects as hax_app (see tests/conftest.py) —
-    # NOSUPERUSER NOBYPASSRLS per infra/docker-compose/postgres/init.sql.
+    # NOSUPERUSER NOBYPASSRLS per infra/compose/postgres/init.sql.
     await session_module.assert_rls_bound_role()
 
 

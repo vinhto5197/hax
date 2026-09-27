@@ -1,7 +1,7 @@
 # ── Infrastructure ──────────────────────────────────────────────
 .PHONY: infra-up infra-down infra-logs infra-ps infra-clean infra-psql infra-redis-cli infra-verify
 
-COMPOSE := docker-compose -f infra/docker-compose/docker-compose.yml
+COMPOSE_DEV := docker-compose -f infra/compose/compose.dev.yml
 
 infra-up:
 	@docker info >/dev/null 2>&1 || { \
@@ -10,20 +10,20 @@ infra-up:
 	  echo "  open -a Docker  # if you use Docker Desktop"; \
 	  exit 1; \
 	}
-	$(COMPOSE) up -d
+	$(COMPOSE_DEV) up -d
 
 infra-down:
-	$(COMPOSE) down
+	$(COMPOSE_DEV) down
 
 infra-logs:
-	$(COMPOSE) logs -f
+	$(COMPOSE_DEV) logs -f
 
 infra-ps:
-	$(COMPOSE) ps
+	$(COMPOSE_DEV) ps
 
 # Tear down containers AND delete volumes (full reset)
 infra-clean:
-	$(COMPOSE) down -v
+	$(COMPOSE_DEV) down -v
 
 infra-psql:
 	docker exec -it hax-postgres psql -U hax -d hax
@@ -32,7 +32,7 @@ infra-redis-cli:
 	docker exec -it hax-redis redis-cli
 
 infra-verify:
-	@bash infra/docker-compose/verify.sh
+	@bash infra/compose/verify.sh
 
 # ── Database (migrations) ──────────────────────────────────────
 .PHONY: migrate migrate-down migration

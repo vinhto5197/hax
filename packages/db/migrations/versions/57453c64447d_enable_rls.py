@@ -42,14 +42,14 @@ _IDENT = "NULLIF(current_setting('app.current_user_id', true), '')::uuid"
 
 def upgrade() -> None:
     # The app role must exist before policies are worth anything. Created by
-    # infra/docker-compose/postgres/init.sql (dev), tests/api/conftest.py
+    # infra/compose/postgres/init.sql (dev), tests/api/conftest.py
     # (test/CI), Terraform (prod). Fail with instructions, not mid-way.
     op.execute(
         """
         DO $$ BEGIN
           IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'hax_app') THEN
             RAISE EXCEPTION 'role hax_app missing — apply '
-              'infra/docker-compose/postgres/init.sql first (see README auth setup)';
+              'infra/compose/postgres/init.sql first (see README auth setup)';
           END IF;
         END $$;
         """
@@ -104,4 +104,4 @@ def downgrade() -> None:
         op.execute(f"ALTER TABLE {table} NO FORCE ROW LEVEL SECURITY")
         op.execute(f"ALTER TABLE {table} DISABLE ROW LEVEL SECURITY")
     # Grants are left in place: harmless, and
-    # infra/docker-compose/postgres/init.sql owns them.
+    # infra/compose/postgres/init.sql owns them.
