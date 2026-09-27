@@ -118,6 +118,29 @@ debug: infra-up types
 	@echo "In VS Code: Run & Debug -> 'Full stack (API + Web)' -> F5 to launch the API + Chrome under the debugger."
 	@$(MAKE) web
 
+# ── Production stack, run locally ────────────────────────────
+.PHONY: prod-build prod-up prod-down prod-logs
+
+# compose.prod.yml + the laptop override, at https://localhost. The env file is
+# both the containers' env_file and compose's --env-file (SITE_ADDRESS); an
+# absolute path because compose resolves relative ones from infra/compose/.
+PROD_ENV := $(CURDIR)/infra/compose/.env.local
+COMPOSE_PROD := HAX_ENV_FILE=$(PROD_ENV) docker-compose --env-file $(PROD_ENV) \
+	-f infra/compose/compose.prod.yml -f infra/compose/compose.prod.local.yml
+
+prod-build:
+	$(COMPOSE_PROD) build
+
+prod-up:
+	@test -f $(PROD_ENV) || { echo "Missing $(PROD_ENV): copy .env.prod.example and fill in local values (see README)."; exit 1; }
+	$(COMPOSE_PROD) up -d
+
+prod-down:
+	$(COMPOSE_PROD) down
+
+prod-logs:
+	$(COMPOSE_PROD) logs -f --tail=100
+
 # ── Status ────────────────────────────────────────────────────
 .PHONY: status
 

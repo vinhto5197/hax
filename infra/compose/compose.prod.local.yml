@@ -1,0 +1,54 @@
+# Laptop override for compose.prod.yml: local stand-ins for what the box gets
+# from AWS (Postgres for RDS, MinIO for S3) plus a mail sink. Caddy serves
+# https://localhost with its internal CA — no ACME for a localhost address.
+# Nothing here publishes a port the dev stack uses, so both can run at once.
+services:
+  caddy:
+    environment:
+      SITE_ADDRESS: "localhost"
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment: { POSTGRES_USER: hax, POSTGRES_PASSWORD: hax, POSTGRES_DB: hax }
+    volumes:
+      # Creates the hax_app runtime role, so the api runs RLS-bound as on RDS.
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - prod_local_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hax -d hax"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    environment: { MINIO_ROOT_USER: minioadmin, MINIO_ROOT_PASSWORD: minioadmin }
+    volumes: [prod_local_minio:/data]
+
+  mailpit:
+    image: axllent/mailpit:v1.27.0
+    ports: ["127.0.0.1:8026:8025"]
+
+  # Build recipes live here, not in compose.prod.yml: the box only pulls.
+  migrate:
+    build: { context: ../.., dockerfile: infra/docker/python.Dockerfile }
+    depends_on:
+      postgres: { condition: service_healthy }
+  api:
+    build: { context: ../.., dockerfile: infra/docker/python.Dockerfile }
+    depends_on:
+      postgres: { condition: service_healthy }
+      minio: { condition: service_started }
+  worker:
+    build: { context: ../.., dockerfile: infra/docker/python.Dockerfile }
+    depends_on:
+      postgres: { condition: service_healthy }
+      minio: { condition: service_started }
+      mailpit: { condition: service_started }
+  web:
+    build: { context: ../.., dockerfile: infra/docker/web.Dockerfile }
+
+volumes:
+  prod_local_pg: {}
+  prod_local_minio: {}
