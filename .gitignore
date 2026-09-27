@@ -85,3 +85,16 @@ celerybeat.pid
 .idea/
 *.swp
 *.swo
+
+# terraform (.terraform.lock.hcl IS committed: it pins provider versions)
+infra/terraform/**/.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfvars
+backend.hcl
+# A saved plan can contain the DB master password.
+tfplan
+*.tfplan
+*.auto.tfvars
+*.tfvars.json
+crash.log

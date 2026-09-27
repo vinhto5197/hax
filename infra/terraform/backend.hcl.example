@@ -1,0 +1,2 @@
+# Copy to backend.hcl (gitignored) and fill from `terraform output` in bootstrap/.
+bucket = "hax-tfstate-<suffix>"
