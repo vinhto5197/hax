@@ -33,7 +33,7 @@ ROOT = Path(__file__).resolve().parents[2]
 ADMIN_URL = os.environ["MIGRATIONS_DATABASE_URL"]
 TEST_DB = "hax_test"
 
-# Mirrors infra/docker-compose/postgres/init.sql so CI (bare service container)
+# Mirrors infra/compose/postgres/init.sql so CI (bare service container)
 # and a fresh clone need no manual role setup.
 _APP_ROLE_SQL = """
 DO $$ BEGIN
