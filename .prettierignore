@@ -2,3 +2,6 @@
 # Formatting them would fight the generator and dirty the tree on every regen.
 apps/web/lib/openapi.ts
 apps/web/openapi.json
+
+# Build output (local runs); a CI checkout never has it.
+apps/web/.next
