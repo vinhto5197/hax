@@ -43,3 +43,4 @@ Each ADR is a single markdown file: `NNNN-kebab-case-title.md` with a numeric pr
 | [0010](0010-celery-for-ingestion.md) | Celery for ingestion | accepted |
 | [0011](0011-auth-architecture.md) | Auth architecture: Auth.js front door, FastAPI identity owner, standard JWT bridge | accepted |
 | [0012](0012-structural-isolation.md) | Structural per-user isolation (repo layer + RLS) | accepted |
+| [0013](0013-deploy-topology.md) | Deploy topology: one box, managed data, thin edge | accepted |

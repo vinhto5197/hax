@@ -33,7 +33,7 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
    - Background chat title generation (Celery + Redis — worker exists from M2),
      and one off-loop publisher for every API-side enqueue. ADR 0010 addendum.
 
-3. **Milestone 3 — Live on AWS** *(next up; deploy early, then continuous)*
+3. **Milestone 3 — Live on AWS** *(in progress; live since 2026-09-27; deploy early, then continuous)*
    - The smallest live stack first: one EC2 box running the compose topology
      (api, worker, web, Redis, Caddy for TLS and single-origin routing),
      managed **RDS Postgres + pgvector**, **S3** for uploads — all provisioned
@@ -125,7 +125,10 @@ this repo. Write prod-level comments only:
 │  └─ db/           Shared Postgres layer: session/engine, models, migrations, repos
 │
 ├─ infra/
-│  └─ compose/       compose.dev.yml (Postgres, Redis, MinIO, Mailpit for local dev), compose.prod.yml (+ the laptop override), Caddyfile
+│  ├─ compose/      compose.dev.yml (Postgres, Redis, MinIO, Mailpit for local dev), compose.prod.yml (+ the laptop override), Caddyfile
+│  ├─ docker/       python.Dockerfile (api, worker, migrate) and web.Dockerfile
+│  ├─ terraform/    EC2 box, RDS, S3, IAM, remote state (bootstrap/); rds-bootstrap.sql; runbook
+│  └─ deploy/       deploy.sh: build → push to GHCR by sha → roll the box over SSM; runbook
 │
 ├─ scripts/         Ad-hoc dev utilities (read-mostly; e.g. corpus inspection)
 │
@@ -149,4 +152,5 @@ this repo. Write prod-level comments only:
 - Chat is **agentic**: `/api/chat` (the only chat route) runs a hand-rolled tool-use loop on the anthropic SDK — `packages/core/agent/harness.py` (loop, MAX_ITERS + no-tools fallback, moving prompt-cache breakpoint) over a registry of four tools in `tools.py` (`search_documents`, `calculator`, `get_current_datetime`, mocked `send_email`). Retrieval is model-invoked, never injected. See ADR 0002 addendum.
 - Auth is **NextAuth/Auth.js v5** (web front door, `/auth/*`) + FastAPI identity endpoints (`/api/auth/*` public; `/internal/auth/*` secret-gated: verify-credentials, oauth-upsert — Google identities resolve to a hax user there, so JWT `sub` is always a hax id) bridged by a standard HS256 JWT (`packages/core/auth/`); `packages/db/repos/` is the start of the repo layer (M2.5); email verification + password reset ride single-use tokens (`packages/db/repos/email_tokens.py`, one live link per purpose) and the gate is ON by default.
 - Isolation is structural (M2.5 slice 2): repo layer + Postgres RLS (`FORCE`, GUC `app.current_user_id` announced per-transaction from a ContextVar). The app connects as least-privilege `hax_app`; Alembic uses the owner role via `MIGRATIONS_DATABASE_URL`. Agent tools get identity via `ToolContext`, never model input. See ADR 0012.
+- Production is `compose.prod.yml` on one EC2 box (Caddy is the only published port; TLS + single origin), RDS Postgres and S3 (instance role, no static keys), Redis on the box — all provisioned by `infra/terraform`. A deploy is `infra/deploy/deploy.sh` at a pushed commit: images tagged by sha on GHCR, compose files fetched at that sha, `/opt/hax/.env` written by hand once and never in the repo or CI. ADR 0013.
 - The directory structure is a target layout — start flat, extract as complexity demands. Not every directory needs to exist from day one.

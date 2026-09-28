@@ -142,6 +142,13 @@ live title is ever wanted, the shape is worker → Redis pub/sub → stream, not
 polling on the token path. Holding the reply stream open for the title was
 rejected outright.
 
+Addendum (2026-09-27): in practice the reply finishes before the title, so
+the first conversation reads "Untitled" until the next message. The fix
+chosen for M3 is client-side and off the token path: when the stream ends
+and the conversation has no title, the browser re-reads it once a second for
+at most ten seconds and updates the sidebar. Send is never disabled. The
+pub/sub shape stays the answer if a title is ever needed mid-reply.
+
 ### The producer side: `apps/api/enqueue.py`
 
 Titles were the first producer on the chat hot path, and measuring
