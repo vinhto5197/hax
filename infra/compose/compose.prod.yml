@@ -4,8 +4,15 @@
 # ${...} below are interpolated from the shell or --env-file, not from env_file.
 # Images are pulled by tag; compose.prod.local.yml adds the build recipes.
 name: hax
+# Per-service log cap, so the running box gets it on the next roll even where
+# the daemon-level default in user-data.sh was written after dockerd started.
+x-logging: &logging
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
 services:
   caddy:
+    <<: *logging
     image: caddy:2-alpine
     restart: unless-stopped
     ports: ["80:80", "443:443", "443:443/udp"]
@@ -22,6 +29,7 @@ services:
       api: { condition: service_healthy }
 
   api:
+    <<: *logging
     image: ${HAX_PYTHON_IMAGE:-hax-python}
     restart: unless-stopped
     env_file: ${HAX_ENV_FILE:-/opt/hax/.env}
@@ -52,6 +60,7 @@ services:
     expose: ["8000"]
 
   worker:
+    <<: *logging
     image: ${HAX_PYTHON_IMAGE:-hax-python}
     restart: unless-stopped
     env_file: ${HAX_ENV_FILE:-/opt/hax/.env}
@@ -65,12 +74,14 @@ services:
   # One-shot: schema to head before api/worker start. Needs
   # MIGRATIONS_DATABASE_URL (the owner role); the app role cannot run DDL.
   migrate:
+    <<: *logging
     image: ${HAX_PYTHON_IMAGE:-hax-python}
     env_file: ${HAX_ENV_FILE:-/opt/hax/.env}
     command: alembic -c alembic.ini upgrade head
     restart: "no"
 
   web:
+    <<: *logging
     image: ${HAX_WEB_IMAGE:-hax-web}
     restart: unless-stopped
     env_file: ${HAX_ENV_FILE:-/opt/hax/.env}
@@ -87,6 +98,7 @@ services:
     expose: ["3000"]
 
   redis:
+    <<: *logging
     image: redis:7-alpine
     restart: unless-stopped
     # noeviction: Redis is the Celery broker, and an evicted queue message is a

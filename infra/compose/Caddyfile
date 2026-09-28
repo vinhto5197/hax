@@ -1,5 +1,9 @@
 {$SITE_ADDRESS} {
 	encode zstd gzip
+	# Browsers remember to use https for a year after one visit, so the
+	# plaintext first request (before Caddy's redirect) happens once, not per
+	# visit. Only ever served over TLS, so the promise is always kept.
+	header Strict-Transport-Security "max-age=31536000"
 
 	# FastAPI owns /api/*. flush_interval -1: the chat SSE stream is written
 	# through as it arrives, never buffered.

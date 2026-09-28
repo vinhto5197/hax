@@ -43,13 +43,15 @@ _IDENT = "NULLIF(current_setting('app.current_user_id', true), '')::uuid"
 def upgrade() -> None:
     # The app role must exist before policies are worth anything. Created by
     # infra/compose/postgres/init.sql (dev), tests/api/conftest.py
-    # (test/CI), Terraform (prod). Fail with instructions, not mid-way.
+    # (test/CI), infra/terraform/rds-bootstrap.sql run by hand on RDS (prod,
+    # Terraform README step 7). Fail with instructions, not mid-way.
     op.execute(
         """
         DO $$ BEGIN
           IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'hax_app') THEN
-            RAISE EXCEPTION 'role hax_app missing — apply '
-              'infra/compose/postgres/init.sql first (see README auth setup)';
+            RAISE EXCEPTION 'role hax_app missing — run '
+              'infra/compose/postgres/init.sql (dev) or '
+              'infra/terraform/rds-bootstrap.sql (RDS) first';
           END IF;
         END $$;
         """

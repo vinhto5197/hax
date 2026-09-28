@@ -10,14 +10,18 @@ import { PasswordField } from "@/components/auth/PasswordField";
 import { GoogleButton, OrDivider } from "@/components/auth/GoogleButton";
 import { ResendStatus, useResend } from "@/components/auth/useResend";
 
-// Google failures come back as a redirect to /login?error=... — the two codes
-// below are ours (auth.ts signIn callback); anything else is Auth.js's own
-// (OAuthCallbackError, OAuthAccountNotLinked, ...) and gets the generic line.
+// Every Auth.js failure lands here as /login?error=... (auth.ts pages.error).
+// google_unverified is ours (the signIn callback); OAuth* codes are a Google
+// round-trip that did not complete, which a retry can fix; anything else
+// (Configuration, ...) is a server-side problem a retry cannot fix, so the
+// message must not send the user back to the same button.
 function oauthErrorMessage(code: string | null): string | null {
   if (!code) return null;
   if (code === "google_unverified")
     return "Google hasn't verified that email address, so it can't be used to sign in.";
-  return "Google sign-in didn't complete. Please try again.";
+  if (code.startsWith("OAuth"))
+    return "Google sign-in didn't complete. Please try again.";
+  return "Sign-in is temporarily unavailable. Please try again later.";
 }
 
 function LoginForm() {
