@@ -19,6 +19,7 @@
 # HAX_INSTANCE_ID (default: terraform output), AWS_REGION (default us-east-1).
 set -euo pipefail
 cd "$(dirname "$0")/../.."
+export AWS_PAGER=""
 
 STEP=${1:-all}
 TAG=${2:-$(git rev-parse --short HEAD)}

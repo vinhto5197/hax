@@ -6,10 +6,7 @@ the IAM role that ties them together — all in the default VPC of `us-east-1`.
 The box is managed through SSM Session Manager; there is no SSH.
 
 Every command below runs on the laptop with AWS credentials for the account
-(`aws configure`, region `us-east-1`), unless it says "on the box". The
-`.envrc` here unsets the dev MinIO `AWS_*` keys that the root `.envrc`
-exports; without it the CLI and Terraform would use those and get
-`InvalidClientTokenId`.
+(`aws configure`, region `us-east-1`), unless it says "on the box".
 
 ## What costs money
 

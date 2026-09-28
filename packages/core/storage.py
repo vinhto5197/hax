@@ -14,6 +14,12 @@ S3_BUCKET = os.getenv("S3_BUCKET", "hax-documents")
 # Unset in prod -> boto3 talks to real AWS S3; set to MinIO's URL in dev.
 _ENDPOINT_URL = os.getenv("S3_ENDPOINT_URL") or None
 _REGION = os.getenv("S3_REGION", "us-east-1")
+# Dev-only static keys (MinIO). Deliberately not the AWS_* names: those are
+# read by every AWS tool run from the repo's shell (Terraform, the CLI), and
+# MinIO's throwaway keys would shadow the real account. Unset in prod, so
+# boto3 falls through to the instance role.
+_ACCESS_KEY = os.getenv("S3_ACCESS_KEY_ID") or None
+_SECRET_KEY = os.getenv("S3_SECRET_ACCESS_KEY") or None
 
 # Lazy singleton: importing this module never builds a client or needs creds —
 # the client is created on first actual use.
@@ -29,9 +35,13 @@ class StorageKeyNotFound(Exception):
 def _get_client():
     global _client
     if _client is None:
-        # Credentials come from the env automatically (AWS_ACCESS_KEY_ID /
-        # AWS_SECRET_ACCESS_KEY) — MinIO root creds in dev, IAM in prod.
-        _client = boto3.client("s3", endpoint_url=_ENDPOINT_URL, region_name=_REGION)
+        _client = boto3.client(
+            "s3",
+            endpoint_url=_ENDPOINT_URL,
+            region_name=_REGION,
+            aws_access_key_id=_ACCESS_KEY,
+            aws_secret_access_key=_SECRET_KEY,
+        )
     return _client
 
 
