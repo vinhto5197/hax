@@ -25,3 +25,8 @@ output "ssm_command" {
 output "app_url" {
   value = "https://${var.domain}"
 }
+
+output "deploy_role_arn" {
+  description = "GitHub Actions secret AWS_DEPLOY_ROLE_ARN."
+  value       = aws_iam_role.deploy.arn
+}

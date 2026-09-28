@@ -2,6 +2,7 @@
 project                  = "hax"
 region                   = "us-east-1"
 domain                   = "example.com"
+github_repo              = "<owner>/hax"
 instance_type            = "t4g.small"
 db_instance_class        = "db.t4g.micro"
 db_master_username       = "hax"

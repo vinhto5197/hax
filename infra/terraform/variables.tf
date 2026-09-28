@@ -58,3 +58,8 @@ variable "db_backup_retention_days" {
   type        = number
   default     = 7
 }
+
+variable "github_repo" {
+  description = "GitHub repository (owner/name) whose main-branch pushes may assume the deploy role."
+  type        = string
+}
