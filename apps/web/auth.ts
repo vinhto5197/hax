@@ -33,7 +33,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   // rule can route the whole prefix there.
   basePath: "/auth",
   session: { strategy: "jwt", maxAge: MAX_AGE_S },
-  pages: { signIn: "/login" },
+  // error: "/login" too, so a cancelled or failed Google round-trip lands on
+  // the login page (which maps ?error= to a message) instead of Auth.js's
+  // bare /auth/error with no way back.
+  pages: { signIn: "/login", error: "/login" },
   providers: [
     Credentials({
       credentials: { email: {}, password: {} },
