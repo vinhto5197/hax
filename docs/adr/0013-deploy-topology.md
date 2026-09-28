@@ -48,7 +48,13 @@ endpoint (MinIO in dev), and Postgres, Redis and SMTP are plain protocols.
   compose file and Caddyfile *at that sha from the public repo*, pins the
   image tags in `/opt/hax/images.env`, and runs `compose pull` + `up -d`. A
   deploy is therefore always a pushed commit, never a working tree, and
-  rollback is `roll <older sha>`. CI (slice 3) calls the same script.
+  rollback is `roll <older sha>`. CI calls the same script: `ci.yml`'s
+  `deploy` job, on every push to `main` that passes lint, tests and the web
+  checks, on GitHub's arm64 runner, under a `deploy-prod` concurrency group,
+  with a box-side `flock` as the second guard. AWS access is a role assumed
+  with the run's OIDC token, trusting only `main` of this repository and
+  allowed only `ssm:SendCommand` on this instance plus the result read.
+  GHCR access is the run's own token. No AWS key exists in GitHub.
 - **Secrets** live only in `/opt/hax/.env`, written by hand once, mode 600,
   read by compose. They never transit the deploy script or CI. The
   laptop-side mirror is a gitignored file. One file, but compose narrows it
@@ -81,6 +87,12 @@ Redis volume).
   abuse makes it worth the three fixes.
 - **Managed CI-side Terraform** (Atlantis, HCP): plan-on-PR is the right
   shape for a team; for one operator, plan read at the laptop is the review.
+- **An IAM user with a stored key for CI** (the spec's first draft): one
+  long-lived secret in GitHub, rotated by hand or never. OIDC federation is
+  the same number of Terraform resources and leaves nothing to leak.
+- **Cross-building arm64 under QEMU on an x86 runner**: the Next build alone
+  would take ten-plus minutes; GitHub's arm64 runners are free for public
+  repositories and build natively.
 - **Embedding compose files in the SSM command**: worked, but the parameter
   size limit is poorly documented and the payload grew past 7 KB; fetching
   from GitHub at the sha is smaller and makes "deploy = pushed commit" a
