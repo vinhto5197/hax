@@ -137,3 +137,13 @@ The filled `.env` goes to `/opt/hax` on the box by hand, once; everything
 else — images, compose file, Caddyfile, `pull` and `up` — is
 `infra/deploy/deploy.sh`, run from the laptop (later from CI). The runbook is
 `infra/deploy/README.md`.
+
+## 9. CI deploys
+
+`ci.tf` creates the GitHub OIDC provider and a `hax-deploy` role that only
+pushes to `main` of `github_repo` (terraform.tfvars) may assume, allowed to
+send the run-shell-script command to this box and read its result, nothing
+else. After apply, `terraform output deploy_role_arn` goes into the GitHub
+Actions secret `AWS_DEPLOY_ROLE_ARN`, and `instance_id` into the variable
+`HAX_INSTANCE_ID` (`infra/deploy/README.md`). No AWS key is ever stored in
+GitHub.
