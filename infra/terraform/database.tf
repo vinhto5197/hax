@@ -21,14 +21,23 @@ resource "aws_db_instance" "postgres" {
 
   db_subnet_group_name   = aws_db_subnet_group.postgres.name
   vpc_security_group_ids = [aws_security_group.db.id]
-  # Same AZ as the box: cross-AZ traffic is billed per GB.
-  availability_zone   = aws_instance.box.availability_zone
+  # Same AZ as the box (cross-AZ traffic is billed per GB), taken from the
+  # subnet, never from the instance: see data.aws_subnet.box.
+  availability_zone   = data.aws_subnet.box.availability_zone
   publicly_accessible = false
 
   backup_retention_period = var.db_backup_retention_days
   apply_immediately       = true
   deletion_protection     = false
   # A demo database: destroy should not leave a billable snapshot behind. The
-  # 7-day automated backups cover mistakes while it runs.
-  skip_final_snapshot = true
+  # automated backups (db_backup_retention_days) cover mistakes while it runs
+  # and outlive the instance if it is ever deleted.
+  skip_final_snapshot      = true
+  delete_automated_backups = false
+
+  # The one resource holding user data. Terraform refuses to destroy it until
+  # this block is removed on purpose; a full `terraform destroy` needs that too.
+  lifecycle {
+    prevent_destroy = true
+  }
 }

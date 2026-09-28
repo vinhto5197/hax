@@ -11,12 +11,19 @@ Every command below runs on the laptop with AWS credentials for the account
 ## What costs money
 
 While it exists: the `t4g.small` instance and its 20 GB gp3 root volume, the
-`db.t4g.micro` RDS instance and its 20 GB gp3 storage + 7 days of backups, and
+`db.t4g.micro` RDS instance and its 20 GB gp3 storage + automated backups
+(`db_backup_retention_days`), and
 the Elastic IP (AWS bills every public IPv4 address, attached or not). Cents a
 month: the uploads bucket and the state bucket. The box runs with standard
 CPU credits (it throttles rather than bills when they run out); RDS's `t4g`
 credits are always unlimited and cannot be changed. `terraform destroy` removes
-everything except the state bucket, which the bootstrap module owns.
+everything except the state bucket, which the bootstrap module owns, and refuses
+the database until its `prevent_destroy` block in `database.tf` is removed on
+purpose.
+
+Replacing the box (`terraform apply -replace=aws_instance.box`, e.g. for a new
+AMI) must not touch the database: read the plan and confirm
+`aws_db_instance.postgres` is absent from it before typing yes.
 
 ## 1. Bootstrap remote state (once per account)
 
