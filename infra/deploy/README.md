@@ -36,7 +36,9 @@ script; by hand it is one command. The box was provisioned by
    ```
 
    The file never leaves that directory: the script reads it, CI never sees
-   it. Rotating a value is editing it there and `deploy.sh roll`.
+   it. Rotating a value is editing it there and `deploy.sh roll` (or the
+   `up -d --force-recreate` below): containers read `env_file` only when
+   they are created, never on `restart`.
 
 ## Every deploy
 
@@ -46,7 +48,20 @@ infra/deploy/deploy.sh           # build + push + roll, at HEAD
 ```
 
 Or by step: `deploy.sh build`, `deploy.sh push`, `deploy.sh roll [sha]`.
-`roll` with an older sha is the rollback: images are kept per sha on GHCR.
+`build` and `push` always describe HEAD and refuse a dirty tree or an
+existing tag, so an image named `<sha>` is exactly commit `<sha>`.
+
+**Rollback** is `deploy.sh roll <older sha>`: images are kept per sha on
+GHCR. If a migration landed between the two shas, roll back the schema first
+or `migrate` fails on the old image ("Can't locate revision") and api/worker
+are left on the new one. On the box, with the *current* image:
+
+```sh
+hc run --rm migrate alembic -c alembic.ini downgrade <revision at the older sha>
+```
+
+then `roll <older sha>`. Keep migrations expand-only where possible so a
+rollback rarely needs this.
 
 On the box, `roll` writes `compose.prod.yml`, `Caddyfile` and `images.env`
 next to `.env`, then `docker compose pull` and `up -d`. Compose orders the
@@ -65,7 +80,7 @@ Verify: `https://<domain>` shows a real padlock and the login page;
 alias hc='docker compose --env-file .env --env-file images.env -f compose.prod.yml'
 hc ps
 hc logs -f --tail=100 caddy      # or api, worker, web, migrate
-hc restart worker                # after editing .env
+hc up -d --force-recreate worker # after editing .env (restart does NOT reload env_file)
 ```
 
 Both `--env-file` flags matter: `.env` carries `SITE_ADDRESS`, `images.env`

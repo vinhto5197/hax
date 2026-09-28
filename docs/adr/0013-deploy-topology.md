@@ -51,7 +51,9 @@ endpoint (MinIO in dev), and Postgres, Redis and SMTP are plain protocols.
   rollback is `roll <older sha>`. CI (slice 3) calls the same script.
 - **Secrets** live only in `/opt/hax/.env`, written by hand once, mode 600,
   read by compose. They never transit the deploy script or CI. The
-  laptop-side mirror is a gitignored file.
+  laptop-side mirror is a gitignored file. One file, but compose narrows it
+  per service: the owner-role URL reaches only the `migrate` one-shot, and
+  the web container gets no database, broker, model or mail credential.
 - **Account plan: Free** (six months, hard spending cap, $200 credit). Its one
   observed restriction is RDS backup retention ≤ 1 day, so retention is a
   variable set in `terraform.tfvars`; the config defaults to 7. Upgrading to
@@ -92,6 +94,12 @@ Redis volume).
   die with the box; nothing durable lives there.
 - A deploy recreates the app containers, so each deploy is a few seconds of
   downtime. Zero-downtime is an M3.5 concern (a second box behind an ALB).
+- `deploy.sh` enforces "image `<sha>` is commit `<sha>`": build and push
+  refuse a dirty tree, a non-HEAD sha and an existing tag. Rollback is
+  `roll <older sha>`, but across a migration the schema must be downgraded
+  first (the runbook has the command); expand-only migrations keep that rare.
+- Only the running images stay on the box; GHCR keeps every sha, so a
+  rollback is a pull, not a rebuild.
 - RDS point-in-time recovery reaches back one day on the Free plan. A
   manual snapshot before a risky migration is the operator's move.
 - Uploads are not versioned by choice (user data is sensitive; a deleted
