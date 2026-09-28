@@ -25,6 +25,12 @@ services:
     image: ${HAX_PYTHON_IMAGE:-hax-python}
     restart: unless-stopped
     env_file: ${HAX_ENV_FILE:-/opt/hax/.env}
+    # The owner-role URL is in the shared .env for migrate only; blanked here
+    # (environment overrides env_file) so a compromised long-lived container
+    # holds no credential that can disable RLS. session.py falls back to
+    # DATABASE_URL when it is empty.
+    environment:
+      MIGRATIONS_DATABASE_URL: ""
     # --forwarded-allow-ips=*: api:8000 is published nowhere, so the only
     # client that can reach it is caddy (and web, which sends no forwarding
     # headers); trusting every immediate peer is trusting caddy. Caddy replaces
@@ -49,6 +55,8 @@ services:
     image: ${HAX_PYTHON_IMAGE:-hax-python}
     restart: unless-stopped
     env_file: ${HAX_ENV_FILE:-/opt/hax/.env}
+    environment:
+      MIGRATIONS_DATABASE_URL: ""
     command: celery -A apps.worker.celery_app worker --loglevel=info --concurrency=2
     depends_on:
       redis: { condition: service_healthy }
@@ -66,6 +74,16 @@ services:
     image: ${HAX_WEB_IMAGE:-hax-web}
     restart: unless-stopped
     env_file: ${HAX_ENV_FILE:-/opt/hax/.env}
+    # Next's server reads only AUTH_* / API_INTERNAL_URL / INTERNAL_API_SECRET;
+    # the rest of .env is blanked so the largest unauthenticated surface holds
+    # no database, model or mail credential.
+    environment:
+      MIGRATIONS_DATABASE_URL: ""
+      DATABASE_URL: ""
+      REDIS_URL: ""
+      ANTHROPIC_API_KEY: ""
+      VOYAGE_API_KEY: ""
+      SMTP_PASSWORD: ""
     expose: ["3000"]
 
   redis:

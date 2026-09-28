@@ -5,14 +5,20 @@
 #
 #   infra/deploy/deploy.sh [build|push|roll|all] [sha]
 #
-# build  hax-python:latest and hax-web:latest from the Dockerfiles (arm64: the
-#        box is Graviton, so build on Apple Silicon or an arm64 runner).
-# push   tag both as ghcr.io/<owner>/hax-{python,web}:<sha> and push.
+# build  hax-python:latest and hax-web:latest from the Dockerfiles, for
+#        linux/arm64 (the box is Graviton; an amd64 runner cross-builds).
+#        Refuses a dirty tree: the image must be the commit it will be tagged
+#        as (DEPLOY_ALLOW_DIRTY=1 overrides, for local experiments only).
+# push   tag both as ghcr.io/<owner>/hax-{python,web}:<HEAD sha> and push.
+#        Tags are immutable by convention: an existing tag is never
+#        overwritten (DEPLOY_OVERWRITE=1 overrides, e.g. a CI re-run).
 # roll   over SSM, the box fetches compose.prod.yml + Caddyfile at <sha> from
 #        the public repo, pins the two image tags in /opt/hax/images.env, then
 #        compose pull + up -d. So <sha> must be pushed: a deploy is always a
 #        commit on GitHub, never a working tree.
-# all    the three in order (default). sha defaults to the short HEAD sha.
+# all    the three in order (default). build/push always use HEAD; a sha
+#        argument is accepted by roll only (rollback), never by build or push,
+#        so an image can never carry a sha other than the tree it was built from.
 #
 # Env: GHCR_OWNER (default: gh api user), GITHUB_REPO (default <owner>/hax),
 # GHCR_TOKEN (CI: docker login with it; a laptop logs in once by hand),
@@ -22,23 +28,41 @@ cd "$(dirname "$0")/../.."
 export AWS_PAGER=""
 
 STEP=${1:-all}
-TAG=${2:-$(git rev-parse --short HEAD)}
+HEAD_SHA=$(git rev-parse --short HEAD)
+TAG=${2:-$HEAD_SHA}
 OWNER=${GHCR_OWNER:-$(gh api user -q .login)}
 REPO=${GITHUB_REPO:-$OWNER/hax}
 REGION=${AWS_REGION:-us-east-1}
 PY_IMAGE="ghcr.io/$OWNER/hax-python:$TAG"
 WEB_IMAGE="ghcr.io/$OWNER/hax-web:$TAG"
 
+# build and push describe HEAD's tree, so they refuse any other sha and any
+# uncommitted change: what gets tagged <sha> must be exactly commit <sha>.
+at_head_and_clean() {
+  [[ $TAG == "$HEAD_SHA" ]] || { echo "$STEP builds HEAD ($HEAD_SHA); pass a sha to roll only"; exit 1; }
+  if [[ -z "${DEPLOY_ALLOW_DIRTY:-}" && -n "$(git status --porcelain)" ]]; then
+    echo "working tree is dirty: commit first (DEPLOY_ALLOW_DIRTY=1 to override)"; exit 1
+  fi
+}
+
 build() {
-  docker build -f infra/docker/python.Dockerfile -t hax-python:latest .
+  at_head_and_clean
+  docker build --platform linux/arm64 -f infra/docker/python.Dockerfile -t hax-python:latest .
   # Empty NEXT_PUBLIC_API_URL: the browser calls /api on its own origin.
-  docker build -f infra/docker/web.Dockerfile --build-arg NEXT_PUBLIC_API_URL= -t hax-web:latest .
+  docker build --platform linux/arm64 -f infra/docker/web.Dockerfile --build-arg NEXT_PUBLIC_API_URL= -t hax-web:latest .
 }
 
 push() {
+  at_head_and_clean
   if [[ -n "${GHCR_TOKEN:-}" ]]; then
     echo "$GHCR_TOKEN" | docker login ghcr.io -u "$OWNER" --password-stdin
   fi
+  local image
+  for image in "$PY_IMAGE" "$WEB_IMAGE"; do
+    if [[ -z "${DEPLOY_OVERWRITE:-}" ]] && docker manifest inspect "$image" > /dev/null 2>&1; then
+      echo "$image already exists on GHCR; tags are immutable (DEPLOY_OVERWRITE=1 to override)"; exit 1
+    fi
+  done
   docker tag hax-python:latest "$PY_IMAGE" && docker push "$PY_IMAGE"
   docker tag hax-web:latest "$WEB_IMAGE" && docker push "$WEB_IMAGE"
 }
@@ -64,7 +88,10 @@ compose() { docker compose --env-file .env --env-file images.env -f compose.prod
 compose pull --quiet
 compose up -d --remove-orphans
 compose ps
-docker image prune -f > /dev/null
+# Only the running images stay on the box; superseded sha tags are pullable
+# from GHCR (a rollback re-pulls, about a minute) and would otherwise fill
+# the root volume.
+docker image prune -af > /dev/null
 REMOTE
 )
   cmd_id=$(aws ssm send-command --region "$REGION" --instance-ids "$instance" \
