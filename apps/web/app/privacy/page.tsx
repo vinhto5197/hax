@@ -40,7 +40,10 @@ export default function Privacy() {
           Anthropic receives your messages and relevant excerpts of your
           documents to generate replies.
         </li>
-        <li>Voyage AI receives document text to compute embeddings.</li>
+        <li>
+          Voyage AI receives document text, and the search queries derived from
+          your messages, to compute embeddings.
+        </li>
         <li>Resend delivers verification and password-reset emails.</li>
         <li>
           Google provides sign-in if you choose it; hax receives only your email
@@ -53,7 +56,8 @@ export default function Privacy() {
       <p>
         Each user&apos;s conversations and documents are visible only to that
         user, enforced in the database. Deleting a conversation or a document in
-        the app removes it and everything derived from it. To delete your
+        the app removes it and everything derived from it right away; database
+        backups holding a copy expire on their own within days. To delete your
         account and all its data, email the address below.
       </p>
 

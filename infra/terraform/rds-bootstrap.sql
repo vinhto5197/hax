@@ -3,7 +3,8 @@
 -- hax_app and fails if the role does not exist. Mirrors
 -- infra/compose/postgres/init.sql; the app password arrives as the psql
 -- variable app_password (`-v app_password='...'`), never in this file.
--- Re-running is harmless: every statement is idempotent.
+-- Re-running is harmless: every statement is idempotent, and the password
+-- given on the command line always wins (a re-run rotates it).
 
 CREATE EXTENSION IF NOT EXISTS vector;
 
@@ -13,6 +14,7 @@ SELECT format(
   'CREATE ROLE hax_app LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS',
   :'app_password'
 ) WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'hax_app') \gexec
+SELECT format('ALTER ROLE hax_app WITH PASSWORD %L', :'app_password') \gexec
 
 GRANT USAGE ON SCHEMA public TO hax_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO hax_app;

@@ -52,7 +52,8 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
      leaves the box; SES after sandbox exit; CloudWatch alarms; the Fargate
      path (`local/V1_CHECKLIST.local.md`); a staging environment variable;
      the hardening items deferred from M3 (RDS CA verification, CSP nonce,
-     anonymous-user cleanup, limiter redesign).
+     anonymous-user cleanup, limiter redesign, OIDC federation for the deploy
+     job, per-service env files, network split + Redis auth).
 
 4. **Milestone 4 — Structured outputs + polish** *(built against live infra, auto-deployed)*
    - Table / structured view for results (not only free-form text)
