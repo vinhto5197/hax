@@ -22,7 +22,9 @@
 #
 # Env: GHCR_OWNER (default: gh api user), GITHUB_REPO (default <owner>/hax),
 # GHCR_TOKEN (CI: docker login with it; a laptop logs in once by hand),
+# GH_TOKEN (CI: for the commit-exists check; a laptop's gh is logged in),
 # HAX_INSTANCE_ID (default: terraform output), AWS_REGION (default us-east-1).
+# CI (.github/workflows/ci.yml) sets all of these and runs `all`.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 export AWS_PAGER=""
@@ -81,9 +83,13 @@ roll() {
 set -euo pipefail
 cd /opt/hax
 test -f .env || { echo "/opt/hax/.env missing: write it first (infra/deploy/README.md)"; exit 1; }
-curl -fsSL "$raw/compose.prod.yml" -o compose.prod.yml
-curl -fsSL "$raw/Caddyfile" -o Caddyfile
-printf 'HAX_PYTHON_IMAGE=%s\nHAX_WEB_IMAGE=%s\n' '$PY_IMAGE' '$WEB_IMAGE' > images.env
+# One roll at a time: a CI run and a laptop rollback, or two queued runs,
+# must not interleave their file writes and compose ups. Waits up to 10 min.
+exec 9> .deploy.lock
+flock -w 600 9 || { echo "another deploy holds /opt/hax/.deploy.lock"; exit 1; }
+curl -fsSL "$raw/compose.prod.yml" -o compose.prod.yml.new && mv compose.prod.yml.new compose.prod.yml
+curl -fsSL "$raw/Caddyfile" -o Caddyfile.new && mv Caddyfile.new Caddyfile
+printf 'HAX_PYTHON_IMAGE=%s\nHAX_WEB_IMAGE=%s\n' '$PY_IMAGE' '$WEB_IMAGE' > images.env.new && mv images.env.new images.env
 compose() { docker compose --env-file .env --env-file images.env -f compose.prod.yml "\$@"; }
 compose pull --quiet
 compose up -d --remove-orphans
