@@ -98,3 +98,6 @@ tfplan
 *.auto.tfvars
 *.tfvars.json
 crash.log
+
+# SDD workspaces and adversarial-review inputs (local working files)
+.superpowers/

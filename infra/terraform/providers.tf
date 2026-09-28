@@ -37,3 +37,11 @@ data "aws_subnets" "default" {
     values = data.aws_ec2_instance_type_offerings.box.locations
   }
 }
+
+# The one subnet the box lives in, resolved at plan time. Both the box and RDS
+# take their zone from here: reading it off the instance instead would make the
+# database's zone "known after apply" during a box replacement, and RDS cannot
+# change zone in place, so Terraform would plan the database as replaced too.
+data "aws_subnet" "box" {
+  id = sort(data.aws_subnets.default.ids)[0]
+}

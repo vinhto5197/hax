@@ -11,7 +11,7 @@ data "aws_ami" "ubuntu" {
 resource "aws_instance" "box" {
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.instance_type
-  subnet_id              = sort(data.aws_subnets.default.ids)[0]
+  subnet_id              = data.aws_subnet.box.id
   vpc_security_group_ids = [aws_security_group.box.id]
   iam_instance_profile   = aws_iam_instance_profile.box.name
   user_data              = file("${path.module}/user-data.sh")
