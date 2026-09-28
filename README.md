@@ -121,6 +121,16 @@ Postgres, MinIO and Mailpit for RDS, S3 and the SMTP relay.
 
 It publishes only 80/443 and 8026, so it runs alongside `make dev`.
 
+### Deploy
+
+The live stack is one EC2 box running `compose.prod.yml` against RDS and S3,
+provisioned by Terraform; ADR 0013 records the topology and every thin choice.
+Two runbooks: [infra/terraform/README.md](infra/terraform/README.md) brings the
+infrastructure up (bootstrap state, plan, apply, RDS bootstrap) and
+[infra/deploy/README.md](infra/deploy/README.md) ships a commit to it. After
+the one-time setup, a deploy is `infra/deploy/deploy.sh`: build, push to GHCR by
+sha, roll the box over SSM. Secrets live only in `/opt/hax/.env` on the box.
+
 ### Verify local infra
 
 After a fresh clone, a Docker version bump, or anything else that touches the data services, run this end-to-end pass to confirm Postgres + Redis are wired up correctly. Stop and diagnose if any step fails.
@@ -222,14 +232,14 @@ Check what's running at any time with `make status` (a TCP probe of each service
 | Email      | Transactional email — Mailpit (dev), real SMTP relay in prod       |
 | Types      | OpenAPI spec → generated TypeScript (e.g. openapi-typescript)      |
 | Infra      | Docker, Docker Compose                                             |
-| Deploy     | AWS, provisioned via Terraform                                     |
+| Deploy     | AWS (EC2 + RDS + S3) via Terraform; GHCR images; SSM roll (ADR 0013) |
 
 ## Build milestones (v0)
 
 1. **Streaming chat** *(shipped)* — Next.js + FastAPI + SSE, conversation history in Postgres, Docker Compose (Postgres, Redis, all services). Auth + background titles deferred to M2.5.
 2. **Data + RAG** *(shipped)* — User data upload (files), Celery ingestion (chunk → embed → pgvector), conversation memory, and chat as a single **agentic** route: retrieval is a model-invoked tool (`search_documents`, alongside a calculator, datetime, and a mocked email send) behind a hand-rolled tool-use harness with prompt caching and a model selector.
 2.5. **Auth + background titles** *(shipped)* — email/password + Google via NextAuth/Auth.js, `users` table, Postgres row-level security, email verification + password reset, conversations + documents scoped to a user; background chat title generation (Celery + Redis, `TITLE_MODEL`), with every API-side publish off the event loop (`apps/api/enqueue.py`).
-3. **Live on AWS** *(next)* — the smallest live stack first: one EC2 box running the compose topology (api, worker, web, Redis, Caddy) against managed RDS Postgres + pgvector and S3, all in Terraform; CI/CD that rolls the box on every merge; an anonymous demo of the chat. **3.5** grows it when each piece earns its cost: ALB, ElastiCache, SES, alarms, Fargate.
+3. **Live on AWS** *(in progress; live since 2026-09-27)* — the smallest live stack first: one EC2 box running the compose topology (api, worker, web, Redis, Caddy) against managed RDS Postgres + pgvector and S3, all in Terraform; CI/CD that rolls the box on every merge; an anonymous demo of the chat. **3.5** grows it when each piece earns its cost: ALB, ElastiCache, SES, alarms, Fargate.
 4. **Structured outputs + polish** — table/structured view for results, citation/source display, cohesive UI.
 5. **Cleanup + hardening + eval** — test + eval infrastructure, drain backlogs, tighten deferred foot-guns.
 
