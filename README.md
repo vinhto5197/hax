@@ -128,8 +128,11 @@ provisioned by Terraform; ADR 0013 records the topology and every thin choice.
 Two runbooks: [infra/terraform/README.md](infra/terraform/README.md) brings the
 infrastructure up (bootstrap state, plan, apply, RDS bootstrap) and
 [infra/deploy/README.md](infra/deploy/README.md) ships a commit to it. After
-the one-time setup, a deploy is `infra/deploy/deploy.sh`: build, push to GHCR by
-sha, roll the box over SSM. Secrets live only in `/opt/hax/.env` on the box.
+the one-time setup, every push to `main` that passes CI rolls the box
+(`.github/workflows/ci.yml` → `infra/deploy/deploy.sh`: build, push to GHCR by
+sha, roll over SSM, with AWS access by OIDC and no stored key). The same
+script by hand is the fallback and the rollback. Secrets live only in
+`/opt/hax/.env` on the box.
 
 ### Verify local infra
 

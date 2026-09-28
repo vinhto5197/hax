@@ -40,7 +40,21 @@ script; by hand it is one command. The box was provisioned by
    `up -d --force-recreate` below): containers read `env_file` only when
    they are created, never on `restart`.
 
-## Every deploy
+## Every deploy: push to main
+
+`.github/workflows/ci.yml` runs lint, tests, the web checks and a
+generated-types drift check on every push and pull request; on a push to
+`main` that passes, its `deploy` job runs `deploy.sh all` on an arm64 runner:
+GHCR login with the run's own token, AWS access by assuming the deploy role
+with the run's OIDC token (`infra/terraform/ci.tf`; no AWS key is stored in
+GitHub), one deploy at a time (`concurrency: deploy-prod`). Watch it under
+the repo's Actions tab; the job's last step prints the box's container table.
+
+Two repository settings, once (Settings → Secrets and variables → Actions):
+secret `AWS_DEPLOY_ROLE_ARN` = `terraform output deploy_role_arn`; variable
+`HAX_INSTANCE_ID` = `terraform output instance_id`.
+
+## By hand: the fallback and the rollback
 
 ```sh
 git push                         # the box fetches compose files at the sha
@@ -63,7 +77,8 @@ hc run --rm migrate alembic -c alembic.ini downgrade <revision at the older sha>
 then `roll <older sha>`. Keep migrations expand-only where possible so a
 rollback rarely needs this.
 
-On the box, `roll` writes `compose.prod.yml`, `Caddyfile` and `images.env`
+On the box, `roll` takes `/opt/hax/.deploy.lock` (a second roll waits, up
+to ten minutes), writes `compose.prod.yml`, `Caddyfile` and `images.env`
 next to `.env`, then `docker compose pull` and `up -d`. Compose orders the
 rest: `migrate` runs to head, `api` and `worker` wait for it, `caddy` waits
 for `api` healthy. First deploy: `up` pulls ~1 GB of images, and Caddy's
