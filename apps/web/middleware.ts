@@ -5,7 +5,7 @@ import { auth } from "@/auth";
 // Session-gate every page except the auth surfaces. /verify-email,
 // /forgot-password and /reset-password are reached from emailed links, so they
 // must stay open to logged-out visitors; /auth/* is Auth.js's own machinery
-// (signin/callback).
+// (signin/callback); /privacy is linked from the Google consent screen.
 const PUBLIC_PREFIXES = [
   "/login",
   "/signup",
@@ -13,6 +13,7 @@ const PUBLIC_PREFIXES = [
   "/forgot-password",
   "/reset-password",
   "/auth",
+  "/privacy",
 ];
 
 // Gates Next pages only, and crypto-only (req.auth comes from auth.ts's
