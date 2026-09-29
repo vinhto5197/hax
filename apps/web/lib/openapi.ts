@@ -271,10 +271,7 @@ export interface components {
         };
         /** Body_upload_document_api_documents_post */
         Body_upload_document_api_documents_post: {
-            /**
-             * File
-             * Format: binary
-             */
+            /** File */
             file: string;
         };
         /** ChatRequest */
