@@ -21,7 +21,11 @@ class User(Base):
         primary_key=True,
         server_default=func.gen_random_uuid(),
     )
-    email: Mapped[str]
+    # NULL = an anonymous demo visitor, and nothing else: every other user has
+    # an address. Signup while anonymous writes the address onto this row; the
+    # visitor's token still carries no email, so the demo caps hold until they
+    # verify and log in again (the login gate refuses unverified accounts).
+    email: Mapped[str | None] = mapped_column(nullable=True)
     name: Mapped[str | None] = mapped_column(nullable=True)
     # NULL = no password method attached (Google-born account); the reset flow
     # is what adds a password to such an account.

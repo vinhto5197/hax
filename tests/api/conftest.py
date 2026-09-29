@@ -159,21 +159,20 @@ async def user_b(admin_engine):
     return await make_user(admin_engine, "b@test.local")
 
 
-def bearer(user) -> dict[str, str]:
-    """Authorization header for `user` — the Bearer path, no cookie needed."""
+def bearer(user, *, anonymous: bool = False) -> dict[str, str]:
+    """Authorization header for `user` — the Bearer path, no cookie needed.
+    anonymous mints what auth.ts emits for a demo visitor: no email."""
     now = int(time.time())
-    token = jwt.encode(
-        {
-            "sub": str(user.id),
-            "email": user.email,
-            "iss": "hax",
-            "aud": "hax-api",
-            "iat": now,
-            "exp": now + 600,
-            "jti": "test",
-            "auth_time": now,
-        },
-        os.environ["AUTH_SECRET"],
-        algorithm="HS256",
-    )
+    claims: dict[str, object] = {
+        "sub": str(user.id),
+        "iss": "hax",
+        "aud": "hax-api",
+        "iat": now,
+        "exp": now + 600,
+        "jti": "test",
+        "auth_time": now,
+    }
+    if not anonymous:
+        claims["email"] = user.email
+    token = jwt.encode(claims, os.environ["AUTH_SECRET"], algorithm="HS256")
     return {"Authorization": f"Bearer {token}"}

@@ -83,3 +83,9 @@ def test_missing_auth_time_rejected():
 def test_non_uuid_sub_rejected():
     with pytest.raises(InvalidSessionToken):
         decode_session_token(mint(sub="admin"), SECRET)
+
+
+def test_missing_email_decodes_as_none():
+    # An anonymous demo visitor's token carries no email.
+    claims = decode_session_token(mint(email=None), SECRET)
+    assert claims.email is None

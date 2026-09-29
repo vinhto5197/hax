@@ -1,4 +1,4 @@
-import NextAuth, { CredentialsSignin } from "next-auth";
+import NextAuth, { CredentialsSignin, type Session } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import { SignJWT, jwtVerify } from "jose";
@@ -22,6 +22,8 @@ class EmailUnverified extends CredentialsSignin {
 // claims sub/email/iat/exp/jti/auth_time. auth_time is set ONCE at login and
 // preserved across re-issues — FastAPI's revocation compares it to
 // users.sessions_valid_after, so refreshing must never launder an old login.
+// email is null for an anonymous user and is the only marker of one; the key
+// is always emitted.
 const ISSUER = "hax";
 const AUDIENCE = "hax-api";
 const MAX_AGE_S = 7 * 24 * 60 * 60;
@@ -123,7 +125,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         // First mint after a successful login (credentials or Google; signIn
         // above has already swapped in the hax id).
         token.sub = (user as { id: string }).id;
-        token.email = user.email;
+        token.email = user.email ?? null;
         token.auth_time = Math.floor(Date.now() / 1000);
         token.jti = crypto.randomUUID();
       }
@@ -132,8 +134,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
     session({ session, token }) {
       if (session.user) {
-        session.user.id = token.sub as string;
-        session.user.email = token.email as string;
+        // The param intersects AdapterUser (email: string) with the Session
+        // augmentation in types/next-auth.d.ts; the returned Session is what
+        // the app reads, so write through that type — email may be null.
+        const user = session.user as Session["user"];
+        user.id = token.sub as string;
+        user.email = token.email ?? null;
       }
       return session;
     },
@@ -147,7 +153,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         unknown
       >;
       return await new SignJWT({
-        email,
+        email: email ?? null,
         auth_time,
         jti: jti as string | undefined,
       })
