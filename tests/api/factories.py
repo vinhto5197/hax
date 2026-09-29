@@ -7,6 +7,7 @@ test — a repo bug must never be able to seed its own passing data — and the
 admin engine deliberately bypasses the app engine's identity machinery."""
 
 import uuid
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 from sqlalchemy import text
@@ -14,10 +15,16 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 
 async def make_user(admin_engine: AsyncEngine, email: str) -> SimpleNamespace:
+    # sessions_valid_after from the app clock, as the ORM stamps it in
+    # production: the DB clock runs ahead of the app's, and a later app-clock
+    # bump must always compare greater than the birth stamp.
     async with admin_engine.begin() as conn:
         row = await conn.execute(
-            text("INSERT INTO users (email) VALUES (:email) RETURNING id, email"),
-            {"email": email},
+            text(
+                "INSERT INTO users (email, sessions_valid_after) "
+                "VALUES (:email, :now) RETURNING id, email"
+            ),
+            {"email": email, "now": datetime.now(UTC)},
         )
         uid, email = row.one()
     return SimpleNamespace(id=uid, email=email)

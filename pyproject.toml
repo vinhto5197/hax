@@ -13,7 +13,10 @@ description = "Local dev configuration for hax."
 requires-python = ">=3.11"
 dependencies = [
   # API
-  "fastapi[standard]>=0.115.0",
+  # Pinned exactly: FastAPI's OpenAPI output feeds the committed TypeScript
+  # types, and CI checks them against what the installed version emits. Bump
+  # here, then `make types`. (Lock file for the rest: M5 decision.)
+  "fastapi[standard]==0.141.1",
   "uvicorn[standard]>=0.32.0",
   # LLM
   "anthropic>=0.40.0",

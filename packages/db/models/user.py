@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import DateTime, Index, func, text
 from sqlalchemy.dialects.postgresql import UUID
@@ -34,8 +34,16 @@ class User(Base):
     )
     # Revocation cutoff: tokens whose auth_time predates this are dead.
     # Password reset bumps it (DB + Redis write-through — see apps/api/auth.py).
+    # One clock, the app's: every later writer stamps datetime.now(UTC), and
+    # auth_time in the token is the app clock too. A DB-clock insert default
+    # would sit tens of ms ahead of the app (RDS and the box are different
+    # machines), so a bump made moments after signup could land BEFORE the
+    # birth stamp, and a token minted in the same second as a cutoff could
+    # read as revoked. server_default remains for non-ORM inserts only.
     sessions_valid_after: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        server_default=func.now(),
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
