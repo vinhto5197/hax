@@ -53,6 +53,16 @@ async def test_visitor_gets_the_guest_prompt_and_no_tools(client, visitor, harne
     assert harness[0]["tools"] is False
 
 
+async def test_visitor_model_choice_is_ignored(client, visitor, harness):
+    r = await client.post(
+        "/api/chat",
+        json={"prompt": "hi", "model": "claude-opus-4-8"},
+        headers=bearer(visitor, anonymous=True),
+    )
+    assert r.status_code == 200
+    assert harness[0]["model"] == chat_router.DEFAULT_MODEL
+
+
 async def test_member_gets_the_agentic_prompt_and_tools(client, user_a, harness):
     r = await client.post("/api/chat", json={"prompt": "hi"}, headers=bearer(user_a))
     assert r.status_code == 200
