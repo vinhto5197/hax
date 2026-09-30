@@ -118,7 +118,7 @@ async def oauth_upsert(
 
 
 def _anon_per_ip_per_day() -> int:
-    return int(os.getenv("ANON_PER_IP_PER_DAY", "5"))
+    return int(os.getenv("ANON_PER_IP_PER_DAY", "3"))
 
 
 @router.post(
