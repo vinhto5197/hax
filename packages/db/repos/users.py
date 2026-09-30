@@ -35,6 +35,15 @@ async def create_password_user(
     return user
 
 
+async def create_anonymous(session: AsyncSession) -> User:
+    """A demo visitor: no email (the only marker of an anonymous user), no
+    password. The caller owns the transaction."""
+    user = User()
+    session.add(user)
+    await session.flush()
+    return user
+
+
 async def get_sessions_valid_after(
     session: AsyncSession, user_id: uuid.UUID
 ) -> datetime | None:
