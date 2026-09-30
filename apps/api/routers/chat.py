@@ -52,10 +52,11 @@ async def chat(
     # Replay prior turns. Retrieval is NOT injected here — the model invokes the
     # search_documents tool itself when the corpus looks relevant.
     messages = await load_history(conversation_id, user.id)
-    model = payload.model or DEFAULT_MODEL
-    # A visitor gets the guest prompt (the demo text rides in it) and no
-    # tools; a member gets the agentic prompt and the registry.
+    # A visitor gets the guest prompt (the demo text rides in it), no tools,
+    # and the default model whatever the request asked for (spend control); a
+    # member gets the agentic prompt, the registry and their model choice.
     visitor = is_visitor(user)
+    model = DEFAULT_MODEL if visitor else (payload.model or DEFAULT_MODEL)
     event_fn = partial(
         stream_completion_agentic,
         system=DEMO_SYSTEM_PROMPT if visitor else AGENTIC_SYSTEM,
