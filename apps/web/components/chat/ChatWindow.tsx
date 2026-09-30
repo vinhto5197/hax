@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { ChatInput } from "@/components/chat/ChatInput";
+import { DemoLimitModal } from "@/components/chat/DemoLimitModal";
 import { useConversations } from "@/components/chat/ConversationsProvider";
 import { MessageList } from "@/components/chat/MessageList";
 import { useChat } from "@/hooks/useChat";
@@ -57,8 +58,20 @@ function ChatSession({ conversationId }: { conversationId: string | null }) {
   );
 
   // One useChat owns all chat state; children get values via props.
-  const { messages, isLoading, streamingContent, status, error, send } =
-    useChat(conversationId, model || null, handleConversationCreated, refresh);
+  const {
+    messages,
+    isLoading,
+    streamingContent,
+    status,
+    error,
+    limited,
+    send,
+  } = useChat(
+    conversationId,
+    model || null,
+    handleConversationCreated,
+    refresh,
+  );
 
   return (
     <div className="mx-auto flex h-full w-full max-w-4xl flex-col gap-4 p-4">
@@ -98,7 +111,9 @@ function ChatSession({ conversationId }: { conversationId: string | null }) {
         <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
       ) : null}
 
-      <ChatInput onSend={send} disabled={isLoading} />
+      <ChatInput onSend={send} disabled={isLoading || limited} />
+
+      {limited ? <DemoLimitModal /> : null}
     </div>
   );
 }

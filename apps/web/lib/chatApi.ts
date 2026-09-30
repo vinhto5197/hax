@@ -38,6 +38,27 @@ async function apiFetch(input: string, init?: RequestInit): Promise<Response> {
   return response;
 }
 
+// 403 {"detail": {"code": "demo_limit"}}: an anonymous visitor used up the
+// demo's turns or uploads. The one error the UI turns into a sign-up prompt.
+export class DemoLimitError extends Error {
+  constructor() {
+    super("demo_limit");
+    this.name = "DemoLimitError";
+  }
+}
+
+async function isDemoLimit(response: Response): Promise<boolean> {
+  if (response.status !== 403) return false;
+  try {
+    const body = (await response.clone().json()) as {
+      detail?: { code?: string };
+    };
+    return body.detail?.code === "demo_limit";
+  } catch {
+    return false;
+  }
+}
+
 // Response bodies are typed from the generated OpenAPI contract but not
 // validated at runtime — we trust the first-party API.
 export async function listConversations(): Promise<ConversationSummary[]> {
@@ -76,6 +97,7 @@ export async function uploadDocument(file: File): Promise<DocumentSummary> {
     method: "POST",
     body: form,
   });
+  if (await isDemoLimit(response)) throw new DemoLimitError();
   if (!response.ok) {
     // Surface FastAPI's `detail` — these errors are user-actionable.
     let detail = `API ${response.status}: ${response.statusText}`;
@@ -196,6 +218,7 @@ export async function streamChat(
     body: JSON.stringify({ prompt, conversation_id: conversationId, model }),
   });
 
+  if (await isDemoLimit(response)) throw new DemoLimitError();
   if (!response.ok) {
     throw new Error(`API ${response.status}: ${response.statusText}`);
   }

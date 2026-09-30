@@ -79,11 +79,16 @@ async def stream_completion_agentic(
     model: str = DEFAULT_MODEL,
     *,
     ctx: ToolContext,
+    tools: bool = True,
 ) -> AsyncIterator[dict]:
-    """Run the tool-use loop, yielding {"content": …} / {"status": …} events."""
+    """Run the tool-use loop, yielding {"content": …} / {"status": …} events.
+
+    tools=False sends no tool schemas, so the model can only answer in prose
+    (the demo visitor's mode); the loop then ends after its first iteration.
+    """
     # Local copy — the intermediate tool turns appended below are never persisted.
     messages = list(messages)
-    tool_schemas = [t.to_anthropic() for t in TOOLS.values()]
+    tool_schemas = [t.to_anthropic() for t in TOOLS.values()] if tools else []
     # Tracks whether any iteration streamed text, so a new iteration's text gets
     # a separator instead of concatenating into run-ons.
     emitted_text = False
@@ -93,8 +98,9 @@ async def stream_completion_agentic(
             "model": model,
             "max_tokens": MAX_TOKENS,
             "messages": _cache_last(messages),
-            "tools": tool_schemas,
         }
+        if tool_schemas:
+            kwargs["tools"] = tool_schemas
         if system is not None:
             kwargs["system"] = system
 

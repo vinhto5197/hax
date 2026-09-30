@@ -10,8 +10,10 @@ from apps.api.chat_service import (
     load_history,
     persist_user_turn,
 )
+from apps.api.demo import enforce_turn_cap, is_visitor
 from packages.core.agent.harness import DEFAULT_MODEL, stream_completion_agentic
 from packages.core.agent.tools import ToolContext
+from packages.core.demo.prompt import DEMO_SYSTEM_PROMPT
 from packages.core.schemas.chat import ChatRequest
 
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -36,10 +38,12 @@ AGENTIC_SYSTEM = (
 )
 
 
-@router.post("")
+@router.post("", responses={403: {"description": "demo_limit: sign up to continue"}})
 async def chat(
     payload: ChatRequest, user: CurrentUser = Depends(current_user)
 ) -> StreamingResponse:
+    # Before anything is persisted: a refused turn leaves no trace.
+    await enforce_turn_cap(user)
     # Persist the user turn before streaming, so it survives an LLM error and we
     # have a conversation id for the SSE prelude.
     conversation_id = await persist_user_turn(
@@ -49,11 +53,15 @@ async def chat(
     # search_documents tool itself when the corpus looks relevant.
     messages = await load_history(conversation_id, user.id)
     model = payload.model or DEFAULT_MODEL
+    # A visitor gets the guest prompt (the demo text rides in it) and no
+    # tools; a member gets the agentic prompt and the registry.
+    visitor = is_visitor(user)
     event_fn = partial(
         stream_completion_agentic,
-        system=AGENTIC_SYSTEM,
+        system=DEMO_SYSTEM_PROMPT if visitor else AGENTIC_SYSTEM,
         model=model,
         ctx=ToolContext(user_id=user.id),
+        tools=not visitor,
     )
     return StreamingResponse(
         event_stream(event_fn, messages, conversation_id, user.id),

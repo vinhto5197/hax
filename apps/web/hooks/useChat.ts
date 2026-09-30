@@ -2,7 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { type ChatMessage, getConversation, streamChat } from "@/lib/chatApi";
+import {
+  type ChatMessage,
+  DemoLimitError,
+  getConversation,
+  streamChat,
+} from "@/lib/chatApi";
 
 type UseChatResult = {
   messages: ChatMessage[];
@@ -12,6 +17,8 @@ type UseChatResult = {
   // or null when no tool is running. Transient — never part of the transcript.
   status: string | null;
   error: string | null;
+  // An anonymous visitor hit the demo cap; the caller shows the sign-up prompt.
+  limited: boolean;
   send: (text: string) => Promise<void>;
 };
 
@@ -30,6 +37,7 @@ export function useChat(
   const [streamingContent, setStreamingContent] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [limited, setLimited] = useState(false);
   // The id sends target. Starts from the route prop; updated when a lazy-create
   // returns a new id, so follow-up turns hit the same conversation even though
   // the route prop stayed null (the URL was updated shallowly, not navigated).
@@ -108,6 +116,13 @@ export function useChat(
         // Let the caller refresh the sidebar (new conversation / updated order).
         onTurnComplete?.();
       } catch (err) {
+        if (err instanceof DemoLimitError) {
+          // Refused before anything was persisted: drop the optimistic turn
+          // so the view matches the server.
+          setMessages((prev) => prev.slice(0, -1));
+          setLimited(true);
+          return;
+        }
         const errMessage =
           err instanceof Error ? err.message : "Unable to get response.";
         setError(errMessage);
@@ -129,5 +144,13 @@ export function useChat(
     [isLoading, model, activeId, onConversationCreated, onTurnComplete],
   );
 
-  return { messages, isLoading, streamingContent, status, error, send };
+  return {
+    messages,
+    isLoading,
+    streamingContent,
+    status,
+    error,
+    limited,
+    send,
+  };
 }

@@ -15,6 +15,7 @@ from fastapi import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.auth import CurrentUser, current_user
+from apps.api.demo import refuse_visitor
 from apps.api.deps import get_session
 from apps.api.enqueue import publish
 from apps.worker.tasks import ingest_document
@@ -42,13 +43,14 @@ async def list_documents(
     return [DocumentOut.model_validate(d) for d in documents]
 
 
-@router.post("")
+@router.post("", responses={403: {"description": "demo_limit: sign up to upload"}})
 async def upload_document(
     request: Request,
     file: UploadFile = File(...),
     session: AsyncSession = Depends(get_session),
     user: CurrentUser = Depends(current_user),
 ) -> DocumentOut:
+    refuse_visitor(user)
     filename = file.filename or "upload"
     suffix = next((s for s in SUFFIX_MIME if filename.lower().endswith(s)), None)
     if suffix is None:
