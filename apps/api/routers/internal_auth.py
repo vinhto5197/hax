@@ -12,7 +12,12 @@ from apps.api.routers.auth import client_ip
 from packages.core.auth import rate_limit
 from packages.core.auth.passwords import dummy_verify_async, verify_password_async
 from packages.core.auth.revocation import publish_sva
-from packages.core.schemas.auth import AuthUserOut, CredentialsIn, OAuthUpsertIn
+from packages.core.schemas.auth import (
+    AnonymousOut,
+    AuthUserOut,
+    CredentialsIn,
+    OAuthUpsertIn,
+)
 from packages.db.models import User
 from packages.db.repos import accounts as accounts_repo
 from packages.db.repos import users as users_repo
@@ -110,3 +115,32 @@ async def oauth_upsert(
         # could see "revoked" for a cutoff that a crash then rolled back.
         await publish_sva(get_redis(), user.id, cutoff)
     return AuthUserOut(id=user.id, email=user.email, name=user.name)
+
+
+def _anon_per_ip_per_day() -> int:
+    return int(os.getenv("ANON_PER_IP_PER_DAY", "5"))
+
+
+@router.post(
+    "/anonymous",
+    responses={429: {"description": "too many demo visitors from this address"}},
+)
+async def create_anonymous(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+) -> AnonymousOut:
+    """A demo visitor: a user row with no email.
+
+    X-Visitor-IP is the browser's address as Next's server saw it (Caddy's
+    X-Forwarded-For); trusted because this router is reachable only with the
+    internal secret. Without it the limit would key on Next's own address and
+    every visitor would share one bucket.
+    """
+    ip = request.headers.get("x-visitor-ip") or client_ip(request)
+    if not await rate_limit.hit(
+        get_redis(), "anon_ip", ip, limit=_anon_per_ip_per_day(), window_s=86400
+    ):
+        raise HTTPException(429, detail={"code": "rate_limited"})
+    user = await users_repo.create_anonymous(session)
+    await session.commit()
+    return AnonymousOut(id=user.id)

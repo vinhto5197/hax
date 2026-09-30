@@ -227,6 +227,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/internal/auth/anonymous": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Anonymous
+         * @description A demo visitor: a user row with no email.
+         *
+         *     X-Visitor-IP is the browser's address as Next's server saw it (Caddy's
+         *     X-Forwarded-For); trusted because this router is reachable only with the
+         *     internal secret. Without it the limit would key on Next's own address and
+         *     every visitor would share one bucket.
+         */
+        post: operations["create_anonymous_internal_auth_anonymous_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -256,6 +281,14 @@ export interface components {
              * @constant
              */
             status: "check_inbox";
+        };
+        /** AnonymousOut */
+        AnonymousOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
         };
         /** AuthUserOut */
         AuthUserOut: {
@@ -960,6 +993,44 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    create_anonymous_internal_auth_anonymous_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-internal-secret"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnonymousOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description too many demo visitors from this address */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

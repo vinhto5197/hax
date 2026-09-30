@@ -35,6 +35,10 @@ class AuthUserOut(BaseModel):
     name: str | None
 
 
+class AnonymousOut(BaseModel):
+    id: UUID
+
+
 class TokenIn(BaseModel):
     token: str = Field(min_length=1, max_length=128)
 
