@@ -61,10 +61,12 @@ api:
 # ── Worker (Celery) ───────────────────────────────────────────
 .PHONY: worker
 
-# Background-job worker (ingestion, email, conversation titles). Needs infra (Redis) up —
-# run `make infra-up` or `make dev` first. Separate process from the API.
+# Background-job worker (ingestion, email, conversation titles, the daily
+# visitor sweep). Needs infra (Redis) up — run `make infra-up` or `make dev`
+# first. Separate process from the API. --beat embeds the scheduler, as in
+# production: one worker, one beat.
 worker:
-	celery -A apps.worker.celery_app worker --loglevel=info
+	celery -A apps.worker.celery_app worker --beat --schedule /tmp/celerybeat-schedule --loglevel=info
 
 # ── Frontend (Next.js) ────────────────────────────────────────
 .PHONY: web

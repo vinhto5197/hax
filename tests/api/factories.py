@@ -30,6 +30,19 @@ async def make_user(admin_engine: AsyncEngine, email: str) -> SimpleNamespace:
     return SimpleNamespace(id=uid, email=email)
 
 
+async def make_visitor(admin_engine: AsyncEngine) -> SimpleNamespace:
+    """A demo visitor: a users row with no email, which is its only marker.
+    sessions_valid_after from the app clock, as make_user: with the DB clock
+    ahead, a token minted in the same second would read as revoked."""
+    async with admin_engine.begin() as conn:
+        row = await conn.execute(
+            text("INSERT INTO users (sessions_valid_after) VALUES (:now) RETURNING id"),
+            {"now": datetime.now(UTC)},
+        )
+        uid = row.scalar_one()
+    return SimpleNamespace(id=uid, email=None)
+
+
 async def make_conversation(
     admin_engine: AsyncEngine, user_id: uuid.UUID, title: str | None = None
 ) -> uuid.UUID:

@@ -8,7 +8,7 @@ semantics without remembering to.
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from packages.db.models import User
@@ -143,3 +143,22 @@ async def reset_password(
     if user.email_verified_at is None:
         user.email_verified_at = cutoff
     return cutoff
+
+
+async def delete_stale_anonymous(session: AsyncSession, cutoff: datetime) -> int:
+    """Delete every demo visitor (no email) created before `cutoff`; returns
+    how many went.
+
+    The `email IS NULL` guard is in the statement itself, so this can never
+    delete an account. `users` is outside RLS; the cascade into the policied
+    tables (conversations, documents, chunks; messages via conversations) runs
+    through referential-integrity triggers, which Postgres exempts from row
+    security, so the caller needs no announced identity.
+    """
+    result = await session.execute(
+        delete(User)
+        .where(User.email.is_(None), User.created_at < cutoff)
+        .returning(User.id)
+        .execution_options(synchronize_session=False)
+    )
+    return len(result.all())
