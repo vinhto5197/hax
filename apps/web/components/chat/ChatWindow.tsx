@@ -18,6 +18,13 @@ const MODEL_OPTIONS = [
   { value: "claude-opus-4-8", label: "Opus" },
 ] as const;
 
+// A new conversation's title is generated in the background and usually lands
+// a moment after the first reply; the sidebar otherwise learns it only on the
+// next turn. Re-read the list once a second, for at most this long, until it
+// has a title. Never blocks sending.
+const TITLE_POLL_MS = 1000;
+const TITLE_POLL_TICKS = 10;
+
 // The demo: the landing page renders the chat in place for a visitor. The
 // conversation gets no URL (a real request for /chat/* ends a demo — see
 // proxy.ts), the first message is sent on mount, and there is no model choice
@@ -61,13 +68,19 @@ function ChatSession({
   const [model, setModel] = useState("");
   // From context (see ConversationsProvider); called after a turn to refresh
   // the sidebar.
-  const { refresh } = useConversations();
+  const { conversations, refresh } = useConversations();
+  // The conversation this session created, if any: the one whose title is
+  // awaited below. A demo has no sidebar, so it never sets this.
+  const [createdId, setCreatedId] = useState<string | null>(null);
 
   const handleConversationCreated = useCallback(
     (id: string) => {
       // Shallow URL update — router.replace would cross the route segment and
       // kill the in-flight stream. A demo conversation gets no URL at all.
-      if (!demo) window.history.replaceState(null, "", `/chat/${id}`);
+      if (!demo) {
+        window.history.replaceState(null, "", `/chat/${id}`);
+        setCreatedId(id);
+      }
       refresh();
     },
     [refresh, demo],
@@ -88,6 +101,18 @@ function ChatSession({
     handleConversationCreated,
     refresh,
   );
+
+  const titled = conversations.some((c) => c.id === createdId && c.title);
+  useEffect(() => {
+    if (!createdId || isLoading || titled) return;
+    let ticks = 0;
+    const timer = setInterval(() => {
+      ticks += 1;
+      refresh();
+      if (ticks >= TITLE_POLL_TICKS) clearInterval(timer);
+    }, TITLE_POLL_MS);
+    return () => clearInterval(timer);
+  }, [createdId, isLoading, titled, refresh]);
 
   // The demo's first message, sent once on mount (the ref survives re-renders;
   // the key on ChatSession guarantees a fresh mount per demo).
