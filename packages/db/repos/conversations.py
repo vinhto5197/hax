@@ -133,13 +133,3 @@ async def set_title_if_unset(
         .execution_options(synchronize_session=False)
     )
     return result.first() is not None
-
-
-async def count_user_messages(session: AsyncSession, user_id: uuid.UUID) -> int:
-    """User turns across all of the user's conversations (the demo cap)."""
-    return await session.scalar(
-        select(func.count())
-        .select_from(Message)
-        .join(Conversation, Message.conversation_id == Conversation.id)
-        .where(Conversation.user_id == user_id, Message.role == "user")
-    )
