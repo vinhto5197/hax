@@ -99,9 +99,16 @@ compose pull --quiet
 compose up -d --remove-orphans
 # Caddy reads its file only at start, and up -d does not recreate a container
 # whose bind-mounted config changed, so a Caddyfile change would otherwise
-# never apply. A graceful reload picks up the fetched file with no dropped
-# connection, recreated or not.
-compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
+# never apply. A graceful reload picks up the file with no dropped connection
+# — when the container still sees the host's file. If its view differs (the
+# mount is pinned to an inode the host no longer has), recreate it once; the
+# certificates live in a volume, so that costs a second, not a new issuance.
+if compose exec -T caddy cat /etc/caddy/Caddyfile | cmp -s - Caddyfile; then
+  compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
+else
+  echo "caddy's Caddyfile differs from the host's: recreating caddy"
+  compose up -d --force-recreate caddy
+fi
 compose ps
 # Only the running images stay on the box; superseded sha tags are pullable
 # from GHCR (a rollback re-pulls, about a minute) and would otherwise fill

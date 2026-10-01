@@ -65,7 +65,9 @@ Or by step: `deploy.sh build`, `deploy.sh push`, `deploy.sh roll [sha]`. A roll
 also reloads Caddy gracefully, because `up -d` leaves a running container
 alone when only its bind-mounted Caddyfile changed; the file is written in
 place for the same reason (a single-file bind mount pins the inode, so a
-renamed-over file is invisible to the container).
+renamed-over file is invisible to the container). If the container's view
+still differs from the host's file, the roll recreates Caddy instead of
+reloading it: a second of downtime, no new certificate (they live in a volume).
 `build` and `push` always describe HEAD and refuse a dirty tree or an
 existing tag, so an image named `<sha>` is exactly commit `<sha>`.
 
