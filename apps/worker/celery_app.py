@@ -10,6 +10,7 @@ import logging
 import os
 
 from celery import Celery
+from celery.schedules import crontab
 from celery.signals import worker_process_init
 
 from packages.db import engine
@@ -47,6 +48,17 @@ celery_app.conf.update(
     # thread per enqueue. Connect only — established-connection reads (the
     # worker's blocking pop) are untouched.
     broker_transport_options={"socket_connect_timeout": 2},
+    # The schedule fires only where a beat process exists. The worker is
+    # started with an embedded beat (--beat), which is correct for exactly one
+    # worker: a second worker needs a single separate beat instead, or every
+    # tick fires once per worker.
+    timezone="UTC",
+    beat_schedule={
+        "sweep-anonymous-users": {
+            "task": "sweep_anonymous_users",
+            "schedule": crontab(hour=4, minute=0),
+        },
+    },
 )
 
 

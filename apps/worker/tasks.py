@@ -1,9 +1,11 @@
 """Celery tasks for hax background jobs: document ingestion, transactional
-email, conversation titles."""
+email, conversation titles, and the daily sweep of aged demo visitors."""
 
 import asyncio
 import logging
+import os
 import smtplib
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import anthropic
@@ -19,6 +21,7 @@ from packages.core.rag.ingest import (
 )
 from packages.db import AsyncSessionLocal, engine
 from packages.db.repos import conversations as conversations_repo
+from packages.db.repos import users as users_repo
 from packages.db.user_context import current_user_id
 
 logger = logging.getLogger(__name__)
@@ -65,8 +68,9 @@ def _public_error(exc: BaseException) -> str:
     return str(exc) if isinstance(exc, PermanentIngestError) else GENERIC_INGEST_ERROR
 
 
-def _run_async(coro) -> None:
-    """Drive a coroutine in a fresh event loop, then dispose the async engine's pool.
+def _run_async(coro):
+    """Drive a coroutine in a fresh event loop, return its result, then dispose
+    the async engine's pool.
 
     ``asyncio.run`` creates a NEW loop per call, but the shared async engine caches
     asyncpg connections bound to whichever loop first used them. Disposing after
@@ -76,13 +80,13 @@ def _run_async(coro) -> None:
     ingestion.
     """
 
-    async def _runner() -> None:
+    async def _runner():
         try:
-            await coro
+            return await coro
         finally:
             await engine.dispose()
 
-    asyncio.run(_runner())
+    return asyncio.run(_runner())
 
 
 def _record_failed(doc_id: UUID, error: str) -> None:
@@ -255,3 +259,30 @@ def generate_title(self, conversation_id: str, user_id: str) -> None:
         )
     finally:
         current_user_id.reset(token)
+
+
+def _anon_retention() -> timedelta:
+    # A demo visitor (users.email IS NULL) and everything it owns is deleted
+    # once the row is this old.
+    return timedelta(days=int(os.getenv("ANON_RETENTION_DAYS", "3")))
+
+
+async def sweep_anonymous_users_async(now: datetime | None = None) -> int:
+    """Delete every demo visitor older than ANON_RETENTION_DAYS, with everything
+    it owns (foreign-key cascade); returns how many went. Rows with an email
+    are never candidates: the repo's statement carries that guard itself."""
+    cutoff = (now or datetime.now(UTC)) - _anon_retention()
+    async with AsyncSessionLocal() as session:
+        deleted = await users_repo.delete_stale_anonymous(session, cutoff)
+        await session.commit()
+    return deleted
+
+
+# No retries: beat runs it again tomorrow and the work is idempotent.
+# ignore_result, as for every task here: nobody reads it.
+@celery_app.task(name="sweep_anonymous_users", ignore_result=True)
+def sweep_anonymous_users() -> None:
+    """Scheduled by celery_app's beat_schedule, daily. Logs counts and ids
+    only: a visitor has no email, and content is never logged."""
+    deleted = _run_async(sweep_anonymous_users_async())
+    logger.info("swept %d anonymous users", deleted)

@@ -8,21 +8,17 @@ from sqlalchemy import text
 import apps.api.routers.chat as chat_router
 from packages.core.demo.prompt import DEMO_SYSTEM_PROMPT
 from tests.api.conftest import bearer
-from tests.api.factories import make_conversation, make_message, make_user
+from tests.api.factories import (
+    make_conversation,
+    make_message,
+    make_user,
+    make_visitor,
+)
 
 
 @pytest.fixture
 async def visitor(admin_engine):
-    async with admin_engine.begin() as conn:
-        uid = (
-            await conn.execute(text("INSERT INTO users DEFAULT VALUES RETURNING id"))
-        ).scalar_one()
-
-    class V:
-        id = uid
-        email = None
-
-    return V
+    return await make_visitor(admin_engine)
 
 
 @pytest.fixture

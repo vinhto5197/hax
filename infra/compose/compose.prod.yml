@@ -66,7 +66,13 @@ services:
     env_file: ${HAX_ENV_FILE:-/opt/hax/.env}
     environment:
       MIGRATIONS_DATABASE_URL: ""
-    command: celery -A apps.worker.celery_app worker --loglevel=info --concurrency=2
+    # The embedded beat is for a single worker (a second one needs its own
+    # separate beat process). The schedule file lives in /tmp because /app is
+    # read-only for the hax user; it only records last-run times, so losing
+    # it on a restart merely waits for the next tick.
+    command: >
+      celery -A apps.worker.celery_app worker --beat
+      --schedule /tmp/celerybeat-schedule --loglevel=info --concurrency=2
     depends_on:
       redis: { condition: service_healthy }
       migrate: { condition: service_completed_successfully }
