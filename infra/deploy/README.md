@@ -61,7 +61,9 @@ git push                         # the box fetches compose files at the sha
 infra/deploy/deploy.sh           # build + push + roll, at HEAD
 ```
 
-Or by step: `deploy.sh build`, `deploy.sh push`, `deploy.sh roll [sha]`.
+Or by step: `deploy.sh build`, `deploy.sh push`, `deploy.sh roll [sha]`. A roll
+also reloads Caddy gracefully, because `up -d` leaves a running container
+alone when only its bind-mounted Caddyfile changed.
 `build` and `push` always describe HEAD and refuse a dirty tree or an
 existing tag, so an image named `<sha>` is exactly commit `<sha>`.
 
