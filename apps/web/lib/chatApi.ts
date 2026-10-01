@@ -97,7 +97,6 @@ export async function uploadDocument(file: File): Promise<DocumentSummary> {
     method: "POST",
     body: form,
   });
-  if (await isDemoLimit(response)) throw new DemoLimitError();
   if (!response.ok) {
     // Surface FastAPI's `detail` — these errors are user-actionable.
     let detail = `API ${response.status}: ${response.statusText}`;

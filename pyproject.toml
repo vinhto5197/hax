@@ -27,7 +27,7 @@ dependencies = [
   "voyageai>=0.4,<1",
   # Upload formats beyond plain text (packages/core/rag/extract.py): the
   # text layer only, no OCR.
-  "pypdf>=5,<7",
+  "pypdf[crypto]>=5,<7",
   "python-docx>=1.1,<2",
   # Async tasks
   "celery[redis]>=5.4.0",
