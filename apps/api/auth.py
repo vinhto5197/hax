@@ -28,9 +28,7 @@ _DEFAULT_COOKIE = "authjs.session-token"
 
 class CurrentUser(BaseModel):
     id: uuid.UUID
-    # None = an anonymous demo visitor (the only marker of one). Read from the
-    # token, not the row: a visitor who signed up keeps a token without an
-    # email, and stays anonymous, until they verify and log in again.
+    # None = an anonymous demo visitor (the only marker of one).
     email: str | None
 
 

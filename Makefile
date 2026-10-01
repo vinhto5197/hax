@@ -119,7 +119,7 @@ debug: infra-up types
 	@$(MAKE) web
 
 # ── Production stack, run locally ────────────────────────────
-.PHONY: prod-build prod-up prod-down prod-logs
+.PHONY: prod-build prod-up prod-down prod-clean prod-logs
 
 # compose.prod.yml + the laptop override, at https://localhost. The env file is
 # both the containers' env_file and compose's --env-file (SITE_ADDRESS); an
@@ -137,6 +137,10 @@ prod-up:
 
 prod-down:
 	$(COMPOSE_PROD) down
+
+# Containers AND volumes: Postgres, MinIO, Redis, Caddy's local CA — a full reset.
+prod-clean:
+	$(COMPOSE_PROD) down -v
 
 prod-logs:
 	$(COMPOSE_PROD) logs -f --tail=100

@@ -113,6 +113,7 @@ Postgres, MinIO and Mailpit for RDS, S3 and the SMTP relay.
    make prod-up      # whole stack, detached
    make prod-logs    # tail every service
    make prod-down    # stop (volumes are kept)
+   make prod-clean   # stop and delete volumes (full reset)
    ```
 
 3. Open <https://localhost>. Caddy serves it with its own internal CA, so the

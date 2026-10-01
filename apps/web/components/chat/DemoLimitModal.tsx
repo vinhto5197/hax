@@ -5,8 +5,8 @@ import Link from "next/link";
 import { buttonClass } from "@/components/auth/AuthCard";
 
 // Shown when the API refuses an anonymous visitor's turn or upload (403
-// demo_limit). Sign-up converts the visitor's own account, so the
-// conversation is kept; signing in to an existing account leaves it behind.
+// demo_limit). The demo conversation is not carried over: an account starts
+// fresh, with the visitor's own documents.
 export function DemoLimitModal() {
   return (
     <div
@@ -20,7 +20,7 @@ export function DemoLimitModal() {
           End of the demo
         </h2>
         <p className="text-sm">
-          Sign up to keep this conversation and keep chatting.
+          Sign up to keep chatting, over your own documents.
         </p>
         <Link href="/signup" className={`block text-center ${buttonClass}`}>
           Sign up
@@ -29,7 +29,7 @@ export function DemoLimitModal() {
           <Link href="/login" className="underline">
             Log in
           </Link>{" "}
-          instead (the demo conversation stays with the guest session).
+          if you already have an account.
         </p>
       </div>
     </div>
