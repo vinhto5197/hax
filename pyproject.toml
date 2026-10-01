@@ -15,7 +15,7 @@ dependencies = [
   # API
   # Pinned exactly: FastAPI's OpenAPI output feeds the committed TypeScript
   # types, and CI checks them against what the installed version emits. Bump
-  # here, then `make types`. (Lock file for the rest: M5 decision.)
+  # here, then `make types`.
   "fastapi[standard]==0.141.1",
   "uvicorn[standard]>=0.32.0",
   # LLM
@@ -42,9 +42,9 @@ dependencies = [
   "python-dotenv>=1.0.0",
   "httpx>=0.27.0",
   # Object storage (raw uploaded files): S3 in prod, MinIO in dev — one boto3
-  # client, endpoint swapped by env (slice 2a).
+  # client, endpoint swapped by env.
   "boto3>=1.35.0",
-  # Auth (M2.5): password hashing + session-JWT verification.
+  # Auth: password hashing + session-JWT verification.
   "argon2-cffi>=23.1.0",
   "pyjwt>=2.10.0,<3",
 ]

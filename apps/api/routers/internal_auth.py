@@ -23,7 +23,8 @@ from packages.db.repos import accounts as accounts_repo
 from packages.db.repos import users as users_repo
 
 # 404-camouflaged behind internal_only: only Next's server (holding
-# INTERNAL_API_SECRET) can reach these (verify-credentials, oauth-upsert).
+# INTERNAL_API_SECRET) can reach these (verify-credentials, oauth-upsert,
+# anonymous).
 # verify-credentials must never be reachable as a public password oracle.
 router = APIRouter(prefix="/internal/auth", dependencies=[Depends(internal_only)])
 

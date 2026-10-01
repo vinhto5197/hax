@@ -26,7 +26,7 @@ let evictingSession = false;
 // Single entry point for FastAPI calls: credentials are attached here so no
 // callsite can drop them (dev is cross-origin — ADR 0005, pairs with
 // allow_credentials=True), and a 401 (cookie expired, revoked, or tampered —
-// middleware's crypto-only check can still pass one) evicts centrally.
+// proxy.ts's crypto-only check can still pass one) evicts centrally.
 async function apiFetch(input: string, init?: RequestInit): Promise<Response> {
   const response = await fetch(input, { ...init, credentials: "include" });
   if (response.status === 401 && !evictingSession) {
@@ -39,7 +39,8 @@ async function apiFetch(input: string, init?: RequestInit): Promise<Response> {
 }
 
 // 403 {"detail": {"code": "demo_limit"}}: an anonymous visitor used up the
-// demo's turns or uploads. The one error the UI turns into a sign-up prompt.
+// demo's turns. Thrown by streamChat only — the one error the UI turns into
+// the sign-up prompt.
 export class DemoLimitError extends Error {
   constructor() {
     super("demo_limit");

@@ -35,7 +35,8 @@ class User(Base):
         DateTime(timezone=True), nullable=True
     )
     # Revocation cutoff: tokens whose auth_time predates this are dead.
-    # Password reset bumps it (DB + Redis write-through — see apps/api/auth.py).
+    # Password reset bumps it (DB + Redis write-through — see
+    # packages/core/auth/revocation.py).
     # One clock, the app's: every later writer stamps datetime.now(UTC), and
     # auth_time in the token is the app clock too. A DB-clock insert default
     # would sit tens of ms ahead of the app (RDS and the box are different

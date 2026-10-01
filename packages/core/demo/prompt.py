@@ -3,9 +3,10 @@
 A visitor gets no tools: no document search, no uploads. prompt.md carries the
 guest instructions and the reference text about hax the demo answers from, and
 asks for a sign-up line in the first answer only. Read once at import: the
-file changes only with a new image, and a deploy restarts the process. The
-text is the same for every visitor but shorter than the model's prompt-cache
-minimum, so it is not cached; accepted.
+file changes only with a new image, and a deploy restarts the process. On its
+own it is under the default model's prompt-cache minimum, so a visitor's
+first turn is never a cache hit; later turns cache the prefix as any chat
+does.
 """
 
 from pathlib import Path
