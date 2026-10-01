@@ -63,7 +63,9 @@ infra/deploy/deploy.sh           # build + push + roll, at HEAD
 
 Or by step: `deploy.sh build`, `deploy.sh push`, `deploy.sh roll [sha]`. A roll
 also reloads Caddy gracefully, because `up -d` leaves a running container
-alone when only its bind-mounted Caddyfile changed.
+alone when only its bind-mounted Caddyfile changed; the file is written in
+place for the same reason (a single-file bind mount pins the inode, so a
+renamed-over file is invisible to the container).
 `build` and `push` always describe HEAD and refuse a dirty tree or an
 existing tag, so an image named `<sha>` is exactly commit `<sha>`.
 
