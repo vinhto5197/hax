@@ -189,3 +189,18 @@ commit — the worker sees only committed rows.
 Consequence recorded in ADR 0011: a broker outage on the auth routes now
 yields the uniform 202 (logged), not a 500 that only the mailing branches
 could produce.
+
+## Addendum (2026-10-01) — a scheduled task, and the title poll
+
+**Beat.** The worker now starts with an embedded beat (`--beat`, schedule
+file in `/tmp`), which publishes `sweep_anonymous_users` daily (ADR 0011
+addendum). An embedded beat is correct for exactly one worker; a second
+worker needs a single separate beat process or every tick fires once per
+worker.
+
+**Titles.** The sidebar learns a new conversation's title by polling the
+list from the browser: after the first reply, once a second for at most ten
+seconds, until the title appears. This is not the server polling rejected
+above (nothing holds the stream or a connection, and the API does no extra
+work per token); it is a client refetch bounded in time, and sending is
+never blocked.
