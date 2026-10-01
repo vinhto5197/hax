@@ -2,10 +2,9 @@
 
 The demo opens model spend to anyone, so a visitor gets DEMO_TURN_LIMIT user
 turns in total, checked before anything is persisted, and no uploads at all
-(the guest chat has no document search to use them with). A visitor who
-signed up keeps a token without an email, and so stays limited, until they
-verify and log in again. 403 {"code": "demo_limit"} is the one signal the web
-client turns into the sign-up prompt.
+(the guest chat has no document search to use them with). 403
+{"code": "demo_limit"} is the one signal the web client turns into the
+sign-up prompt.
 """
 
 import os

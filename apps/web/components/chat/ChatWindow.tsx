@@ -110,7 +110,7 @@ function ChatSession({
                 <Link href="/signup" className="underline">
                   sign up
                 </Link>{" "}
-                to keep this conversation and use your own documents.
+                to chat over your own documents.
               </>
             ) : (
               <>

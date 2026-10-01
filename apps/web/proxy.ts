@@ -26,7 +26,7 @@ export default auth((req) => {
   const { pathname } = req.nextUrl;
   const session = req.auth;
   // An anonymous demo visitor is a session with no email: they may reach the
-  // auth screens (sign-up converts their row; login ends the demo).
+  // auth screens (signing up or logging in ends the demo).
   const member = Boolean(session?.user?.email);
   // The landing page is public by exact match ("/" as a prefix would open
   // everything). Members belong in the app. A returning visitor gets the
