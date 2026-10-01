@@ -35,6 +35,9 @@ COPY apps/api ./apps/api
 COPY apps/worker ./apps/worker
 COPY packages ./packages
 COPY alembic.ini ./alembic.ini
+# Links the GHCR package to the repo, so a package CI creates inherits the
+# repo's access instead of needing a manual grant.
+LABEL org.opencontainers.image.source="https://github.com/vinhto5197/hax"
 USER hax
 EXPOSE 8000
 CMD ["uvicorn", "apps.api.main:app", "--host", "0.0.0.0", "--port", "8000"]

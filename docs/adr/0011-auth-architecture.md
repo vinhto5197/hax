@@ -297,3 +297,59 @@ SPF + DKIM configured on the sending domain. The worker must restart before
 or with any deploy that adds a task — Celery discards a message for a task
 it doesn't know rather than retrying it.
 `AUTH_REQUIRE_EMAIL_VERIFICATION=true` is a launch precondition.
+
+## Addendum (2026-10-01) — the anonymous demo
+
+**Context.** A visitor should try the chat before creating an account. The
+demo opens model spend to anyone, so it needs an identity to cap on, but an
+identity that costs nothing to create and leaves nothing behind.
+
+**Decision: anonymity is the absence of an email, nowhere else.** An
+anonymous visitor is a `users` row with `email IS NULL` (the column became
+nullable; the `lower(email)` unique index already ignores NULLs) and an
+Auth.js session whose token carries no `email` claim. There is no flag
+column, no token claim and no derived field: every check is
+`email is None` (API: `CurrentUser.email`; web: `session.user.email ===
+null`; the sweep: `WHERE email IS NULL`). A row with an email is a member to
+every boundary (RLS, revocation, rate limits, the repo layer) exactly as
+before; a row without one is a member to all of them too, plus the demo
+caps.
+
+**Creation.** `POST /internal/auth/anonymous` (secret-gated like its
+siblings) inserts the row, limited per address per day through the existing
+limiter (`ANON_PER_IP_PER_DAY`, fail-open on Redis). An Auth.js
+`anonymous` credentials provider calls it, forwarding the visitor's address
+from `x-forwarded-for`, and mints the session with `email: null`.
+
+**Where the demo lives.** On the landing page `/`, in place: the first Send
+starts the session and renders the chat there, with no URL for the
+conversation and no sidebar. Reload or leave and it is gone; the next Send
+is a new demo. Members are sent from `/` to `/chat`; a visitor's real
+request for `/chat*` is sent back to `/`. Visitors may reach `/login` and
+`/signup`.
+
+**What a visitor gets.** A guest system prompt (`packages/core/demo/
+prompt.md`: instructions plus three reference texts about hax) and no tools
+at all, so no retrieval, no uploads (403), and the model's own text as the
+only output. `DEMO_TURN_LIMIT` user turns in total, checked before anything
+is persisted; the refusal is `403 {"code": "demo_limit"}`, the one signal the
+web turns into the sign-up prompt. The invitation to sign up is in the first
+answer only.
+
+**No conversion.** Signing up from the demo creates a fresh account; the demo
+conversation stays on the anonymous row. Built and dropped: a signup that
+claimed the visitor's own row (an optional-caller dependency, a conditional
+row claim, a signup branch, and a rule about not revoking the claiming
+session) for a result nobody needs in v0.
+
+**Retention.** A daily Celery beat task deletes rows with no email older
+than `ANON_RETENTION_DAYS` (default 3); foreign keys cascade to everything
+the row owned. `users` is outside RLS and Postgres exempts referential
+cascades from row security, so the sweep announces no identity.
+
+**Alternatives considered.** An `is_anonymous` column and claim (rejected:
+a second source of truth for one fact). A seeded per-visitor corpus with
+retrieval (built in a fast pass, dropped: more machinery than the demo
+needs; the reference texts fit in the prompt). A persistent demo
+conversation with a URL (dropped: the demo is one sitting). A
+`sessionStorage` tab marker to end the demo (dropped: a proxy rule does it).

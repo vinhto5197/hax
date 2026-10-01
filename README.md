@@ -67,8 +67,9 @@ Start everything (Postgres, Redis, MinIO, Mailpit, FastAPI, Next.js):
 make dev
 ```
 
-Ingestion, transactional email and conversation titles run in a **Celery
-worker** (a separate process). Run it in a second terminal — otherwise an upload
+Ingestion, transactional email, conversation titles and the daily sweep of
+demo visitors run in a **Celery worker** (a separate process, with the
+scheduler embedded). Run it in a second terminal — otherwise an upload
 just sits at `pending`, no email arrives, and new conversations stay "Untitled"
 (`make dev` prints this reminder too):
 
@@ -118,7 +119,9 @@ Postgres, MinIO and Mailpit for RDS, S3 and the SMTP relay.
 
 3. Open <https://localhost>. Caddy serves it with its own internal CA, so the
    browser shows a certificate warning once — accept it. Mailpit for this
-   stack is at <http://localhost:8026>.
+   stack is at <http://localhost:8026>. The landing page is the anonymous
+   demo: send a message without an account to try it (a few turns, no
+   uploads); log in for the full product.
 
 It publishes only 80/443 and 8026, so it runs alongside `make dev`.
 
@@ -243,7 +246,7 @@ Check what's running at any time with `make status` (a TCP probe of each service
 1. **Streaming chat** *(shipped)* — Next.js + FastAPI + SSE, conversation history in Postgres, Docker Compose (Postgres, Redis, all services). Auth + background titles deferred to M2.5.
 2. **Data + RAG** *(shipped)* — User data upload (files), Celery ingestion (chunk → embed → pgvector), conversation memory, and chat as a single **agentic** route: retrieval is a model-invoked tool (`search_documents`, alongside a calculator, datetime, and a mocked email send) behind a hand-rolled tool-use harness with prompt caching and a model selector.
 2.5. **Auth + background titles** *(shipped)* — email/password + Google via NextAuth/Auth.js, `users` table, Postgres row-level security, email verification + password reset, conversations + documents scoped to a user; background chat title generation (Celery + Redis, `TITLE_MODEL`), with every API-side publish off the event loop (`apps/api/enqueue.py`).
-3. **Live on AWS** *(in progress; live since 2026-09-27)* — the smallest live stack first: one EC2 box running the compose topology (api, worker, web, Redis, Caddy) against managed RDS Postgres + pgvector and S3, all in Terraform; CI/CD that rolls the box on every merge; an anonymous demo of the chat. **3.5** grows it when each piece earns its cost: ALB, ElastiCache, SES, alarms, Fargate.
+3. **Live on AWS** *(in progress; live since 2026-09-27)* — the smallest live stack first: one EC2 box running the compose topology (api, worker, web, Redis, Caddy) against managed RDS Postgres + pgvector and S3, all in Terraform; CI/CD that rolls the box on every merge; an anonymous demo on the landing page (a few turns about hax, no account). **3.5** grows it when each piece earns its cost: ALB, ElastiCache, SES, alarms, Fargate.
 4. **Structured outputs + polish** — table/structured view for results, citation/source display, cohesive UI.
 5. **Cleanup + hardening + eval** — test + eval infrastructure, drain backlogs, tighten deferred foot-guns.
 

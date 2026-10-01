@@ -43,8 +43,10 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
      generated-types drift check on every push; a passing push to `main`
      rolls the box through `infra/deploy/deploy.sh` (OIDC role, no stored
      AWS key). The value of CI/CD is a running pipeline, not a one-off deploy.
-   - An **anonymous demo**: try the chat without an account for a few turns,
-     then sign up and keep the conversation. A minimal public landing page.
+   - An **anonymous demo** *(live)*: the landing page is the demo — a few
+     turns about hax itself, no account, no tools, then sign up for the full
+     product. Anonymity is `users.email IS NULL` and nothing else; a daily
+     sweep removes aged visitors. ADR 0011 addendum.
    - Why deploy here, not last: surfaces infra issues (SSE, secrets,
      networking) early and keeps a live URL from M3 on. M4 + M5 ride the
      pipeline. The deploy ADR records every thin choice and its upgrade.
@@ -54,7 +56,7 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
      leaves the box; SES after sandbox exit; CloudWatch alarms; the Fargate
      path (`local/V1_CHECKLIST.local.md`); a staging environment variable;
      the hardening items deferred from M3 (RDS CA verification, CSP nonce,
-     anonymous-user cleanup, limiter redesign, OIDC federation for the deploy
+     limiter redesign, OIDC federation for the deploy
      job, per-service env files, network split + Redis auth).
 
 4. **Milestone 4 — Structured outputs + polish** *(built against live infra, auto-deployed)*
@@ -153,7 +155,7 @@ this repo. Write prod-level comments only:
 - TypeScript types are generated from the FastAPI OpenAPI spec to prevent drift.
 - LangChain is used inside `packages/core` for **text splitting only** (`langchain-text-splitters`). Embeddings call the **Voyage SDK directly**; retrieval SQL, prompt assembly, and generation stay hand-rolled (ADR 0008 → superseded by 0009).
 - Chat is **agentic**: `/api/chat` (the only chat route) runs a hand-rolled tool-use loop on the anthropic SDK — `packages/core/agent/harness.py` (loop, MAX_ITERS + no-tools fallback, moving prompt-cache breakpoint) over a registry of four tools in `tools.py` (`search_documents`, `calculator`, `get_current_datetime`, mocked `send_email`). Retrieval is model-invoked, never injected. See ADR 0002 addendum.
-- Auth is **NextAuth/Auth.js v5** (web front door, `/auth/*`) + FastAPI identity endpoints (`/api/auth/*` public; `/internal/auth/*` secret-gated: verify-credentials, oauth-upsert — Google identities resolve to a hax user there, so JWT `sub` is always a hax id) bridged by a standard HS256 JWT (`packages/core/auth/`); `packages/db/repos/` is the start of the repo layer (M2.5); email verification + password reset ride single-use tokens (`packages/db/repos/email_tokens.py`, one live link per purpose) and the gate is ON by default.
+- Auth is **NextAuth/Auth.js v5** (web front door, `/auth/*`) + FastAPI identity endpoints (`/api/auth/*` public; `/internal/auth/*` secret-gated: verify-credentials, oauth-upsert — Google identities resolve to a hax user there, so JWT `sub` is always a hax id) bridged by a standard HS256 JWT (`packages/core/auth/`); `packages/db/repos/` is the start of the repo layer (M2.5); email verification + password reset ride single-use tokens (`packages/db/repos/email_tokens.py`, one live link per purpose) and the gate is ON by default. An anonymous demo visitor is a `users` row with no email and a token with no email — the only marker; `apps/api/demo.py` holds the caps (`DEMO_TURN_LIMIT`, no uploads, the guest prompt with no tools). ADR 0011 addendum.
 - Isolation is structural (M2.5 slice 2): repo layer + Postgres RLS (`FORCE`, GUC `app.current_user_id` announced per-transaction from a ContextVar). The app connects as least-privilege `hax_app`; Alembic uses the owner role via `MIGRATIONS_DATABASE_URL`. Agent tools get identity via `ToolContext`, never model input. See ADR 0012.
 - Production is `compose.prod.yml` on one EC2 box (Caddy is the only published port; TLS + single origin), RDS Postgres and S3 (instance role, no static keys), Redis on the box — all provisioned by `infra/terraform`. A deploy is `infra/deploy/deploy.sh` at a pushed commit: images tagged by sha on GHCR, compose files fetched at that sha, `/opt/hax/.env` written by hand once and never in the repo or CI. ADR 0013.
 - The directory structure is a target layout — start flat, extract as complexity demands. Not every directory needs to exist from day one.

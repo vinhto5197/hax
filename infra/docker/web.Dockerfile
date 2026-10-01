@@ -20,6 +20,7 @@ RUN addgroup -S hax && adduser -S -G hax hax
 COPY --from=build --chown=hax:hax /app/.next/standalone ./
 COPY --from=build --chown=hax:hax /app/.next/static ./.next/static
 COPY --from=build --chown=hax:hax /app/public ./public
+LABEL org.opencontainers.image.source="https://github.com/vinhto5197/hax"
 USER hax
 EXPOSE 3000
 CMD ["node", "server.js"]
