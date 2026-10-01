@@ -14,7 +14,7 @@
 #        overwritten (DEPLOY_OVERWRITE=1 overrides, e.g. a CI re-run).
 # roll   over SSM, the box fetches compose.prod.yml + Caddyfile at <sha> from
 #        the public repo, pins the two image tags in /opt/hax/images.env, then
-#        compose pull + up -d. So <sha> must be pushed: a deploy is always a
+#        compose pull + up -d + caddy reload. So <sha> must be pushed: a deploy is always a
 #        commit on GitHub, never a working tree.
 # all    the three in order (default). build/push always use HEAD; a sha
 #        argument is accepted by roll only (rollback), never by build or push,
@@ -93,6 +93,11 @@ printf 'HAX_PYTHON_IMAGE=%s\nHAX_WEB_IMAGE=%s\n' '$PY_IMAGE' '$WEB_IMAGE' > imag
 compose() { docker compose --env-file .env --env-file images.env -f compose.prod.yml "\$@"; }
 compose pull --quiet
 compose up -d --remove-orphans
+# Caddy reads its file only at start, and up -d does not recreate a container
+# whose bind-mounted config changed, so a Caddyfile change would otherwise
+# never apply. A graceful reload picks up the fetched file with no dropped
+# connection, recreated or not.
+compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
 compose ps
 # Only the running images stay on the box; superseded sha tags are pullable
 # from GHCR (a rollback re-pulls, about a minute) and would otherwise fill
