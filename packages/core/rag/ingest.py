@@ -23,7 +23,8 @@ async def ingest_document_async(document_id: UUID) -> None:
     'processing' while retries are pending.
 
     Idempotent: the chunk write is delete-then-insert in one transaction, so a
-    retry or broker redelivery (acks_late) re-runs cleanly. Invariant:
+    Celery retry re-runs cleanly. (A broker redelivery never gets here —
+    tasks.py records it failed without parsing again.) Invariant:
     status=ready => a complete, current chunk set.
     """
     async with AsyncSessionLocal() as session:

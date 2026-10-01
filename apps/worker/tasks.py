@@ -111,9 +111,7 @@ def _record_failed(doc_id: UUID, error: str) -> None:
         logger.exception("failed to record 'failed' status for document %s", doc_id)
 
 
-# ignore_result: the UI polls documents.status, nobody reads the task result,
-# and the result-backend subscription is what makes a publish hang when Redis
-# is unreachable (see apps/api/enqueue.py).
+# ignore_result: see generate_title.
 @celery_app.task(
     bind=True, name="ingest_document", max_retries=MAX_RETRIES, ignore_result=True
 )
@@ -123,8 +121,9 @@ def ingest_document(self, document_id: str, user_id: str) -> None:
     ``ingest_document_async`` drives pending/processing -> ready and raises on
     failure without touching 'failed'; this task classifies that failure:
 
-    - ``PermanentIngestError`` (missing doc/key, non-UTF-8, no chunks) -> record
-      'failed' and stop; retrying can't help.
+    - ``PermanentIngestError`` (missing doc/key, unreadable or over-budget
+      content — see extract.py — no chunks) -> record 'failed' and stop;
+      retrying can't help.
     - anything else (Voyage / S3 / DB I/O) -> transient: retry with exponential
       backoff, leaving status='processing' so the polling UI keeps waiting; on the
       final attempt, record 'failed'.
@@ -179,9 +178,7 @@ def ingest_document(self, document_id: str, user_id: str) -> None:
 EMAIL_MAX_RETRIES = 3
 
 
-# ignore_result, as for generate_title below: nobody reads this task's result,
-# and the result-backend subscription every publish would otherwise open is
-# what makes an enqueue hang for many seconds when Redis is unreachable.
+# ignore_result: see generate_title.
 @celery_app.task(
     bind=True, name="send_email", max_retries=EMAIL_MAX_RETRIES, ignore_result=True
 )
@@ -294,7 +291,7 @@ async def sweep_anonymous_users_async(now: datetime | None = None) -> int:
 
 
 # No retries: beat runs it again tomorrow and the work is idempotent.
-# ignore_result, as for every task here: nobody reads it.
+# ignore_result: see generate_title.
 @celery_app.task(name="sweep_anonymous_users", ignore_result=True)
 def sweep_anonymous_users() -> None:
     """Scheduled by celery_app's beat_schedule, daily. Logs counts and ids

@@ -128,7 +128,6 @@ async def stream_completion_agentic(
         if final.stop_reason != "tool_use":
             return  # end_turn — the answer already streamed
 
-        # Replay the model's tool_use turn, run each tool, feed results back.
         messages.append({"role": "assistant", "content": final.content})
         tool_results: list[dict] = []
         for block in final.content:

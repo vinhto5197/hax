@@ -46,7 +46,6 @@ async def list_documents(
     session: AsyncSession = Depends(get_session),
     user: CurrentUser = Depends(current_user),
 ) -> list[DocumentOut]:
-    # Most-recent first.
     documents = await documents_repo.list_for_user(session, user.id)
     return [DocumentOut.model_validate(d) for d in documents]
 

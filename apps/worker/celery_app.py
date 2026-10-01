@@ -33,9 +33,11 @@ celery_app.conf.update(
     task_serializer="json",
     result_serializer="json",
     accept_content=["json"],
-    # Ack the message only AFTER the task finishes, so a worker crash mid-task
-    # redelivers it instead of dropping the work. This is *why* the task must be
-    # idempotent — ingestion is, via delete-then-insert (see ingest_document_async).
+    # Ack only AFTER the task finishes, so a worker death mid-task redelivers
+    # the message with its redelivered flag set; ingest_document uses that flag
+    # to record the document failed instead of parsing the same bytes again
+    # (tasks.py). Celery retries, not redelivery, re-run a task — ingestion
+    # stays idempotent for those via delete-then-insert.
     task_acks_late=True,
     task_reject_on_worker_lost=True,
     # Ingestion is long-ish: don't let one worker hoard queued messages, and hard-

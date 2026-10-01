@@ -73,8 +73,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     }),
     // A demo visitor: FastAPI creates a user with no email (the only marker
-    // of an anonymous user). The visitor's address is forwarded because this request comes from Next's server; the
-    // per-address limit would otherwise see only Next.
+    // of an anonymous user). The visitor's address is forwarded because this
+    // request comes from Next's server; the per-address limit would otherwise
+    // see only Next.
     Credentials({
       id: "anonymous",
       credentials: {},
