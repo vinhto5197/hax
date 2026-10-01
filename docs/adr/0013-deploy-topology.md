@@ -21,7 +21,10 @@ endpoint (MinIO in dev), and Postgres, Redis and SMTP are plain protocols.
   Redis, and a `migrate` one-shot. Caddy is the only service with published
   ports; it terminates TLS with Let's Encrypt and routes `/api/*` to uvicorn
   (SSE flushed, never buffered) and everything else to Next, so web and API
-  are one origin and cookies are first-party. `/internal/*` is not routed
+  are one origin and cookies are first-party. Caddy also caps the API's
+  request body (6 MB): Starlette spools an upload to disk before the route's
+  checks run, so the proxy is the only hop that can refuse an oversized body
+  without receiving it. `/internal/*` is not routed
   publicly: Next's server reaches it over the compose network.
 - **RDS Postgres 16** (`db.t4g.micro`, pgvector built in, TLS forced) in the
   box's availability zone, reachable only from the box's security group. The
