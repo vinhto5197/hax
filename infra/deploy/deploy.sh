@@ -88,7 +88,11 @@ test -f .env || { echo "/opt/hax/.env missing: write it first (infra/deploy/READ
 exec 9> .deploy.lock
 flock -w 600 9 || { echo "another deploy holds /opt/hax/.deploy.lock"; exit 1; }
 curl -fsSL "$raw/compose.prod.yml" -o compose.prod.yml.new && mv compose.prod.yml.new compose.prod.yml
-curl -fsSL "$raw/Caddyfile" -o Caddyfile.new && mv Caddyfile.new Caddyfile
+# Written IN PLACE, not renamed over: the caddy container bind-mounts this one
+# file, which pins its inode, so a rename would leave the container reading
+# the old file forever and the reload below would re-read it. The download
+# still lands in .new first, so a failed fetch never truncates the live file.
+curl -fsSL "$raw/Caddyfile" -o Caddyfile.new && cat Caddyfile.new > Caddyfile && rm Caddyfile.new
 printf 'HAX_PYTHON_IMAGE=%s\nHAX_WEB_IMAGE=%s\n' '$PY_IMAGE' '$WEB_IMAGE' > images.env.new && mv images.env.new images.env
 compose() { docker compose --env-file .env --env-file images.env -f compose.prod.yml "\$@"; }
 compose pull --quiet
