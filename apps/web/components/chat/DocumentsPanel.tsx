@@ -26,6 +26,8 @@ export function DocumentsPanel() {
   const [uploading, setUploading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The one failed document whose reason is shown inline (tap the status).
+  const [openErrorId, setOpenErrorId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -128,36 +130,48 @@ export function DocumentsPanel() {
         </p>
       ) : (
         <ul className="flex max-h-40 flex-col gap-1 overflow-y-auto">
-          {documents.map((doc) => (
-            // `title` shows the ingest error on hover; `?? undefined` because
-            // React omits the attribute for undefined (title isn't nullable).
-            <li
-              key={doc.id}
-              className="flex items-center gap-2 px-1 text-xs"
-              title={doc.error ?? undefined}
-            >
-              <span className="flex-1 truncate text-black/70 dark:text-white/70">
-                {doc.filename}
-              </span>
-              <span
-                className={
-                  STATUS_STYLES[doc.status] ??
-                  "text-black/40 dark:text-white/40"
-                }
-              >
-                {doc.status}
-              </span>
-              <button
-                type="button"
-                onClick={() => handleDelete(doc)}
-                disabled={deletingId === doc.id}
-                aria-label={`Delete ${doc.filename}`}
-                className="shrink-0 px-0.5 text-sm leading-none text-black/30 hover:text-red-600 disabled:opacity-50 dark:text-white/30 dark:hover:text-red-400"
-              >
-                ×
-              </button>
-            </li>
-          ))}
+          {documents.map((doc) => {
+            const statusClass =
+              STATUS_STYLES[doc.status] ?? "text-black/40 dark:text-white/40";
+            return (
+              <li key={doc.id} className="px-1 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="flex-1 truncate text-black/70 dark:text-white/70">
+                    {doc.filename}
+                  </span>
+                  {doc.error ? (
+                    // A failed document's reason opens on tap, not hover.
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setOpenErrorId((id) => (id === doc.id ? null : doc.id))
+                      }
+                      aria-expanded={openErrorId === doc.id}
+                      className={`underline decoration-dotted underline-offset-2 ${statusClass}`}
+                    >
+                      {doc.status}
+                    </button>
+                  ) : (
+                    <span className={statusClass}>{doc.status}</span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(doc)}
+                    disabled={deletingId === doc.id}
+                    aria-label={`Delete ${doc.filename}`}
+                    className="shrink-0 px-0.5 text-sm leading-none text-black/30 hover:text-red-600 disabled:opacity-50 dark:text-white/30 dark:hover:text-red-400"
+                  >
+                    ×
+                  </button>
+                </div>
+                {doc.error && openErrorId === doc.id ? (
+                  <p className="mt-0.5 text-red-600 dark:text-red-400">
+                    {doc.error}
+                  </p>
+                ) : null}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
