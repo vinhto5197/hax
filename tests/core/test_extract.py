@@ -5,7 +5,9 @@ import io
 
 import pytest
 from docx import Document as DocxDocument
+from pypdf import PdfReader, PdfWriter
 
+import packages.core.rag.extract as extract
 from packages.core.rag.errors import PermanentIngestError
 from packages.core.rag.extract import extract_text
 
@@ -89,3 +91,43 @@ def test_docx_paragraphs_and_tables():
 def test_garbage_docx_is_permanent():
     with pytest.raises(PermanentIngestError, match="could not be read"):
         extract_text(b"PK not really a zip", "x.docx")
+
+
+def _encrypted(user_password: str) -> bytes:
+    writer = PdfWriter()
+    writer.append(PdfReader(io.BytesIO(_pdf("secret text"))))
+    writer.encrypt(
+        user_password=user_password, owner_password="owner", algorithm="AES-256"
+    )
+    out = io.BytesIO()
+    writer.write(out)
+    return out.getvalue()
+
+
+def test_pdf_with_an_empty_user_password_is_read():
+    assert "secret text" in extract_text(_encrypted(""), "x.pdf")
+
+
+def test_pdf_with_a_user_password_is_permanent_with_a_reason():
+    with pytest.raises(PermanentIngestError, match="password"):
+        extract_text(_encrypted("hunter2"), "x.pdf")
+
+
+def test_docx_over_the_inflated_budget_is_permanent(monkeypatch):
+    monkeypatch.setattr(extract, "MAX_INFLATED_BYTES", 64)
+    with pytest.raises(PermanentIngestError, match="too long"):
+        extract_text(_docx(["hello"]), "x.docx")
+
+
+def test_pdf_over_the_page_cap_is_permanent(monkeypatch):
+    monkeypatch.setattr(extract, "MAX_PDF_PAGES", 0)
+    with pytest.raises(PermanentIngestError, match="too long"):
+        extract_text(_pdf("hello"), "x.pdf")
+
+
+def test_text_over_the_character_budget_is_permanent(monkeypatch):
+    monkeypatch.setattr(extract, "MAX_TEXT_CHARS", 5)
+    with pytest.raises(PermanentIngestError, match="too long"):
+        extract_text(b"hello world", "x.txt")
+    with pytest.raises(PermanentIngestError, match="too long"):
+        extract_text(_pdf("hello world"), "x.pdf")
