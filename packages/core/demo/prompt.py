@@ -2,9 +2,10 @@
 
 A visitor gets no tools: no document search, no uploads. prompt.md carries the
 guest instructions and the reference text about hax the demo answers from, and
-asks for a sign-up line at the end of every answer. Read once at import: the
+asks for a sign-up line in the first answer only. Read once at import: the
 file changes only with a new image, and a deploy restarts the process. The
-text is identical for every visitor, so Anthropic's prompt cache hits.
+text is the same for every visitor but shorter than the model's prompt-cache
+minimum, so it is not cached; accepted.
 """
 
 from pathlib import Path

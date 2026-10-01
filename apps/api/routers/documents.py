@@ -67,16 +67,17 @@ async def upload_document(
         )
     max_bytes = TEXT_MAX_BYTES if suffix in TEXT_SUFFIXES else BINARY_MAX_BYTES
 
-    # Reject on the declared length BEFORE buffering anything — an honest large
-    # client costs zero reads. (A lying/absent Content-Length is caught below.)
+    # By the time this runs the multipart body has already been received and
+    # spooled (Starlette parses the form before dependencies resolve); the
+    # proxy's request-body cap (Caddyfile) is what refuses an oversized body
+    # early. The declared length is a cheap first answer for an honest client.
     declared = request.headers.get("content-length")
     if declared is not None and declared.isdigit() and int(declared) > max_bytes:
         raise HTTPException(
             status_code=413, detail=f"file exceeds {max_bytes // 1024} KB"
         )
 
-    # Bounded read caps RAM at max_bytes+1 even when the header lies; the deeper
-    # multipart disk-spool is the reverse proxy's request-size-limit job.
+    # Bounded read caps RAM at max_bytes+1 even when the header lies.
     content = await file.read(max_bytes + 1)
     if len(content) > max_bytes:
         raise HTTPException(

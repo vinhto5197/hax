@@ -6,8 +6,15 @@
 	header Strict-Transport-Security "max-age=31536000"
 
 	# FastAPI owns /api/*. flush_interval -1: the chat SSE stream is written
-	# through as it arrives, never buffered.
+	# through as it arrives, never buffered. max_size is the request-body cap
+	# for the whole API: Starlette spools a multipart upload to disk BEFORE the
+	# route's checks run, so this is the only hop that refuses an oversized
+	# body (413) without receiving it. Must stay above the largest upload the
+	# API accepts (5 MB plus multipart overhead).
 	handle /api/* {
+		request_body {
+			max_size 6MB
+		}
 		reverse_proxy api:8000 {
 			flush_interval -1
 		}

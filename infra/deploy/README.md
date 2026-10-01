@@ -75,7 +75,10 @@ hc run --rm migrate alembic -c alembic.ini downgrade <revision at the older sha>
 ```
 
 then `roll <older sha>`. Keep migrations expand-only where possible so a
-rollback rarely needs this.
+rollback rarely needs this. One known exception: the migration that made
+`users.email` nullable cannot be reversed while demo visitors exist — run
+`DELETE FROM users WHERE email IS NULL` as the owner role first, or the
+downgrade fails on the NOT NULL constraint.
 
 On the box, `roll` takes `/opt/hax/.deploy.lock` (a second roll waits, up
 to ten minutes), writes `compose.prod.yml`, `Caddyfile` and `images.env`
