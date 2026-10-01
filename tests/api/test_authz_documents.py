@@ -1,5 +1,7 @@
 from types import SimpleNamespace
 
+import pytest
+
 from tests.api.conftest import bearer
 from tests.api.factories import make_document
 
@@ -88,3 +90,62 @@ async def test_upload_marks_failed_when_the_broker_is_down(
     assert r.status_code == 200
     assert r.json()["status"] == "failed"
     assert r.json()["error"] == "could not start ingestion (task queue unavailable)"
+
+
+@pytest.fixture
+def stub_publish(monkeypatch):
+    import apps.api.routers.documents as documents_router
+    from packages.core import storage
+
+    monkeypatch.setattr(storage, "put", lambda key, content, mime: None)
+    monkeypatch.setattr(
+        documents_router,
+        "ingest_document",
+        SimpleNamespace(name="ingest_document", apply_async=lambda args, retry: None),
+    )
+
+
+async def test_upload_accepts_pdf_without_parsing_it(client, user_a, stub_publish):
+    # Binary formats are parsed only in the worker: the route stores whatever
+    # bytes carry the suffix and lets ingestion report an unreadable file.
+    r = await client.post(
+        "/api/documents",
+        files={"file": ("report.pdf", b"%PDF-1.4 not really", "application/pdf")},
+        headers=bearer(user_a),
+    )
+    assert r.status_code == 200
+    assert r.json()["status"] == "pending"
+
+
+async def test_upload_rejects_unknown_suffix(client, user_a, stub_publish):
+    r = await client.post(
+        "/api/documents",
+        files={"file": ("tool.exe", b"MZ", "application/octet-stream")},
+        headers=bearer(user_a),
+    )
+    assert r.status_code == 400
+    assert r.json()["detail"] == "supported files: .txt, .md, .pdf, .docx"
+
+
+async def test_upload_rejects_pdf_over_5mb_on_declared_length(
+    client, user_a, stub_publish
+):
+    # httpx keeps a caller-set Content-Length, so the route sees a declared
+    # 5 MB + 1 and refuses before reading the (tiny) body.
+    r = await client.post(
+        "/api/documents",
+        files={"file": ("big.pdf", b"%PDF-1.4", "application/pdf")},
+        headers={**bearer(user_a), "content-length": str(5 * 1024 * 1024 + 1)},
+    )
+    assert r.status_code == 413
+    assert r.json()["detail"] == "file exceeds 5120 KB"
+
+
+async def test_upload_rejects_text_over_256kb(client, user_a, stub_publish):
+    r = await client.post(
+        "/api/documents",
+        files={"file": ("big.txt", b"a" * (256 * 1024 + 1), "text/plain")},
+        headers=bearer(user_a),
+    )
+    assert r.status_code == 413
+    assert r.json()["detail"] == "file exceeds 256 KB"

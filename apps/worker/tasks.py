@@ -14,11 +14,8 @@ from sqlalchemy.exc import InterfaceError, OperationalError
 from apps.worker.celery_app import celery_app
 from packages.core import titles
 from packages.core.email import smtp, templates
-from packages.core.rag.ingest import (
-    PermanentIngestError,
-    ingest_document_async,
-    mark_document_failed,
-)
+from packages.core.rag.errors import PermanentIngestError
+from packages.core.rag.ingest import ingest_document_async, mark_document_failed
 from packages.db import AsyncSessionLocal, engine
 from packages.db.repos import conversations as conversations_repo
 from packages.db.repos import users as users_repo

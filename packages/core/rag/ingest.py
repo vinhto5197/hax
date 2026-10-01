@@ -7,24 +7,11 @@ from sqlalchemy.orm.exc import StaleDataError
 
 from packages.core import storage
 from packages.core.rag.embeddings import embed_documents
+from packages.core.rag.errors import PermanentIngestError
+from packages.core.rag.extract import extract_text
 from packages.core.rag.splitter import split_text
 from packages.db import AsyncSessionLocal
 from packages.db.models import Chunk, Document
-
-
-class PermanentIngestError(Exception):
-    """A deterministic ingestion failure that retrying cannot fix — missing doc,
-    missing storage_key, the object absent from storage, non-UTF-8 content, or no
-    chunks after splitting.
-
-    The Celery task records the document 'failed' immediately on this, instead of
-    retrying. Any OTHER exception (Voyage / S3 / DB I/O) is treated as transient
-    and retried with backoff.
-
-    Messages are USER-VISIBLE (they become doc.error via the task's _public_error
-    pass-through): keep them static or interpolate only server-generated ids/
-    filenames — never raw driver/SDK exception text.
-    """
 
 
 async def ingest_document_async(document_id: UUID) -> None:
@@ -62,12 +49,8 @@ async def ingest_document_async(document_id: UUID) -> None:
             raise PermanentIngestError(
                 f"storage object {storage_key} not found for document {document_id}"
             ) from exc
-        try:
-            text = raw.decode("utf-8")
-        except UnicodeDecodeError as exc:
-            raise PermanentIngestError(
-                f"document {document_id} is not valid UTF-8"
-            ) from exc
+        # Parsing is CPU-bound (PDF especially) -> off the loop.
+        text = await asyncio.to_thread(extract_text, raw, filename)
         chunks = split_text(text)
         if not chunks:
             raise PermanentIngestError("document produced no chunks after splitting")
