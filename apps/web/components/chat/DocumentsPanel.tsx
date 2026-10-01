@@ -9,7 +9,7 @@ import {
   uploadDocument,
 } from "@/lib/chatApi";
 
-// Upload a .txt/.md file and watch ingestion status: uploads return 'pending'
+// Upload a .txt/.md/.pdf/.docx file and watch ingestion status: uploads return 'pending'
 // and the panel polls until ready|failed. Local state — only this panel reads it.
 const STATUS_STYLES: Record<string, string> = {
   ready: "text-green-600 dark:text-green-400",
@@ -106,13 +106,14 @@ export function DocumentsPanel() {
         </button>
       </div>
       <p className="px-1 text-xs text-black/40 dark:text-white/40">
-        .txt or .md, up to 256 KB.
+        PDF, Word (.docx), .txt or .md. Text PDFs only, up to 5 MB; plain text
+        up to 256 KB.
       </p>
       {/* Hidden file control; the styled button above proxies to it. */}
       <input
         ref={inputRef}
         type="file"
-        accept=".txt,.md,text/plain,text/markdown"
+        accept=".txt,.md,.pdf,.docx"
         onChange={handleFile}
         className="hidden"
       />

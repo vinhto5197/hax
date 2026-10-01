@@ -27,10 +27,18 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
-# Whole file is buffered in memory; streaming uploads are out of v0 scope.
-MAX_BYTES = 256 * 1024
 # Mime derived from the validated suffix — the client's content_type is untrusted.
-SUFFIX_MIME = {".txt": "text/plain", ".md": "text/markdown"}
+SUFFIX_MIME = {
+    ".txt": "text/plain",
+    ".md": "text/markdown",
+    ".pdf": "application/pdf",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+}
+TEXT_SUFFIXES = {".txt", ".md"}
+# Whole file is buffered in memory; streaming uploads are out of v0 scope.
+# Text is dense, so its cap is smaller; binary formats carry layout overhead.
+TEXT_MAX_BYTES = 256 * 1024
+BINARY_MAX_BYTES = 5 * 1024 * 1024
 
 
 @router.get("")
@@ -55,27 +63,30 @@ async def upload_document(
     suffix = next((s for s in SUFFIX_MIME if filename.lower().endswith(s)), None)
     if suffix is None:
         raise HTTPException(
-            status_code=400, detail="only .txt and .md files are supported"
+            status_code=400, detail="supported files: .txt, .md, .pdf, .docx"
         )
+    max_bytes = TEXT_MAX_BYTES if suffix in TEXT_SUFFIXES else BINARY_MAX_BYTES
 
     # Reject on the declared length BEFORE buffering anything — an honest large
     # client costs zero reads. (A lying/absent Content-Length is caught below.)
     declared = request.headers.get("content-length")
-    if declared is not None and declared.isdigit() and int(declared) > MAX_BYTES:
-        raise HTTPException(status_code=413, detail=f"file exceeds {MAX_BYTES} bytes")
+    if declared is not None and declared.isdigit() and int(declared) > max_bytes:
+        raise HTTPException(
+            status_code=413, detail=f"file exceeds {max_bytes // 1024} KB"
+        )
 
-    # Bounded read caps RAM at MAX_BYTES+1 even when the header lies; the deeper
+    # Bounded read caps RAM at max_bytes+1 even when the header lies; the deeper
     # multipart disk-spool is the reverse proxy's request-size-limit job.
-    content = await file.read(MAX_BYTES + 1)
-    if len(content) > MAX_BYTES:
-        raise HTTPException(status_code=413, detail=f"file exceeds {MAX_BYTES} bytes")
+    content = await file.read(max_bytes + 1)
+    if len(content) > max_bytes:
+        raise HTTPException(
+            status_code=413, detail=f"file exceeds {max_bytes // 1024} KB"
+        )
     if not content.strip():
         raise HTTPException(status_code=400, detail="file is empty")
-    try:
-        # Validate UTF-8 at the edge (fast 400); the worker re-decodes from storage.
-        content.decode("utf-8")
-    except UnicodeDecodeError:
-        raise HTTPException(status_code=400, detail="file must be UTF-8 text")
+    # Content is not inspected here: the worker parses the bytes it fetches
+    # back from storage, and anything unreadable (bad UTF-8, a text-less PDF)
+    # marks the document failed with a reason the panel shows.
 
     doc = await documents_repo.create(
         session,
