@@ -105,6 +105,9 @@ export function DocumentsPanel() {
           {uploading ? "Uploading…" : "+ Upload"}
         </button>
       </div>
+      <p className="px-1 text-xs text-black/40 dark:text-white/40">
+        .txt or .md, up to 256 KB.
+      </p>
       {/* Hidden file control; the styled button above proxies to it. */}
       <input
         ref={inputRef}
