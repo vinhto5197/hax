@@ -4,9 +4,9 @@ import Link from "next/link";
 
 import { buttonClass } from "@/components/auth/AuthCard";
 
-// Shown when the API refuses an anonymous visitor's turn or upload (403
-// demo_limit). The demo conversation is not carried over: an account starts
-// fresh, with the visitor's own documents.
+// Shown when the API refuses an anonymous visitor's turn (403 demo_limit). The
+// demo conversation is not carried over: an account starts fresh, with the
+// visitor's own documents.
 export function DemoLimitModal() {
   return (
     <div
