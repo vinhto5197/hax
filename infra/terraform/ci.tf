@@ -1,7 +1,11 @@
 # GitHub Actions deploys by assuming a role with its own OIDC token: no AWS
-# key exists in GitHub. Trust is narrowed to pushes of one branch of one repo;
-# permission to the one command a deploy sends, on the one box. The role can
-# open no session and read no state, database or bucket.
+# key exists in GitHub. Trust is narrowed to one workflow file on one branch
+# of one repo. What the role grants is one thing, and it is not small: a
+# shell on the box as root, through SSM's run-shell-script document. That is
+# what a deploy is today (infra/deploy/deploy.sh), and it reaches everything
+# on the box, /opt/hax/.env included. It cannot open an interactive session
+# or touch AWS state, the database or the bucket directly. Narrowing it to a
+# single custom SSM document that takes only a sha is the M3.5 upgrade.
 resource "aws_iam_openid_connect_provider" "github" {
   url            = "https://token.actions.githubusercontent.com"
   client_id_list = ["sts.amazonaws.com"]
@@ -25,6 +29,14 @@ data "aws_iam_policy_document" "deploy_assume" {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
       values   = ["repo:${var.github_repo}:ref:refs/heads/main"]
+    }
+    # And only this workflow file: another workflow on main (a schedule, a
+    # manual dispatch) with id-token permission presents the same subject but
+    # a different job_workflow_ref, and is refused.
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:job_workflow_ref"
+      values   = ["${var.github_repo}/.github/workflows/ci.yml@refs/heads/main"]
     }
   }
 }

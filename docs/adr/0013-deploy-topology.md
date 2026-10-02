@@ -55,9 +55,13 @@ endpoint (MinIO in dev), and Postgres, Redis and SMTP are plain protocols.
   `deploy` job, on every push to `main` that passes lint, tests and the web
   checks, on GitHub's arm64 runner, under a `deploy-prod` concurrency group,
   with a box-side `flock` as the second guard. AWS access is a role assumed
-  with the run's OIDC token, trusting only `main` of this repository and
-  allowed only `ssm:SendCommand` on this instance plus the result read.
-  GHCR access is the run's own token. No AWS key exists in GitHub.
+  with the run's OIDC token, trusting only the `ci.yml` workflow on `main` of
+  this repository, and allowed `ssm:SendCommand` on this instance plus the
+  result read — which is a root shell on the box, everything a deploy needs
+  and everything on the box with it. The workflow therefore starts with no
+  token permissions and pins its actions to commits. A custom SSM document
+  that takes only a sha, and a role allowed that document alone, is the M3.5
+  narrowing. GHCR access is the run's own token. No AWS key exists in GitHub.
 - **Secrets** live only in `/opt/hax/.env`, written by hand once, mode 600,
   read by compose. They never transit the deploy script or CI. The
   laptop-side mirror is a gitignored file. One file, but compose narrows it
