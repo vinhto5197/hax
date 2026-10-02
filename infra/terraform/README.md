@@ -141,9 +141,12 @@ else — images, compose file, Caddyfile, `pull` and `up` — is
 ## 9. CI deploys
 
 `ci.tf` creates the GitHub OIDC provider and a `hax-deploy` role that only
-pushes to `main` of `github_repo` (terraform.tfvars) may assume, allowed to
-send the run-shell-script command to this box and read its result, nothing
-else. After apply, `terraform output deploy_role_arn` goes into the GitHub
+the `ci.yml` workflow on `main` of `github_repo` (terraform.tfvars) may
+assume. It is allowed to send the run-shell-script command to this box and
+read the result, which is a root shell on the box: everything a deploy does,
+and everything on the box, `/opt/hax/.env` included. It can open no session
+and touch no AWS state, database or bucket directly. The workflow pins its
+actions to commits for that reason. After apply, `terraform output deploy_role_arn` goes into the GitHub
 Actions secret `AWS_DEPLOY_ROLE_ARN`, and `instance_id` into the variable
 `HAX_INSTANCE_ID` (`infra/deploy/README.md`). No AWS key is ever stored in
 GitHub.
