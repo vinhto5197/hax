@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import anyio
@@ -38,6 +39,12 @@ TEXT_SUFFIXES = {".txt", ".md"}
 # Whole file is buffered in memory; streaming uploads are out of v0 scope.
 # Text is dense, so its cap is smaller; binary formats carry layout overhead.
 TEXT_MAX_BYTES = 256 * 1024
+# An ingest still pending or processing this long has lost its worker: one
+# attempt is capped at 300 s and a deploy waits up to that for in-flight work.
+# A deadline that fires on a live attempt costs a flicker, not the document:
+# the attempt still writes 'ready' over it when it finishes.
+STUCK_AFTER = timedelta(minutes=10)
+STUCK_ERROR = "processing did not finish; upload the file again"
 BINARY_MAX_BYTES = 5 * 1024 * 1024
 
 
@@ -46,6 +53,15 @@ async def list_documents(
     session: AsyncSession = Depends(get_session),
     user: CurrentUser = Depends(current_user),
 ) -> list[DocumentOut]:
+    # The deadline on in-flight documents is applied here, on read, because
+    # the one case that strands a row — the worker killed mid-task — leaves
+    # no process to write the terminal status, and the panel reads this list
+    # whenever it shows the row.
+    stale = await documents_repo.fail_stale(
+        session, user.id, datetime.now(UTC) - STUCK_AFTER, STUCK_ERROR
+    )
+    if stale:
+        await session.commit()
     documents = await documents_repo.list_for_user(session, user.id)
     return [DocumentOut.model_validate(d) for d in documents]
 

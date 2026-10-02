@@ -1,14 +1,13 @@
-"""A message that already killed a worker comes back redelivered, and is
-never parsed again: the document is recorded failed with a message that
-says to upload again. Runs the real task body with a pushed request, the
-pipeline stubbed, through the APP engine."""
+"""A restored (redelivered) ingest message simply runs again — ingestion is
+idempotent — and a lost worker's message is not requeued. Runs the real task
+body with a pushed request, the pipeline stubbed, through the APP engine."""
 
 import asyncio
 
 import pytest
-from sqlalchemy import text
 
 import apps.worker.tasks as tasks
+from apps.worker.celery_app import celery_app
 from packages.db import engine as app_engine
 from tests.api.factories import make_document
 
@@ -24,15 +23,6 @@ def pipeline(monkeypatch):
     return calls
 
 
-async def _status(admin_engine, doc_id):
-    async with admin_engine.connect() as conn:
-        return (
-            await conn.execute(
-                text("SELECT status, error FROM documents WHERE id = :i"), {"i": doc_id}
-            )
-        ).one()
-
-
 async def _deliver(doc_id, user_id, *, redelivered: bool):
     def run():
         task = tasks.ingest_document
@@ -46,19 +36,15 @@ async def _deliver(doc_id, user_id, *, redelivered: bool):
     await asyncio.to_thread(run)
 
 
-async def test_a_first_delivery_is_processed(admin_engine, user_a, pipeline):
-    doc = await make_document(admin_engine, user_a.id, status="processing")
-    await _deliver(doc, user_a.id, redelivered=False)
-    assert pipeline == [doc]
-    assert (await _status(admin_engine, doc)).status == "processing"
-
-
-async def test_a_redelivery_records_failed_without_parsing(
+async def test_a_redelivered_message_runs_like_any_other(
     admin_engine, user_a, pipeline
 ):
     doc = await make_document(admin_engine, user_a.id, status="processing")
     await _deliver(doc, user_a.id, redelivered=True)
-    assert pipeline == []
-    status, error = await _status(admin_engine, doc)
-    assert status == "failed"
-    assert error == tasks.INTERRUPTED_ERROR
+    assert pipeline == [doc]
+
+
+def test_a_lost_worker_does_not_requeue_and_orphans_return_in_minutes():
+    assert celery_app.conf.task_acks_late is True
+    assert celery_app.conf.task_reject_on_worker_lost is False
+    assert celery_app.conf.broker_transport_options["visibility_timeout"] == 600

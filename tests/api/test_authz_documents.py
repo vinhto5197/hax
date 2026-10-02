@@ -149,3 +149,37 @@ async def test_upload_rejects_text_over_256kb(client, user_a, stub_publish):
     )
     assert r.status_code == 413
     assert r.json()["detail"] == "file exceeds 256 KB"
+
+
+async def test_listing_fails_documents_stuck_in_flight_past_the_deadline(
+    client, user_a, user_b, admin_engine
+):
+    from sqlalchemy import text
+
+    stale = await make_document(admin_engine, user_a.id, status="processing")
+    fresh = await make_document(admin_engine, user_a.id, status="processing")
+    theirs = await make_document(admin_engine, user_b.id, status="processing")
+    async with admin_engine.begin() as conn:
+        await conn.execute(
+            text(
+                "UPDATE documents SET updated_at = now() - interval '2 hours'"
+                " WHERE id IN (:a, :b)"
+            ),
+            {"a": stale, "b": theirs},
+        )
+
+    r = await client.get("/api/documents", headers=bearer(user_a))
+    assert r.status_code == 200
+    by_id = {d["id"]: d for d in r.json()}
+    assert by_id[str(stale)]["status"] == "failed"
+    assert "upload the file again" in by_id[str(stale)]["error"]
+    assert by_id[str(fresh)]["status"] == "processing"
+
+    # Another user's stale row is untouched: the deadline runs as the caller.
+    async with admin_engine.connect() as conn:
+        status = (
+            await conn.execute(
+                text("SELECT status FROM documents WHERE id = :i"), {"i": theirs}
+            )
+        ).scalar_one()
+    assert status == "processing"

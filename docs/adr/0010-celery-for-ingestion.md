@@ -204,3 +204,16 @@ seconds, until the title appears. This is not the server polling rejected
 above (nothing holds the stream or a connection, and the API does no extra
 work per token); it is a client refetch bounded in time, and sending is
 never blocked.
+
+**Worker loss and the deadline (2026-10-02).** A message whose worker was
+killed mid-task (an out-of-memory parse) is acknowledged, not requeued
+(`task_reject_on_worker_lost=False`): the same bytes would kill the next
+child forever. The broker's "redelivered" mark is not read anywhere — it
+means restored, not died — and a restored message (a warm shutdown at a
+deploy, or a visibility timeout of ten minutes after a hard kill) simply runs
+again, which every task here tolerates. The document a lost worker leaves at
+`processing` gets its terminal status from the API instead: listing a user's
+documents fails any of theirs still pending or processing after ten minutes,
+as the caller, under RLS (a deadline that fires on a live attempt is
+harmless: the attempt still writes `ready` over it). The worker's `stop_grace_period` is above
+`task_time_limit`, so a deploy waits for in-flight work rather than killing it.

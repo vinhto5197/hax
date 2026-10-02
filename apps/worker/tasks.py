@@ -53,17 +53,6 @@ def _retry_transient(task, exc: BaseException, *, max_retries: int, label: str) 
     raise task.retry(exc=exc, countdown=countdown)
 
 
-# A message that already killed a worker (an out-of-memory parse is a SIGKILL,
-# not an exception) comes back redelivered, and task_reject_on_worker_lost
-# would hand it to the next child forever. A redelivered message is therefore
-# never parsed again; a worker restarted mid-ingest produces the same mark,
-# and that document is failed too, with a message that says to upload again.
-INTERRUPTED_ERROR = (
-    "processing stopped before it finished; try uploading once more, and if that"
-    " fails too the file cannot be read"
-)
-
-
 # doc.error is user-visible (DocumentOut.error). Permanent errors carry
 # messages we authored; anything else is raw SDK/driver text that can leak
 # endpoints, keys, or paths — log the raw form, store the generic line.
@@ -127,9 +116,9 @@ def ingest_document(self, document_id: str, user_id: str) -> None:
     - anything else (Voyage / S3 / DB I/O) -> transient: retry with exponential
       backoff, leaving status='processing' so the polling UI keeps waiting; on the
       final attempt, record 'failed'.
-    - a worker death (OOM, or a restart mid-ingest) is no exception at all: the
-      broker redelivers, and a redelivered message records 'failed' without
-      parsing again.
+    - a worker death (an out-of-memory parse) is no exception at all: the
+      message is not requeued (celery_app), and the document stays
+      'processing' until the API's deadline fails it.
 
     The id arrives as a str (the JSON broker can't carry a UUID) and is parsed back
     here. user_id rides the payload — the enqueuing request knows the owner; the
@@ -141,10 +130,6 @@ def ingest_document(self, document_id: str, user_id: str) -> None:
     # _record_failed calls below) see the announced identity.
     token = current_user_id.set(UUID(user_id))
     try:
-        if (self.request.delivery_info or {}).get("redelivered"):
-            logger.error("ingest message for %s was redelivered; not retrying", doc_id)
-            _record_failed(doc_id, INTERRUPTED_ERROR)
-            return
         _run_async(ingest_document_async(doc_id))
     except PermanentIngestError as exc:
         logger.error("permanent ingest failure for %s: %s", doc_id, exc, exc_info=True)
