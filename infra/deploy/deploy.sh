@@ -103,7 +103,10 @@ curl -fsSL "$raw/Caddyfile" -o Caddyfile.new && cat Caddyfile.new > Caddyfile &&
 printf 'HAX_PYTHON_IMAGE=%s\nHAX_WEB_IMAGE=%s\n' '$PY_IMAGE' '$WEB_IMAGE' > images.env.next
 compose() { docker compose --env-file .env --env-file "\${IMAGES_ENV:-images.env}" -f compose.prod.yml "\$@"; }
 IMAGES_ENV=images.env.next compose pull --quiet
-IMAGES_ENV=images.env.next compose run --rm migrate
+# stdin from /dev/null: SSM feeds this script to the shell on stdin, and a
+# `run` that attaches stdin would swallow the rest of the script as its
+# input — the roll would end here, "successfully", with nothing promoted.
+IMAGES_ENV=images.env.next compose run --rm -T migrate < /dev/null
 mv images.env.next images.env
 compose up -d --remove-orphans
 # Caddy reads its file only at start, and up -d does not recreate a container
