@@ -42,6 +42,10 @@ script; by hand it is one command. The box was provisioned by
 
 ## Every deploy: push to main
 
+Only the tip of `main` rolls: the deploy job first asks GitHub for the
+current tip and exits green without deploying when this run's commit is
+older (two close pushes finishing out of order, or a re-run of an old run).
+
 `.github/workflows/ci.yml` runs lint, tests, the web checks and a
 generated-types drift check on every push and pull request; on a push to
 `main` that passes, its `deploy` job runs `deploy.sh all` on an arm64 runner:
