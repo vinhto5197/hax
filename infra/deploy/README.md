@@ -73,8 +73,11 @@ existing tag, so an image named `<sha>` is exactly commit `<sha>`.
 
 **Rollback** is `deploy.sh roll <older sha>`: images are kept per sha on
 GHCR. If a migration landed between the two shas, roll back the schema first
-or `migrate` fails on the old image ("Can't locate revision") and api/worker
-are left on the new one. On the box, with the *current* image:
+or `migrate` fails on the old image ("Can't locate revision"). A failing
+migrate stops the roll before it touches the running containers, so the box
+keeps serving the newer commit and `images.env` still names it; nothing is
+half-applied, but the rollback has not happened. On the box, with the
+*current* image:
 
 ```sh
 hc run --rm migrate alembic -c alembic.ini downgrade <revision at the older sha>
@@ -101,7 +104,8 @@ Verify: `https://<domain>` shows a real padlock and the login page;
 The uptime monitor (external, five-minute interval on `/api/health`) emails
 first. Then, on the box: `docker ps` shows each container's health label;
 `hc logs --tail=200 <service>` has the last minutes; `cat images.env` says
-which commit is running. Rolling back is the section above. Database
+which commit is running (it is written only after that commit's migrate
+succeeded). Rolling back is the section above. Database
 recovery is from RDS's automated backups (console → the instance →
 Maintenance & backups; one-day window on the Free plan): restore to a NEW
 instance, repoint `DATABASE_URL` in `/opt/hax/.env`, `roll`.

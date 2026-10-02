@@ -14,7 +14,7 @@
 #        overwritten (DEPLOY_OVERWRITE=1 overrides, e.g. a CI re-run).
 # roll   over SSM, the box fetches compose.prod.yml + Caddyfile at <sha> from
 #        the public repo, pins the two image tags in /opt/hax/images.env, then
-#        compose pull + up -d + caddy reload. So <sha> must be pushed: a deploy is always a
+#        compose pull + migrate + up -d + caddy reload. So <sha> must be pushed: a deploy is always a
 #        commit on GitHub, never a working tree.
 # all    the three in order (default). build/push always use HEAD; a sha
 #        argument is accepted by roll only (rollback), never by build or push,
@@ -93,9 +93,18 @@ curl -fsSL "$raw/compose.prod.yml" -o compose.prod.yml.new && mv compose.prod.ym
 # the old file forever and the reload below would re-read it. The download
 # still lands in .new first, so a failed fetch never truncates the live file.
 curl -fsSL "$raw/Caddyfile" -o Caddyfile.new && cat Caddyfile.new > Caddyfile && rm Caddyfile.new
-printf 'HAX_PYTHON_IMAGE=%s\nHAX_WEB_IMAGE=%s\n' '$PY_IMAGE' '$WEB_IMAGE' > images.env.new && mv images.env.new images.env
-compose() { docker compose --env-file .env --env-file images.env -f compose.prod.yml "\$@"; }
-compose pull --quiet
+# The new tags stay in images.env.next until the schema is at head: images.env
+# must always name a commit whose migrate succeeded, because up -d recreates
+# api/worker BEFORE compose runs the migrate they depend on — a failing
+# migrate would otherwise leave the old containers removed, the new ones
+# never started, and every /api/* route dead. So: pull, migrate as a one-off
+# gate while the old containers still serve, then promote the tags and roll.
+# compose's own migrate dependency then re-runs upgrade, a no-op at head.
+printf 'HAX_PYTHON_IMAGE=%s\nHAX_WEB_IMAGE=%s\n' '$PY_IMAGE' '$WEB_IMAGE' > images.env.next
+compose() { docker compose --env-file .env --env-file "\${IMAGES_ENV:-images.env}" -f compose.prod.yml "\$@"; }
+IMAGES_ENV=images.env.next compose pull --quiet
+IMAGES_ENV=images.env.next compose run --rm migrate
+mv images.env.next images.env
 compose up -d --remove-orphans
 # Caddy reads its file only at start, and up -d does not recreate a container
 # whose bind-mounted config changed, so a Caddyfile change would otherwise
