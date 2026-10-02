@@ -64,9 +64,12 @@ api:
 # Background-job worker (ingestion, email, conversation titles, the daily
 # visitor sweep). Needs infra (Redis) up — run `make infra-up` or `make dev`
 # first. Separate process from the API. --beat embeds the scheduler, as in
-# production: one worker, one beat.
+# production: one worker, one beat. --pool=solo on the laptop: the prefork
+# pool forks after threads exist, which macOS forbids, and tasks then die
+# with "not enough values to unpack (expected 3, got 0)"; production is
+# Linux and keeps prefork (compose.prod.yml).
 worker:
-	celery -A apps.worker.celery_app worker --beat --schedule /tmp/celerybeat-schedule --loglevel=info
+	celery -A apps.worker.celery_app worker --beat --schedule /tmp/celerybeat-schedule --loglevel=info --pool=solo
 
 # ── Frontend (Next.js) ────────────────────────────────────────
 .PHONY: web
