@@ -128,7 +128,24 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: us-east-1
+      # The concurrency group serializes deploys but does not order them: two
+      # close pushes can finish their checks in either order, and a re-run of
+      # an old run keeps its old sha. Only the tip of main may roll; anything
+      # else is superseded and exits green having done nothing. A deliberate
+      # rollback is `deploy.sh roll <sha>` from a laptop, which never comes
+      # through here.
+      - name: Still the tip of main?
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tip=$(gh api "repos/${{ github.repository }}/commits/main" -q .sha)
+          if [ "$tip" != "${{ github.sha }}" ]; then
+            echo "superseded: main is at ${tip:0:7}, this run is ${GITHUB_SHA:0:7}; not deploying"
+            echo "superseded=true" >> "$GITHUB_OUTPUT"
+          fi
+        id: tip
       - name: Build, push, roll
+        if: steps.tip.outputs.superseded != 'true'
         env:
           GHCR_OWNER: ${{ github.repository_owner }}
           GITHUB_REPO: ${{ github.repository }}
