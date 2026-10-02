@@ -130,7 +130,7 @@ REMOTE
 )
   cmd_id=$(aws ssm send-command --region "$REGION" --instance-ids "$instance" \
     --document-name AWS-RunShellScript --comment "hax deploy $TAG" \
-    --parameters "commands=[\"echo $(printf %s "$remote" | base64 | tr -d '\n') | base64 -d | sudo -u ubuntu -H bash\"],executionTimeout=[\"900\"]" \
+    --parameters "commands=[\"echo $(printf %s "$remote" | base64 | tr -d '\n') | base64 -d | sudo -u ubuntu -H bash\"],executionTimeout=[\"1200\"]" \
     --query Command.CommandId --output text)
   echo "ssm command $cmd_id on $instance"
   while :; do

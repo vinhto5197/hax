@@ -33,13 +33,16 @@ celery_app.conf.update(
     task_serializer="json",
     result_serializer="json",
     accept_content=["json"],
-    # Ack only AFTER the task finishes, so a worker death mid-task redelivers
-    # the message with its redelivered flag set; ingest_document uses that flag
-    # to record the document failed instead of parsing the same bytes again
-    # (tasks.py). Celery retries, not redelivery, re-run a task — ingestion
-    # stays idempotent for those via delete-then-insert.
+    # Ack only AFTER the task finishes: a warm shutdown (a deploy) restores
+    # unfinished messages and they run again — every task here is idempotent
+    # (ingestion via delete-then-insert, titles via a conditional UPDATE). A
+    # LOST worker is different: a child killed mid-task (an out-of-memory
+    # parse) is not requeued, or the same bytes would kill the next child
+    # forever. The document it was processing stays 'processing' until the
+    # API's deadline fails it (routers/documents.py). The broker's own
+    # "redelivered" mark means restored, not died, so nothing reads it.
     task_acks_late=True,
-    task_reject_on_worker_lost=True,
+    task_reject_on_worker_lost=False,
     # Ingestion is long-ish: don't let one worker hoard queued messages, and hard-
     # cap a single task so a hung embed call can't pin a slot forever.
     worker_prefetch_multiplier=1,
@@ -49,7 +52,11 @@ celery_app.conf.update(
     # no connect timeout a publish hangs on the OS TCP timeout, pinning a
     # thread per enqueue. Connect only — established-connection reads (the
     # worker's blocking pop) are untouched.
-    broker_transport_options={"socket_connect_timeout": 2},
+    # visibility_timeout: how long the broker waits before handing an unacked
+    # message to another worker. Only a hard kill of the whole worker leaves
+    # one orphaned (a warm shutdown restores them at once); minutes, not the
+    # default hour.
+    broker_transport_options={"socket_connect_timeout": 2, "visibility_timeout": 600},
     # The schedule fires only where a beat process exists. The worker is
     # started with an embedded beat (--beat), which is correct for exactly one
     # worker: a second worker needs a single separate beat instead, or every

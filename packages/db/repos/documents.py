@@ -3,8 +3,9 @@ repo: user_id required; ownership miss -> None -> route 404."""
 
 import uuid
 from collections.abc import Sequence
+from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from packages.db.models import Document
@@ -63,3 +64,24 @@ async def delete_owned(
         return None
     await session.delete(doc)
     return doc
+
+
+async def fail_stale(
+    session: AsyncSession, user_id: uuid.UUID, cutoff: datetime, error: str
+) -> int:
+    """Record 'failed' on the caller's documents still pending or processing
+    since before `cutoff`; returns how many. The pipeline cannot give itself
+    this deadline: a worker killed mid-task leaves no one to write the
+    terminal status. Scoped to one user, so it runs under RLS as the caller."""
+    result = await session.execute(
+        update(Document)
+        .where(
+            Document.user_id == user_id,
+            Document.status.in_(("pending", "processing")),
+            Document.updated_at < cutoff,
+        )
+        .values(status="failed", error=error)
+        .returning(Document.id)
+        .execution_options(synchronize_session=False)
+    )
+    return len(result.all())
