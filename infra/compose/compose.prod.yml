@@ -50,7 +50,7 @@ services:
       --proxy-headers --forwarded-allow-ips=*
     # The image has no curl/wget.
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/api/health')"]
       interval: 5s
       timeout: 3s
       retries: 12
