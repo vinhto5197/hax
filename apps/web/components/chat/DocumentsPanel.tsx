@@ -26,8 +26,11 @@ export function DocumentsPanel() {
   const [uploading, setUploading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // The one failed document whose reason is shown inline (tap the status).
-  const [openErrorId, setOpenErrorId] = useState<string | null>(null);
+  // Failed documents whose reason is shown inline (tap the status; each
+  // toggles on its own).
+  const [openErrorIds, setOpenErrorIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -144,9 +147,13 @@ export function DocumentsPanel() {
                     <button
                       type="button"
                       onClick={() =>
-                        setOpenErrorId((id) => (id === doc.id ? null : doc.id))
+                        setOpenErrorIds((ids) => {
+                          const next = new Set(ids);
+                          if (!next.delete(doc.id)) next.add(doc.id);
+                          return next;
+                        })
                       }
-                      aria-expanded={openErrorId === doc.id}
+                      aria-expanded={openErrorIds.has(doc.id)}
                       className={`underline decoration-dotted underline-offset-2 ${statusClass}`}
                     >
                       {doc.status}
@@ -164,7 +171,7 @@ export function DocumentsPanel() {
                     ×
                   </button>
                 </div>
-                {doc.error && openErrorId === doc.id ? (
+                {doc.error && openErrorIds.has(doc.id) ? (
                   <p className="mt-0.5 text-red-600 dark:text-red-400">
                     {doc.error}
                   </p>
