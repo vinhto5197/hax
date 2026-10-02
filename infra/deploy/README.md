@@ -96,6 +96,16 @@ certificate takes a few seconds after that; watch it with the logs below.
 Verify: `https://<domain>` shows a real padlock and the login page;
 `https://<domain>/api/conversations` answers 401.
 
+## When something is wrong
+
+The uptime monitor (external, five-minute interval on `/api/health`) emails
+first. Then, on the box: `docker ps` shows each container's health label;
+`hc logs --tail=200 <service>` has the last minutes; `cat images.env` says
+which commit is running. Rolling back is the section above. Database
+recovery is from RDS's automated backups (console → the instance →
+Maintenance & backups; one-day window on the Free plan): restore to a NEW
+instance, repoint `DATABASE_URL` in `/opt/hax/.env`, `roll`.
+
 ## On the box
 
 `terraform output ssm_command`, then `sudo -iu ubuntu`, `cd /opt/hax`, and

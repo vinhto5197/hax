@@ -122,6 +122,19 @@ Redis volume).
 - The dev MinIO credentials are named `S3_ACCESS_KEY_ID`/`S3_SECRET_ACCESS_KEY`,
   never `AWS_*`: the repo's shell exports `.env`, and AWS tools would read
   those first and authenticate to the real account with MinIO's keys.
+- **Observability** is tier one on purpose: `docker logs` per service with
+  size caps, an external uptime monitor requesting `/api/health` every five
+  minutes and emailing on failure (a third-party free tier — an alert that
+  runs on the box dies with the box; the compose healthcheck on the same
+  path only orders startup and labels `docker ps`), and RDS automated
+  backups at the plan's one-day retention (restore = a new instance from a
+  snapshot or point in time, then repoint `DATABASE_URL` and roll; the
+  runbook for that is an M3.5 item). CloudWatch alarms wait for M3.5.
+- **Config outside the images** reaches the box by the roll fetching it at
+  the deployed sha: compose and the Caddyfile. The Caddyfile is a single-file
+  bind mount, which pins the container to one inode, so the roll writes it in
+  place, reloads Caddy gracefully when the container's view matches the host's,
+  and recreates Caddy once when it does not (`infra/deploy/deploy.sh`).
 - Every "thin" choice above has its upgrade listed under M3.5 in CLAUDE.md:
   ALB + ACM + Route 53, ElastiCache, SES, CloudWatch alarms, Fargate, a
-  staging variable, OIDC for the deploy job, RDS CA verification, CSP nonce.
+  staging variable, RDS CA verification, CSP nonce.

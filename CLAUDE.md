@@ -33,7 +33,7 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
    - Background chat title generation (Celery + Redis — worker exists from M2),
      and one off-loop publisher for every API-side enqueue. ADR 0010 addendum.
 
-3. **Milestone 3 — Live on AWS** *(in progress; live since 2026-09-27; deploy early, then continuous)*
+3. **Milestone 3 — Live on AWS** *(shipped 2026-10-02; live since 2026-09-27; deploy early, then continuous)*
    - The smallest live stack first: one EC2 box running the compose topology
      (api, worker, web, Redis, Caddy for TLS and single-origin routing),
      managed **RDS Postgres + pgvector**, **S3** for uploads — all provisioned
@@ -47,6 +47,10 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
      turns about hax itself, no account, no tools, then sign up for the full
      product. Anonymity is `users.email IS NULL` and nothing else; a daily
      sweep removes aged visitors. ADR 0011 addendum.
+   - Observability, tier one: container logs with size caps, an external
+     uptime check on `/api/health` every five minutes with an email alert
+     (a free third-party monitor — an alert that lives on the box dies with
+     it), and RDS automated backups. CloudWatch alarms wait for M3.5.
    - Why deploy here, not last: surfaces infra issues (SSE, secrets,
      networking) early and keeps a live URL from M3 on. M4 + M5 ride the
      pipeline. The deploy ADR records every thin choice and its upgrade.
@@ -56,8 +60,7 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
      leaves the box; SES after sandbox exit; CloudWatch alarms; the Fargate
      path (`local/V1_CHECKLIST.local.md`); a staging environment variable;
      the hardening items deferred from M3 (RDS CA verification, CSP nonce,
-     limiter redesign, OIDC federation for the deploy
-     job, per-service env files, network split + Redis auth).
+     limiter redesign, per-service env files, network split + Redis auth).
 
 4. **Milestone 4 — Structured outputs + polish** *(built against live infra, auto-deployed)*
    - Table / structured view for results (not only free-form text)
