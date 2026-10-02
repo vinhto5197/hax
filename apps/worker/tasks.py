@@ -37,7 +37,13 @@ def _retry_transient(task, exc: BaseException, *, max_retries: int, label: str) 
     and SDK messages can carry addresses or message content.
 
     Caller contract: this either raises Retry (Celery re-queues) or returns,
-    and the caller must then treat the task as done."""
+    and the caller must then treat the task as done.
+
+    Celery logs the Retry it is handed, rendering the wrapped exception in
+    full, so the exception passed on carries the type name and nothing else."""
+    # Full detail at DEBUG only: the laptop runs there, production never does
+    # (DEBUG would put raw exception text in the container log).
+    logger.debug("%s failure detail", label, exc_info=exc)
     if task.request.retries >= max_retries:
         logger.error("%s giving up: %s", label, type(exc).__name__)
         return
@@ -50,7 +56,7 @@ def _retry_transient(task, exc: BaseException, *, max_retries: int, label: str) 
         type(exc).__name__,
         countdown,
     )
-    raise task.retry(exc=exc, countdown=countdown)
+    raise task.retry(exc=RuntimeError(type(exc).__name__), countdown=countdown)
 
 
 # doc.error is user-visible (DocumentOut.error). Permanent errors carry
@@ -132,21 +138,29 @@ def ingest_document(self, document_id: str, user_id: str) -> None:
     try:
         _run_async(ingest_document_async(doc_id))
     except PermanentIngestError as exc:
-        logger.error("permanent ingest failure for %s: %s", doc_id, exc, exc_info=True)
+        # The message is ours (static text); the chained cause underneath it is
+        # the library's and may quote the file, so neither the traceback nor
+        # the chain is logged — here or by Celery, which logs what is raised.
+        logger.error("permanent ingest failure for %s: %s", doc_id, exc)
+        logger.debug("permanent ingest failure detail for %s", doc_id, exc_info=exc)
         _record_failed(doc_id, _public_error(exc))
-        raise
+        raise PermanentIngestError(str(exc)) from None
     except Exception as exc:
+        logger.debug("transient ingest failure detail for %s", doc_id, exc_info=exc)
         if self.request.retries >= MAX_RETRIES:
             logger.error(
-                "ingest exhausted retries for %s: %s", doc_id, exc, exc_info=True
+                "ingest exhausted retries for %s: %s", doc_id, type(exc).__name__
             )
             _record_failed(doc_id, _public_error(exc))
-            raise
+            # Celery logs the exception a task raises, in full: hand it the
+            # type name only. The task is still marked failed.
+            raise RuntimeError(type(exc).__name__) from None
         countdown = RETRY_BACKOFF_BASE * (2**self.request.retries)
         # Exception TYPE only, never str(exc): a DBAPI error's text can carry
         # bound parameters (chunk content) even with hide_parameters=True if
         # the exception was constructed outside the engine's own wrapping —
-        # exc_info is also deliberately omitted here for the same reason.
+        # exc_info is also deliberately omitted here for the same reason, and
+        # the Retry handed to Celery (which logs it) wraps the type name only.
         logger.warning(
             "transient ingest failure for %s; retry %d/%d in %ds: %s",
             doc_id,
@@ -155,7 +169,7 @@ def ingest_document(self, document_id: str, user_id: str) -> None:
             countdown,
             type(exc).__name__,
         )
-        raise self.retry(exc=exc, countdown=countdown)
+        raise self.retry(exc=RuntimeError(type(exc).__name__), countdown=countdown)
     finally:
         current_user_id.reset(token)
 

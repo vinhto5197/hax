@@ -67,9 +67,10 @@ api:
 # production: one worker, one beat. --pool=solo on the laptop: the prefork
 # pool forks after threads exist, which macOS forbids, and tasks then die
 # with "not enough values to unpack (expected 3, got 0)"; production is
-# Linux and keeps prefork (compose.prod.yml).
+# Linux and keeps prefork (compose.prod.yml). The log level follows LOG_LEVEL
+# here (DEBUG = full tracebacks); production pins the worker at info.
 worker:
-	celery -A apps.worker.celery_app worker --beat --schedule /tmp/celerybeat-schedule --loglevel=info --pool=solo
+	celery -A apps.worker.celery_app worker --beat --schedule /tmp/celerybeat-schedule --loglevel=$${LOG_LEVEL:-info} --pool=solo
 
 # ── Frontend (Next.js) ────────────────────────────────────────
 .PHONY: web
