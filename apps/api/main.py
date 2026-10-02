@@ -54,6 +54,8 @@ app.include_router(documents_router, prefix="/api")
 app.include_router(internal_auth_router)
 
 
-@app.get("/health")
+# Under /api so Caddy routes it: the external uptime check and the compose
+# healthcheck hit the same path.
+@app.get("/api/health")
 def health():
     return {"status": "ok"}
