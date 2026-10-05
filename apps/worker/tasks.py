@@ -9,10 +9,13 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import anthropic
+import redis.asyncio
+from redis.exceptions import RedisError
 from sqlalchemy.exc import InterfaceError, OperationalError
 
 from apps.worker.celery_app import celery_app
 from packages.core import titles
+from packages.core.auth.revocation import sva_cache_key
 from packages.core.email import smtp, templates
 from packages.core.rag.errors import PermanentIngestError
 from packages.core.rag.ingest import ingest_document_async, mark_document_failed
@@ -278,15 +281,33 @@ def _anon_retention() -> timedelta:
     return timedelta(days=int(os.getenv("ANON_RETENTION_DAYS", "3")))
 
 
+def _async_redis():
+    return redis.asyncio.from_url(
+        os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+    )
+
+
 async def sweep_anonymous_users_async(now: datetime | None = None) -> int:
     """Delete every demo visitor older than ANON_RETENTION_DAYS, with everything
     it owns (foreign-key cascade); returns how many went. Rows with an email
-    are never candidates: the repo's statement carries that guard itself."""
+    are never candidates: the repo's statement carries that guard itself.
+
+    A swept visitor's live token must read as revoked at once, not when the
+    revocation cache's entry for it expires, so those entries go after the
+    commit (fail-open on a Redis error: the TTL still ends them)."""
     cutoff = (now or datetime.now(UTC)) - _anon_retention()
     async with AsyncSessionLocal() as session:
-        deleted = await users_repo.delete_stale_anonymous(session, cutoff)
+        swept = await users_repo.delete_stale_anonymous(session, cutoff)
         await session.commit()
-    return deleted
+    if swept:
+        client = _async_redis()
+        try:
+            await client.delete(*(sva_cache_key(uid) for uid in swept))
+        except RedisError:
+            logger.warning("sweep: could not purge the revocation cache", exc_info=True)
+        finally:
+            await client.aclose()
+    return len(swept)
 
 
 # No retries: beat runs it again tomorrow and the work is idempotent.

@@ -71,10 +71,20 @@ push() {
 
 roll() {
   local instance=${HAX_INSTANCE_ID:-$(terraform -chdir=infra/terraform output -raw instance_id)}
-  local raw="https://raw.githubusercontent.com/$REPO/$TAG/infra/compose"
-  local remote cmd_id status
-  gh api "repos/$REPO/commits/$TAG" --silent 2>/dev/null \
+  local remote cmd_id status sha deadline
+  # Any commit-ish is accepted, but the images are tagged by the 7-char sha,
+  # so resolve to that first; then prove both images exist before a single
+  # byte changes on the box.
+  sha=$(gh api "repos/$REPO/commits/$TAG" -q .sha 2>/dev/null) \
     || { echo "$TAG is not on GitHub ($REPO): push first"; exit 1; }
+  TAG=${sha:0:7}
+  PY_IMAGE="ghcr.io/$OWNER/hax-python:$TAG"
+  WEB_IMAGE="ghcr.io/$OWNER/hax-web:$TAG"
+  for image in "$PY_IMAGE" "$WEB_IMAGE"; do
+    docker manifest inspect "$image" > /dev/null 2>&1 \
+      || { echo "$image is not on GHCR: build + push first"; exit 1; }
+  done
+  local raw="https://raw.githubusercontent.com/$REPO/$TAG/infra/compose"
 
   # Runs on the box as ubuntu (owner of /opt/hax, in the docker group).
   # --env-file twice: .env for SITE_ADDRESS, images.env for the image tags;
@@ -87,26 +97,29 @@ test -f .env || { echo "/opt/hax/.env missing: write it first (infra/deploy/READ
 # must not interleave their file writes and compose ups. Waits up to 10 min.
 exec 9> .deploy.lock
 flock -w 600 9 || { echo "another deploy holds /opt/hax/.deploy.lock"; exit 1; }
-curl -fsSL "$raw/compose.prod.yml" -o compose.prod.yml.new && mv compose.prod.yml.new compose.prod.yml
-# Written IN PLACE, not renamed over: the caddy container bind-mounts this one
-# file, which pins its inode, so a rename would leave the container reading
-# the old file forever and the reload below would re-read it. The download
-# still lands in .new first, so a failed fetch never truncates the live file.
-curl -fsSL "$raw/Caddyfile" -o Caddyfile.new && cat Caddyfile.new > Caddyfile && rm Caddyfile.new
-# The new tags stay in images.env.next until the schema is at head: images.env
-# must always name a commit whose migrate succeeded, because up -d recreates
-# api/worker BEFORE compose runs the migrate they depend on — a failing
-# migrate would otherwise leave the old containers removed, the new ones
-# never started, and every /api/* route dead. So: pull, migrate as a one-off
-# gate while the old containers still serve, then promote the tags and roll.
-# compose's own migrate dependency then re-runs upgrade, a no-op at head.
+# Nothing the running stack reads changes until the pull and the migrate
+# have succeeded: the three files land as .new/.next, the pull and the
+# one-off migrate run from those, and only then are they promoted. A failure
+# before that point leaves the box exactly as it was. (up -d recreates
+# api/worker BEFORE compose runs the migrate they depend on, so a migrate
+# that failed inside up -d would leave every /api/* route dead; the one-off
+# gate runs while the old containers still serve. compose's own migrate
+# dependency then re-runs upgrade, a no-op at head.)
+curl -fsSL "$raw/compose.prod.yml" -o compose.prod.yml.new
+curl -fsSL "$raw/Caddyfile" -o Caddyfile.new
 printf 'HAX_PYTHON_IMAGE=%s\nHAX_WEB_IMAGE=%s\n' '$PY_IMAGE' '$WEB_IMAGE' > images.env.next
-compose() { docker compose --env-file .env --env-file "\${IMAGES_ENV:-images.env}" -f compose.prod.yml "\$@"; }
-IMAGES_ENV=images.env.next compose pull --quiet
+compose() { docker compose --env-file .env --env-file "\${IMAGES_ENV:-images.env}" -f "\${COMPOSE_FILE:-compose.prod.yml}" "\$@"; }
+IMAGES_ENV=images.env.next COMPOSE_FILE=compose.prod.yml.new compose pull --quiet
 # stdin from /dev/null: SSM feeds this script to the shell on stdin, and a
 # `run` that attaches stdin would swallow the rest of the script as its
 # input — the roll would end here, "successfully", with nothing promoted.
-IMAGES_ENV=images.env.next compose run --rm -T migrate < /dev/null
+IMAGES_ENV=images.env.next COMPOSE_FILE=compose.prod.yml.new compose run --rm -T migrate < /dev/null
+mv compose.prod.yml.new compose.prod.yml
+# The Caddyfile is written IN PLACE, not renamed over: the caddy container
+# bind-mounts this one file, which pins its inode, so a rename would leave
+# the container reading the old file forever and the reload below would
+# re-read it.
+cat Caddyfile.new > Caddyfile && rm Caddyfile.new
 mv images.env.next images.env
 compose up -d --remove-orphans
 # Caddy reads its file only at start, and up -d does not recreate a container
@@ -133,9 +146,21 @@ REMOTE
     --parameters "commands=[\"echo $(printf %s "$remote" | base64 | tr -d '\n') | base64 -d | sudo -u ubuntu -H bash\"],executionTimeout=[\"1200\"]" \
     --query Command.CommandId --output text)
   echo "ssm command $cmd_id on $instance"
+  # The invocation record appears a few seconds after send-command; only
+  # that absence is tolerated. Any other error (an expired session, a
+  # revoked role, throttling) is shown and ends the wait, as does the
+  # deadline, which sits above the command's own executionTimeout.
+  deadline=$((SECONDS + 1500))
   while :; do
-    status=$(aws ssm get-command-invocation --region "$REGION" --command-id "$cmd_id" \
-      --instance-id "$instance" --query Status --output text 2>/dev/null || echo Pending)
+    if status=$(aws ssm get-command-invocation --region "$REGION" --command-id "$cmd_id" \
+        --instance-id "$instance" --query Status --output text 2> /tmp/ssm-poll.err); then
+      :
+    elif grep -q InvocationDoesNotExist /tmp/ssm-poll.err && (( SECONDS < deadline )); then
+      status=Pending
+    else
+      cat /tmp/ssm-poll.err; echo "deploy failed: could not read the command's status"; exit 1
+    fi
+    (( SECONDS < deadline )) || { echo "deploy failed: still $status after 25 min"; exit 1; }
     case $status in
       Pending|InProgress|Delayed) sleep 5 ;;
       *) break ;;
