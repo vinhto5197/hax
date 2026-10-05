@@ -76,5 +76,3 @@ superuser, so dev now mirrors prod.
 
 - [0011](0011-auth-architecture.md) — auth architecture this isolation
   layer builds on.
-- `local/specs/2026-07-30-m2.5-auth-titles.md` — Isolation section (full
-  design), Threat model.

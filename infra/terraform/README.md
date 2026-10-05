@@ -1,8 +1,9 @@
 # infra/terraform
 
 One EC2 box (`t4g.small`, Ubuntu 24.04 arm64, Docker), an Elastic IP, RDS
-Postgres 16 (`db.t4g.micro`, private), one private S3 bucket for uploads, and
-the IAM role that ties them together — all in the default VPC of `us-east-1`.
+Postgres 16 (`db.t4g.micro`, private), one private S3 bucket for uploads, the
+IAM role that ties them together, and the GitHub OIDC provider plus the
+deploy role CI assumes (`ci.tf`) — all in the default VPC of `us-east-1`.
 The box is managed through SSM Session Manager; there is no SSH.
 
 Every command below runs on the laptop with AWS credentials for the account
@@ -23,7 +24,12 @@ purpose.
 
 Replacing the box (`terraform apply -replace=aws_instance.box`, e.g. for a new
 AMI) must not touch the database: read the plan and confirm
-`aws_db_instance.postgres` is absent from it before typing yes.
+`aws_db_instance.postgres` is absent from it before typing yes. After the
+replace: the new box has no `/opt/hax/.env` (write it again, step 5), the
+deploy role's policy follows the new instance ARN by itself, but the GitHub
+variable `HAX_INSTANCE_ID` still names the old box — update it from
+`terraform output instance_id` or every CI deploy targets a box that no
+longer exists.
 
 ## 1. Bootstrap remote state (once per account)
 
@@ -71,8 +77,12 @@ bucket is private and encrypted.
 terraform plan -out=tfplan
 ```
 
-Expect 15 resources to add and nothing to change or destroy. Read it:
-nothing outside the list at the top of this file should appear.
+Expect 18 resources to add and nothing to change or destroy. Read it:
+nothing outside the list at the top of this file should appear. One of the
+18, the GitHub OIDC provider, is a per-account singleton: if the account
+already has one (another project set it up), the apply fails with
+`EntityAlreadyExists` — import it instead of creating it:
+`terraform import aws_iam_openid_connect_provider.github <its ARN>`.
 
 ## 5. Apply
 

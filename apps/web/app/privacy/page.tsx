@@ -29,6 +29,14 @@ export default function Privacy() {
           A session cookie so you stay signed in. There are no advertising or
           analytics cookies.
         </li>
+        <li>
+          If you try hax without an account, a guest session cookie and the few
+          messages of that demo, which are deleted after a few days.
+        </li>
+        <li>
+          Your network address, for up to a day, in counters that limit sign-up
+          and demo attempts, and in request logs that rotate within days.
+        </li>
       </ul>
 
       <h2 className="text-lg font-semibold">Who processes it</h2>

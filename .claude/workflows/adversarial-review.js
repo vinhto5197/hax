@@ -17,7 +17,7 @@ export const meta = {
 // partial coverage. It refuses to start unless the launcher acknowledges the
 // tier explicitly: args.plan must equal "max-5x" (or "max-20x").
 //
-// Tiers decided 2026-09-08 (see memory: ar-config-and-calibration). Fable ≈ 4-6x
+// Tiers decided 2026-09-08. Fable ≈ 4-6x
 // Opus on the usage meter, so it is confined to two singleton agents and the
 // lenses where a missed finding is most expensive.
 const ALLOWED_PLANS = new Set(['max-5x', 'max-20x'])

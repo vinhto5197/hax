@@ -17,7 +17,7 @@ Install these before setup. Versions are minimums.
 | Tool           | Version | Notes                                           |
 | -------------- | ------- | ----------------------------------------------- |
 | Python         | 3.11+   | Via pyenv or Homebrew                           |
-| Node.js        | 18+     | Via nvm or Homebrew                             |
+| Node.js        | 20.9+   | Via nvm or Homebrew (CI and the image use 22)   |
 | Docker         | 20+     | Docker Desktop, Colima, Rancher, etc.           |
 | docker-compose | 2+      | Usually bundled with Docker; Homebrew otherwise |
 | Make           | any     | Pre-installed on macOS / Linux                  |
@@ -172,7 +172,7 @@ make migrate-down              # roll back the most recent migration
 
 ### Auth setup
 
-Chat, conversations and documents all require login (M2.5) — the app is unusable without these steps.
+The landing page's demo works without an account; saved conversations, uploads and the full tool set need a login, which these steps set up.
 
 1. **Generate secrets** in `.env`:
 
@@ -276,7 +276,7 @@ graph TB
 
 - `/api/chat` is the single, **agentic** chat route: the model invokes tools in a loop (document search over pgvector, calculator, datetime, mocked email) — retrieval is never injected, always model-invoked.
 - Chat responses stream (SSE) directly from FastAPI to the browser; they are not queued through Celery.
-- Celery + Redis handle background work — three tasks today: conversation titles, document ingestion (chunk → embed → store), transactional email.
+- Celery + Redis handle background work — four tasks today: conversation titles, document ingestion (chunk → embed → store), transactional email, and the daily sweep of aged demo visitors.
 - pgvector lives in Postgres; no separate vector DB.
 
 ## Built with Claude Code + community skills

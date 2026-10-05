@@ -58,7 +58,7 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
 3.5. **Milestone 3.5 — Grow the live stack** *(after M3; each item when it earns its cost)*
    - ALB + ACM + Route 53 when a second box exists; ElastiCache when Redis
      leaves the box; SES after sandbox exit; CloudWatch alarms; the Fargate
-     path (`local/V1_CHECKLIST.local.md`); a staging environment variable;
+     path; a staging environment variable;
      the hardening items deferred from M3 (RDS CA verification, CSP nonce,
      limiter redesign, per-service env files, network split + Redis auth).
 
@@ -76,7 +76,7 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
      and agent changes are tuned and regression-checked by **number, not vibes**.
      A minimal eval rides along with M2 slice 3; M5 makes it systematic.
      (Rigorous eval-driven tuning is beyond v0 scope.)
-   - Drain the remaining dev + QOL backlogs (`local/*BACKLOG*.local.md`)
+   - Drain the remaining dev + QOL backlogs (kept locally, not committed)
    - Tighten foot-guns deferred during feature work (input validation, error
      surfaces, anything flagged "fix in cleanup")
 

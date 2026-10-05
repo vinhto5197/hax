@@ -84,16 +84,13 @@ per failure mode."
 
 **Known slice-1 gap:** login rate limiting is currently a per-account
 bucket, which is itself a lockout lever (anyone who knows a victim's email
-can trip it). Redesign deferred to M3.5 (tracked in
-`local/DEV_BACKLOG.local.md`, "Login rate limiting is architecturally
-blind") — not a blocker pre-deploy, since nothing public depends on it yet.
+can trip it). Redesign deferred to M3.5 ("limiter redesign" in CLAUDE.md's
+M3.5 list) — not a blocker pre-deploy, since nothing public depends on it yet.
 
 ## Related
 
 - [0012](0012-structural-isolation.md) — per-user data isolation once
   `users` exists.
-- `local/specs/2026-07-30-m2.5-auth-titles.md` — full design (session/token
-  design, threat model, slice breakdown).
 
 ## Addendum (2026-09-14): Google sign-in and account linking
 
