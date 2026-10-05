@@ -103,7 +103,6 @@ without re-upload.
 
 ## Related
 
-- Slice-2a design: `local/specs/2026-06-28-m2-slice2a-celery-ingestion.md`.
 - [0002](0002-anthropic-sdk-not-agent-sdk.md) — "the harness" overhead framing.
 - [0006](0006-async-sqlalchemy-asyncpg-alembic.md) — the async-end-to-end stance
   that makes "don't block the web event loop" matter.

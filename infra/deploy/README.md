@@ -94,13 +94,15 @@ rollback rarely needs this. One known exception: the migration that made
 downgrade fails on the NOT NULL constraint.
 
 On the box, `roll` takes `/opt/hax/.deploy.lock` (a second roll waits, up
-to ten minutes), writes `compose.prod.yml`, `Caddyfile` and `images.env`
-next to `.env`, then `docker compose pull` and `up -d`. Compose orders the
-rest: `migrate` runs to head, `api` and `worker` wait for it, `caddy` waits
+to ten minutes), fetches `compose.prod.yml` and `Caddyfile` and writes the
+image tags as staged copies next to `.env`, pulls, runs `migrate` once as a
+throwaway container, and only then promotes the three files and runs
+`up -d`; a failure before the promotion leaves the box untouched. Compose
+orders the rest: `migrate` runs to head, `api` and `worker` wait for it, `caddy` waits
 for `api` healthy. First deploy: `up` pulls ~1 GB of images, and Caddy's
 certificate takes a few seconds after that; watch it with the logs below.
 
-Verify: `https://<domain>` shows a real padlock and the login page;
+Verify: `https://<domain>` shows a real padlock and the landing page with the demo composer;
 `https://<domain>/api/conversations` answers 401.
 
 ## When something is wrong
