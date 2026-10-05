@@ -145,9 +145,11 @@ async def reset_password(
     return cutoff
 
 
-async def delete_stale_anonymous(session: AsyncSession, cutoff: datetime) -> int:
+async def delete_stale_anonymous(
+    session: AsyncSession, cutoff: datetime
+) -> list[uuid.UUID]:
     """Delete every demo visitor (no email) created before `cutoff`; returns
-    how many went.
+    their ids (the caller purges their revocation-cache entries).
 
     The `email IS NULL` guard is in the statement itself, so this can never
     delete an account. `users` is outside RLS; the cascade into the policied
@@ -161,4 +163,4 @@ async def delete_stale_anonymous(session: AsyncSession, cutoff: datetime) -> int
         .returning(User.id)
         .execution_options(synchronize_session=False)
     )
-    return len(result.all())
+    return list(result.scalars().all())

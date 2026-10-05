@@ -69,7 +69,8 @@ async def _run_tool(name: str, raw_input: dict, ctx: ToolContext) -> tuple[str, 
         parsed = tool.input_model.model_validate(raw_input)
         return await tool.run(parsed, ctx), False
     except Exception as exc:  # noqa: BLE001 — tool faults must not crash the loop
-        logger.warning("agentic tool %s failed: %s", name, exc, exc_info=True)
+        # Type name only: the message can quote the model-authored arguments.
+        logger.warning("agentic tool %s failed: %s", name, type(exc).__name__)
         return f"Error running {name}: {exc}", True
 
 

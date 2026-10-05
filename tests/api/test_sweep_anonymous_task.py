@@ -12,6 +12,7 @@ from sqlalchemy import text
 
 import apps.worker.tasks as tasks
 from apps.worker.celery_app import celery_app
+from packages.core.auth.revocation import sva_cache_key
 from packages.db import engine as app_engine
 from packages.db.models.chunk import EMBEDDING_DIM
 from tests.api.factories import (
@@ -132,3 +133,19 @@ async def test_the_task_runs_the_sweep_and_beat_names_it(admin_engine, caplog):
     assert schedule["task"] == "sweep_anonymous_users"
     assert "sweep_anonymous_users" in celery_app.tasks
     assert celery_app.conf.timezone == "UTC"
+
+
+async def test_the_sweep_purges_the_swept_visitors_revocation_cache(
+    admin_engine, fake_redis, monkeypatch
+):
+    monkeypatch.setattr(tasks, "_async_redis", lambda: fake_redis)
+    monkeypatch.setattr(fake_redis, "aclose", _noop, raising=False)
+    visitor, conv, doc = await _seed_full_visitor(admin_engine, days=4)
+    await fake_redis.set(sva_cache_key(visitor.id), "0")
+
+    assert await tasks.sweep_anonymous_users_async() == 1
+    assert await fake_redis.get(sva_cache_key(visitor.id)) is None
+
+
+async def _noop():
+    return None

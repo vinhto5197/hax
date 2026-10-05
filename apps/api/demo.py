@@ -22,9 +22,10 @@ def _turn_limit() -> int:
 
 
 def _turn_window_s() -> int:
-    # The counter lives as long as the visitor's row (the sweep's retention);
-    # after that the id is gone and the key may expire.
-    return int(os.getenv("ANON_RETENTION_DAYS", "3")) * 86400
+    # The counter must outlive the visitor's row: the sweep runs once a day
+    # after the retention, so a key that expired at exactly the retention
+    # would hand the same token a second batch of turns in the gap.
+    return (int(os.getenv("ANON_RETENTION_DAYS", "3")) + 2) * 86400
 
 
 def _refuse() -> HTTPException:
