@@ -17,7 +17,8 @@ endpoint (MinIO in dev), and Postgres, Redis and SMTP are plain protocols.
 **AWS core, thin edge**, provisioned by Terraform (`infra/terraform`):
 
 - **One EC2 box** (`t4g.small`, Graviton, Ubuntu 24.04) runs the compose
-  topology from `infra/compose/compose.prod.yml`: Caddy, api, worker, web,
+  topology from `infra/compose/compose.prod.yml`: Caddy, api, two workers
+  (one per Celery queue, ADR 0010 addendum), web,
   Redis, and a `migrate` one-shot. Caddy is the only service with published
   ports; it terminates TLS with Let's Encrypt and routes `/api/*` to uvicorn
   (SSE flushed, never buffered) and everything else to Next, so web and API

@@ -216,3 +216,45 @@ documents fails any of theirs still pending or processing after ten minutes,
 as the caller, under RLS (a deadline that fires on a live attempt is
 harmless: the attempt still writes `ready` over it). The worker's `stop_grace_period` is above
 `task_time_limit`, so a deploy waits for in-flight work rather than killing it.
+
+## Addendum (2026-10-06) — two queues, and a per-user upload cap
+
+**The problem.** One queue and one worker served every task. Ingestion runs
+for up to five minutes a message; email, titles and the daily sweep run for
+seconds. With a batch of uploads queued, every slot held an ingest and a
+signup's verification email waited behind them. The same member could also
+queue embedding spend without limit.
+
+**Decision: strict lanes.** Tasks are routed by name in `celery_app.py`
+(`task_routes`, every task listed): `ingest_document` goes to a queue named
+`ingest`; `send_email`, `generate_title` and `sweep_anonymous_users` go to
+the default queue, `celery`. Production runs two worker processes from the
+same image: `worker` consumes only `ingest` (one child, the 1 GiB memory
+fence, the long stop grace), and `worker-fast` consumes only `celery` (one
+child, a smaller fence, a short grace) and carries the embedded beat. Neither
+worker ever listens on the other's queue, so a parse can never hold up an
+email and an ingest can never land in the small container. `make worker`
+starts the same two consumers on the laptop. A test pins the route table:
+every registered task has an explicit route, so a new task is placed by
+choice, not by default.
+
+The default queue keeps its name. A producer that still runs an older route
+table during a roll publishes to the default queue; renaming it would strand
+those messages on a queue nothing consumes.
+
+Beat moves with the fast worker, the one that stays single; an ingest worker
+can be added without a second beat.
+
+**Rejected.** One worker listening on both queues (its slots are shared, so
+a queued ingest still delays an email); a queue-order strategy that lets the
+ingest worker help with fast work when idle (the idle capacity is tiny at one
+host, and the next host makes the question moot — revisit when the worker
+tier has more than one box).
+
+**The cap.** `POST /api/documents` spends one slot of the user's hourly and
+daily buckets through the existing Redis fixed-window limiter, keyed on the
+user id: five accepted uploads an hour, fifteen a day. Only an accepted file
+spends a slot (a rejected suffix or size does not); the check runs after
+validation and before the row exists, so a refused upload leaves nothing
+behind. The limiter fails open when Redis is down, like every limiter in the
+API. A refusal is a 429 whose string detail the upload panel already shows.

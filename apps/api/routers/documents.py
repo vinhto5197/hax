@@ -19,8 +19,10 @@ from apps.api.auth import CurrentUser, current_user
 from apps.api.demo import refuse_visitor
 from apps.api.deps import get_session
 from apps.api.enqueue import publish
+from apps.api.redis_client import get_redis
 from apps.worker.tasks import ingest_document
 from packages.core import storage
+from packages.core.auth import rate_limit
 from packages.core.schemas.document import DocumentOut
 from packages.db.repos import documents as documents_repo
 
@@ -46,6 +48,10 @@ TEXT_MAX_BYTES = 256 * 1024
 STUCK_AFTER = timedelta(minutes=10)
 STUCK_ERROR = "processing did not finish; upload the file again"
 BINARY_MAX_BYTES = 5 * 1024 * 1024
+# Per-user caps on accepted uploads (fixed windows in Redis); every upload
+# costs storage, a worker slot and embedding spend.
+UPLOADS_PER_HOUR = 5
+UPLOADS_PER_DAY = 15
 
 
 @router.get("")
@@ -66,7 +72,13 @@ async def list_documents(
     return [DocumentOut.model_validate(d) for d in documents]
 
 
-@router.post("", responses={403: {"description": "demo_limit: sign up to upload"}})
+@router.post(
+    "",
+    responses={
+        403: {"description": "demo_limit: sign up to upload"},
+        429: {"description": "upload limit reached"},
+    },
+)
 async def upload_document(
     request: Request,
     file: UploadFile = File(...),
@@ -103,6 +115,23 @@ async def upload_document(
     # Content is not inspected here: the worker parses the bytes it fetches
     # back from storage, and anything unreadable (bad UTF-8, a text-less PDF)
     # marks the document failed with a reason the panel shows.
+
+    # Only an accepted upload spends a slot: every rejection above returns
+    # before this line. Keyed on the user id so password and Google accounts
+    # are bounded alike; a visitor never reaches here (refuse_visitor runs
+    # first). A storage failure after the hit still spends one, like a demo
+    # turn the model then fails. Fail-open on Redis is the limiter's contract.
+    ident = str(user.id)
+    if not await rate_limit.hit(
+        get_redis(), "upload_hour", ident, limit=UPLOADS_PER_HOUR, window_s=3600
+    ):
+        raise HTTPException(429, detail="upload limit reached; try again later")
+    # The hour slot spent just above is harmless when the day refuses: the
+    # day is exhausted either way.
+    if not await rate_limit.hit(
+        get_redis(), "upload_day", ident, limit=UPLOADS_PER_DAY, window_s=86400
+    ):
+        raise HTTPException(429, detail="upload limit reached; try again later")
 
     doc = await documents_repo.create(
         session,
