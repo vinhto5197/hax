@@ -4,8 +4,10 @@ current_user is the single enforcement point: cookie (web) or
 Authorization: Bearer (tests and non-browser clients) -> pinned-alg JWT decode
 -> revocation check -> CurrentUser. No DB read on the hot path (Redis only;
 DB only on cache miss). internal_only guards the server-to-server endpoints
-Next calls (verify-credentials, oauth-upsert, anonymous) — it 404s, not 403s,
-so probing can't even learn the routes exist.
+Next calls (verify-credentials, oauth-upsert, anonymous) — a wrong or missing
+secret answers 404, not 403. (The route table itself is public: a wrong
+method or a malformed body is answered by the framework before this runs.
+In production Caddy never routes /internal/* at all.)
 """
 
 import hmac
