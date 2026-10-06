@@ -57,10 +57,28 @@ celery_app.conf.update(
     # one orphaned (a warm shutdown restores them at once); minutes, not the
     # default hour.
     broker_transport_options={"socket_connect_timeout": 2, "visibility_timeout": 600},
-    # The schedule fires only where a beat process exists. The worker is
-    # started with an embedded beat (--beat), which is correct for exactly one
-    # worker: a second worker needs a single separate beat instead, or every
-    # tick fires once per worker.
+    # Two strict lanes: `ingest` is consumed by a worker that consumes nothing
+    # else, and the default queue by a worker that never consumes `ingest`, so
+    # a parse can never delay an email, a title or the sweep. Every task is
+    # routed here by its registered name — a new task without an entry fails
+    # tests/api/test_task_routes.py, so its lane is a conscious choice.
+    # The default queue keeps Celery's own name (`celery`; task_default_queue
+    # is deliberately unset): a producer still running an older route table
+    # during a roll publishes to the default queue, and renaming it would
+    # orphan those messages.
+    # Retries and beat need nothing here: Celery re-sends a retry with the
+    # original routing, and beat publishes through this same router.
+    task_routes={
+        "ingest_document": {"queue": "ingest"},
+        "send_email": {"queue": "celery"},
+        "generate_title": {"queue": "celery"},
+        "sweep_anonymous_users": {"queue": "celery"},
+    },
+    # The schedule fires only where a beat process exists. The beat is embedded
+    # (--beat) in the worker that consumes the default queue — the fast worker,
+    # of which there is exactly one; a second one on that queue would need a
+    # single separate beat instead, or every tick fires once per worker. The
+    # ingest worker carries no beat, so it can be scaled without touching it.
     timezone="UTC",
     beat_schedule={
         "sweep-anonymous-users": {

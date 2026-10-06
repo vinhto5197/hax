@@ -98,7 +98,7 @@ to ten minutes), fetches `compose.prod.yml` and `Caddyfile` and writes the
 image tags as staged copies next to `.env`, pulls, runs `migrate` once as a
 throwaway container, and only then promotes the three files and runs
 `up -d`; a failure before the promotion leaves the box untouched. Compose
-orders the rest: `migrate` runs to head, `api` and `worker` wait for it, `caddy` waits
+orders the rest: `migrate` runs to head, `api`, `worker` and `worker-fast` wait for it, `caddy` waits
 for `api` healthy. First deploy: `up` pulls ~1 GB of images, and Caddy's
 certificate takes a few seconds after that; watch it with the logs below.
 
@@ -123,8 +123,8 @@ instance, repoint `DATABASE_URL` in `/opt/hax/.env`, `roll`.
 ```sh
 alias hc='docker compose --env-file .env --env-file images.env -f compose.prod.yml'
 hc ps
-hc logs -f --tail=100 caddy      # or api, worker, web, migrate
-hc up -d --force-recreate worker # after editing .env (restart does NOT reload env_file)
+hc logs -f --tail=100 caddy      # or api, worker, worker-fast, web, migrate
+hc up -d --force-recreate worker worker-fast # after editing .env (restart does NOT reload env_file)
 ```
 
 Both `--env-file` flags matter: `.env` carries `SITE_ADDRESS`, `images.env`

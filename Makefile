@@ -59,18 +59,26 @@ api:
 	uvicorn apps.api.main:app --reload --port 8000
 
 # ── Worker (Celery) ───────────────────────────────────────────
-.PHONY: worker
+.PHONY: worker worker-fast worker-ingest
 
-# Background-job worker (ingestion, email, conversation titles, the daily
-# visitor sweep). Needs infra (Redis) up — run `make infra-up` or `make dev`
-# first. Separate process from the API. --beat embeds the scheduler, as in
-# production: one worker, one beat. --pool=solo on the laptop: the prefork
-# pool forks after threads exist, which macOS forbids, and tasks then die
-# with "not enough values to unpack (expected 3, got 0)"; production is
-# Linux and keeps prefork (compose.prod.yml). The log level follows LOG_LEVEL
-# here (DEBUG = full tracebacks); production pins the worker at info.
+# Background-job workers, two processes as in production, one per queue:
+# worker-fast consumes the default queue (email, conversation titles, the
+# daily visitor sweep) and embeds the beat — one worker on that queue, one
+# beat; worker-ingest consumes only `ingest` (document ingestion). Needs
+# infra (Redis) up — run `make infra-up` or `make dev` first. Separate
+# processes from the API. --pool=solo on the laptop: the prefork pool forks
+# after threads exist, which macOS forbids, and tasks then die with "not
+# enough values to unpack (expected 3, got 0)"; production is Linux and keeps
+# prefork (compose.prod.yml). The log level follows LOG_LEVEL here (DEBUG =
+# full tracebacks); production pins the workers at info.
 worker:
-	celery -A apps.worker.celery_app worker --beat --schedule /tmp/celerybeat-schedule --loglevel=$${LOG_LEVEL:-info} --pool=solo
+	@$(MAKE) -j2 worker-fast worker-ingest
+
+worker-fast:
+	celery -A apps.worker.celery_app worker -Q celery --beat --schedule /tmp/celerybeat-schedule --loglevel=$${LOG_LEVEL:-info} --pool=solo
+
+worker-ingest:
+	celery -A apps.worker.celery_app worker -Q ingest --loglevel=$${LOG_LEVEL:-info} --pool=solo
 
 # ── Frontend (Next.js) ────────────────────────────────────────
 .PHONY: web

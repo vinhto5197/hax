@@ -59,6 +59,9 @@ services:
       migrate: { condition: service_completed_successfully }
     expose: ["8000"]
 
+  # Two strict lanes (task_routes in apps/worker/celery_app.py): this worker
+  # consumes only `ingest`, so a parse can never hold up the fast lane
+  # (email, titles, the sweep) served by worker-fast below.
   worker:
     <<: *logging
     image: ${HAX_PYTHON_IMAGE:-hax-python}
@@ -66,19 +69,41 @@ services:
     env_file: ${HAX_ENV_FILE:-/opt/hax/.env}
     environment:
       MIGRATIONS_DATABASE_URL: ""
-    # The embedded beat is for a single worker (a second one needs its own
-    # separate beat process). The schedule file lives in /tmp because /app is
-    # read-only for the hax user; it only records last-run times, so losing
-    # it on a restart merely waits for the next tick.
     command: >
-      celery -A apps.worker.celery_app worker --beat
-      --schedule /tmp/celerybeat-schedule --loglevel=info --concurrency=2
+      celery -A apps.worker.celery_app worker -Q ingest
+      --loglevel=info --concurrency=1
     # A parse that outgrows its budget dies inside this fence (the kernel
     # kills the child, the celery parent lives) instead of starving the box.
     mem_limit: 1g
     # A deploy recreates this container; give in-flight tasks the full
     # task_time_limit (300 s) to finish instead of the 10 s default kill.
     stop_grace_period: 330s
+    depends_on:
+      redis: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+
+  # Reserved for the default queue: never give it `-Q ingest`, or a parse
+  # would block the next email and outgrow this cap.
+  worker-fast:
+    <<: *logging
+    image: ${HAX_PYTHON_IMAGE:-hax-python}
+    restart: unless-stopped
+    env_file: ${HAX_ENV_FILE:-/opt/hax/.env}
+    environment:
+      MIGRATIONS_DATABASE_URL: ""
+    # The embedded beat is correct for exactly one worker on this queue (a
+    # second one needs its own separate beat process). The schedule file
+    # lives in /tmp because /app is read-only for the hax user; it only
+    # records last-run times, so losing it on a restart merely waits for the
+    # next tick.
+    command: >
+      celery -A apps.worker.celery_app worker -Q celery --beat
+      --schedule /tmp/celerybeat-schedule --loglevel=info --concurrency=1
+    # Not smaller: a message published under an older route table (a
+    # producer mid-roll) can still put an ingest on the default queue.
+    mem_limit: 512m
+    # Email and title tasks take seconds; a deploy need not wait longer.
+    stop_grace_period: 30s
     depends_on:
       redis: { condition: service_healthy }
       migrate: { condition: service_completed_successfully }

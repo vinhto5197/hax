@@ -68,10 +68,12 @@ make dev
 ```
 
 Ingestion, transactional email, conversation titles and the daily sweep of
-demo visitors run in a **Celery worker** (a separate process, with the
-scheduler embedded). Run it in a second terminal — otherwise an upload
-just sits at `pending`, no email arrives, and new conversations stay "Untitled"
-(`make dev` prints this reminder too):
+demo visitors run in **two Celery workers** on two queues — ingestion on its
+own, everything fast on the default one with the scheduler embedded — so a
+batch of uploads never delays an email. `make worker` starts both. Run it in
+a second terminal — otherwise an upload just sits at `pending`, no email
+arrives, and new conversations stay "Untitled" (`make dev` prints this
+reminder too):
 
 ```bash
 make worker
@@ -97,7 +99,7 @@ make setup           # re-run setup.sh without sourcing
 ### Run the production stack locally
 
 The production box runs `infra/compose/compose.prod.yml` — Caddy in front of
-web + api on one origin, plus the worker, Redis and a migrate one-shot. Running
+web + api on one origin, plus the two workers, Redis and a migrate one-shot. Running
 that exact topology on a laptop catches container, proxy and same-origin issues
 before they reach the box. `infra/compose/compose.prod.local.yml` swaps in local
 Postgres, MinIO and Mailpit for RDS, S3 and the SMTP relay.
@@ -267,7 +269,7 @@ graph TB
   FastAPI -->|enqueue tasks| Redis
   subgraph background [Background]
     Redis
-    CeleryWorker[Celery Worker]
+    CeleryWorker["Celery workers (ingest + fast queues)"]
     Redis -->|consume| CeleryWorker
     CeleryWorker -->|title gen embed ingest| LLM
     CeleryWorker -->|write| PG
@@ -276,7 +278,7 @@ graph TB
 
 - `/api/chat` is the single, **agentic** chat route: the model invokes tools in a loop (document search over pgvector, calculator, datetime, mocked email) — retrieval is never injected, always model-invoked.
 - Chat responses stream (SSE) directly from FastAPI to the browser; they are not queued through Celery.
-- Celery + Redis handle background work — four tasks today: conversation titles, document ingestion (chunk → embed → store), transactional email, and the daily sweep of aged demo visitors.
+- Celery + Redis handle background work — four tasks today: conversation titles, document ingestion (chunk → embed → store), transactional email, and the daily sweep of aged demo visitors. Two queues, two workers: ingestion has its own, so a slow parse never delays an email or a title.
 - pgvector lives in Postgres; no separate vector DB.
 
 ## Built with Claude Code + community skills

@@ -63,6 +63,10 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
      limiter redesign, per-service env files, network split + Redis auth).
 
 4. **Milestone 4 — Structured outputs + polish** *(built against live infra, auto-deployed)*
+   - Slice 0 *(2026-10-06)*: the work-queue split (ingestion on its own queue
+     and worker; email, titles and the sweep on the fast one) and the
+     per-user upload cap — closes the M3 review's one open medium. ADR 0010
+     addendum.
    - Table / structured view for results (not only free-form text)
    - Citation/source display (what data the answer used)
    - Cohesive UI — feels like a product, not a demo collection
@@ -149,7 +153,8 @@ this repo. Write prod-level comments only:
 - `scripts/*` are standalone, read-mostly dev utilities (e.g. `corpus.py`); not imported by the app.
 - Redis is the Celery broker AND the auth cache — rate-limit buckets and revocation cutoffs (one service, two roles). Sessions themselves are stateless JWTs, not Redis rows.
 - Chat responses are streamed (SSE) directly from FastAPI — never queued through Celery.
-- Celery handles background work — four tasks today: `generate_title`, `ingest_document` (chunk → embed → store), `send_email`, and `sweep_anonymous_users` (daily, from the worker's embedded beat; deletes demo visitors older than `ANON_RETENTION_DAYS` (default 3) with everything they own).
+- Celery handles background work — four tasks today: `generate_title`, `ingest_document` (chunk → embed → store), `send_email`, and `sweep_anonymous_users` (daily, from the fast worker's embedded beat; deletes demo visitors older than `ANON_RETENTION_DAYS` (default 3) with everything they own). Two queues, routed by task name in `apps/worker/celery_app.py` and consumed by two worker processes that never share a queue: `ingest` (the `worker` service: one slot, 1 GiB fence) and the default `celery` for email/titles/sweep (`worker-fast`: carries beat). A new task must be given a route — a test fails otherwise. ADR 0010 addendum.
+- Uploads are capped per user through the Redis limiter (`packages/core/auth/rate_limit.py`): 5 accepted files an hour, 15 a day, keyed on the user id, checked after validation and before the row exists; 429 with a string detail. Fail-open like every limiter.
 - Conversation titles: `generate_title` (worker) titles a conversation from its first user message only, with a conditional `UPDATE … WHERE title IS NULL` (first writer wins; nothing else is ever stored in `title`). The API enqueues at conversation creation and re-enqueues on each persisted assistant turn while untitled — that re-enqueue is the retry. The sidebar shows "Untitled" until then. See ADR 0010 addendum.
 - Every Celery publish from the API goes through `apps/api/enqueue.py` (off the event loop, after the DB commit, `retry=False`; `fire_and_forget` for work with its own recovery path — titles, email — and awaited `publish` where the caller must know, e.g. uploads marking a document failed). Tasks published from there declare `ignore_result=True`.
 - Transactional email goes through the Celery `send_email` task (`packages/core/email/`: templates + smtplib transport); dev sends to Mailpit (compose, inbox at :8025), prod to a real relay via the same `SMTP_*` env. Emails are enqueued only after the DB commit.

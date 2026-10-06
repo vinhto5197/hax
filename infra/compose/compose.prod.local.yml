@@ -46,6 +46,12 @@ services:
       postgres: { condition: service_healthy }
       minio: { condition: service_started }
       mailpit: { condition: service_started }
+  worker-fast:
+    build: { context: ../.., dockerfile: infra/docker/python.Dockerfile }
+    depends_on:
+      postgres: { condition: service_healthy }
+      minio: { condition: service_started }
+      mailpit: { condition: service_started }
   web:
     build: { context: ../.., dockerfile: infra/docker/web.Dockerfile }
 
