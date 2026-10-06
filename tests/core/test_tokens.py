@@ -89,3 +89,20 @@ def test_missing_email_decodes_as_none():
     # An anonymous demo visitor's token carries no email.
     claims = decode_session_token(mint(email=None), SECRET)
     assert claims.email is None
+
+
+def test_null_email_decodes_as_none():
+    # The wire form auth.ts emits for a demo visitor: the key present, null.
+    payload = {
+        "sub": UID,
+        "email": None,
+        "iss": ISSUER,
+        "aud": AUDIENCE,
+        "iat": int(time.time()),
+        "exp": int(time.time()) + 600,
+        "jti": "j1",
+        "auth_time": int(time.time()),
+    }
+    token = jwt.encode(payload, SECRET, algorithm=ALGORITHM)
+    claims = decode_session_token(token, SECRET)
+    assert claims.email is None

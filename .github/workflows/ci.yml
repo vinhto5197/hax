@@ -27,6 +27,15 @@ jobs:
         run: pip install "ruff==0.15.0"
       - name: Ruff
         run: ruff check . && ruff format --check .
+      # The box fetches these two files at the deployed sha; a syntax error in
+      # either would be found by the roll, after the images were built.
+      - name: Validate the production compose file and Caddyfile
+        run: |
+          docker run --rm -v "$PWD/infra/compose/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            -e SITE_ADDRESS=example.com caddy:2-alpine \
+            caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+          HAX_ENV_FILE="$PWD/.env.prod.example" SITE_ADDRESS=example.com \
+            docker compose -f infra/compose/compose.prod.yml config -q
 
   test:
     runs-on: ubuntu-latest

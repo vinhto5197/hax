@@ -46,6 +46,9 @@ END $$;
 _GRANTS_SQL = (
     "GRANT USAGE ON SCHEMA public TO hax_app",
     "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO hax_app",
+    # The blanket grant above re-covers the ledger; the migration that made it
+    # read-only for the app role must hold here too.
+    "REVOKE INSERT, UPDATE, DELETE ON alembic_version FROM hax_app",
 )
 
 
@@ -161,7 +164,8 @@ async def user_b(admin_engine):
 
 def bearer(user, *, anonymous: bool = False) -> dict[str, str]:
     """Authorization header for `user` — the Bearer path, no cookie needed.
-    anonymous mints what auth.ts emits for a demo visitor: no email."""
+    anonymous mints what auth.ts emits for a demo visitor: the email claim
+    present and null (the key is always emitted)."""
     now = int(time.time())
     claims: dict[str, object] = {
         "sub": str(user.id),
@@ -172,7 +176,6 @@ def bearer(user, *, anonymous: bool = False) -> dict[str, str]:
         "jti": "test",
         "auth_time": now,
     }
-    if not anonymous:
-        claims["email"] = user.email
+    claims["email"] = None if anonymous else user.email
     token = jwt.encode(claims, os.environ["AUTH_SECRET"], algorithm="HS256")
     return {"Authorization": f"Bearer {token}"}

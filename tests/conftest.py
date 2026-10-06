@@ -26,3 +26,8 @@ os.environ.pop("SMTP_PASSWORD", None)
 # The code default is "true"; hard-set so the suite matches prod regardless of
 # the invoking shell's env.
 os.environ["AUTH_REQUIRE_EMAIL_VERIFICATION"] = "true"
+# The demo knobs are read at call time; the shell's .env (direnv) must not
+# reach the suite, which asserts on the defaults.
+os.environ["DEMO_TURN_LIMIT"] = "3"
+os.environ["ANON_PER_IP_PER_DAY"] = "3"
+os.environ["ANON_RETENTION_DAYS"] = "3"

@@ -133,6 +133,10 @@ if compose exec -T caddy cat /etc/caddy/Caddyfile | cmp -s - Caddyfile; then
 else
   echo "caddy's Caddyfile differs from the host's: recreating caddy"
   compose up -d --force-recreate caddy
+  # up -d returns before caddy has parsed its file; a bad file crash-loops.
+  sleep 5
+  compose ps --status running caddy | grep -q caddy \
+    || { echo "caddy is not running after the recreate"; compose logs --tail=20 caddy; exit 1; }
 fi
 compose ps
 # Only the running images stay on the box; superseded sha tags are pullable
