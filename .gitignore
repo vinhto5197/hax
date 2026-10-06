@@ -81,6 +81,8 @@ celerybeat.pid
 .claude/*
 !.claude/workflows/
 !.claude/agents/
+!.claude/hooks/
+!.claude/settings.json
 
 # ide
 .idea/
