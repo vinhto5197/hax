@@ -80,6 +80,7 @@ celerybeat.pid
 # claude code
 .claude/*
 !.claude/workflows/
+!.claude/agents/
 
 # ide
 .idea/
