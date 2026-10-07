@@ -9,6 +9,7 @@ real task once its monkeypatch is undone.
 import asyncio
 import logging
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 
 import pytest
@@ -42,7 +43,7 @@ async def no_publish_outlives_its_test():
     assert all(flag is False for flag in _retry_flags)
 
 
-async def test_fire_and_forget_returns_before_a_stuck_publish_finishes():
+async def test_fire_and_forget_returns_before_a_stuck_publish_finishes(monkeypatch):
     started, release = threading.Event(), threading.Event()
     threads: list[str] = []
 
@@ -51,6 +52,15 @@ async def test_fire_and_forget_returns_before_a_stuck_publish_finishes():
         started.set()
         release.wait(timeout=30)
 
+    # A pool of this test's own: the module-level one is shared by the whole
+    # suite, and a publish still draining from an earlier test (seconds
+    # against the unroutable test broker) can hold both workers past the
+    # wait below — the claim here is about the hand-off, not pool capacity.
+    monkeypatch.setattr(
+        enqueue,
+        "_publisher",
+        ThreadPoolExecutor(max_workers=2, thread_name_prefix="enqueue"),
+    )
     task = fake_task("generate_title", stuck)
     try:
         enqueue.fire_and_forget(task, "cid", "uid", log_ref="cid")
