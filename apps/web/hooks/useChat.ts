@@ -6,6 +6,7 @@ import {
   type ChatMessage,
   DemoLimitError,
   getConversation,
+  type Source,
   streamChat,
 } from "@/lib/chatApi";
 
@@ -63,6 +64,8 @@ export function useChat(
           conv.messages.map((m) => ({
             role: m.role as ChatMessage["role"],
             content: m.content,
+            // null (user rows, sourceless turns) and undefined both mean no footer.
+            sources: m.sources ?? undefined,
           })),
         );
       })
@@ -90,6 +93,11 @@ export function useChat(
       // (state) mirrors this for live rendering, but state is async/batched —
       // fullContent accumulates synchronously so the finally can commit it.
       let fullContent = "";
+      // Provenance for this turn. The server dedups only what it persists
+      // and forwards every event unchanged, so two searches that hit the
+      // same chunk arrive twice here; dedup by the server's key, first-seen
+      // order, so the live bubble matches the reloaded one.
+      const sources = new Map<string, Source>();
       try {
         await streamChat(
           prompt,
@@ -109,6 +117,12 @@ export function useChat(
               setStatus(null);
             },
             onStatus: setStatus,
+            onSources: (batch) => {
+              for (const s of batch) {
+                const key = `${s.document_id}:${s.chunk_idx}`;
+                if (!sources.has(key)) sources.set(key, s);
+              }
+            },
           },
           model,
         );
@@ -133,7 +147,11 @@ export function useChat(
         if (fullContent) {
           setMessages((prev) => [
             ...prev,
-            { role: "assistant", content: fullContent },
+            {
+              role: "assistant",
+              content: fullContent,
+              sources: sources.size ? [...sources.values()] : undefined,
+            },
           ]);
         }
         setIsLoading(false);

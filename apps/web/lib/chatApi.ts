@@ -7,12 +7,17 @@ type ChatRole = "user" | "assistant";
 export type ChatMessage = {
   role: ChatRole;
   content: string;
+  // Present only on assistant turns that searched and found something.
+  sources?: Source[];
 };
 
 // Response shapes generated from the FastAPI OpenAPI spec (see `make types`).
 export type ConversationSummary = components["schemas"]["ConversationOut"];
 export type ConversationDetail = components["schemas"]["ConversationDetailOut"];
 export type DocumentSummary = components["schemas"]["DocumentOut"];
+// One retrieved passage the model had in context for the turn (slice-level
+// provenance, not a citation): the server snapshots it on the message.
+export type Source = components["schemas"]["SourceOut"];
 
 // Dev: NEXT_PUBLIC_API_URL hits FastAPI directly (Next's dev rewrite buffers
 // SSE). Prod: unset — same-origin via the reverse proxy. See ADR 0005.
@@ -155,13 +160,28 @@ export async function deleteConversation(id: string): Promise<void> {
 
 // Parsed result of one SSE event — a discriminated union so callers switch on
 // `type`: prelude (conversation), token (chunk), tool-activity note (status),
-// terminator (done), or unparseable/empty (ignore).
+// provenance (sources), terminator (done), or unparseable/empty (ignore).
 type StreamEvent =
   | { type: "conversation"; conversationId: string }
   | { type: "chunk"; content: string }
   | { type: "status"; status: string }
+  | { type: "sources"; sources: Source[] }
   | { type: "done" }
   | { type: "ignore" };
+
+// Runtime shape check for an untrusted network payload: one bad element
+// discards the whole event (the footer is optional; the answer is not).
+function isSource(value: unknown): value is Source {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.document_id === "string" &&
+    typeof v.filename === "string" &&
+    typeof v.chunk_idx === "number" &&
+    typeof v.excerpt === "string" &&
+    typeof v.distance === "number"
+  );
+}
 
 function parseStreamEvent(rawEvent: string): StreamEvent {
   for (const line of rawEvent.split("\n")) {
@@ -179,6 +199,7 @@ function parseStreamEvent(rawEvent: string): StreamEvent {
         content?: unknown;
         conversation_id?: unknown;
         status?: unknown;
+        sources?: unknown;
       };
       if (typeof parsed.conversation_id === "string") {
         return { type: "conversation", conversationId: parsed.conversation_id };
@@ -188,6 +209,9 @@ function parseStreamEvent(rawEvent: string): StreamEvent {
       }
       if (typeof parsed.status === "string" && parsed.status.length > 0) {
         return { type: "status", status: parsed.status };
+      }
+      if (Array.isArray(parsed.sources) && parsed.sources.every(isSource)) {
+        return { type: "sources", sources: parsed.sources };
       }
     } catch {
       return { type: "ignore" };
@@ -202,6 +226,8 @@ export type StreamHandlers = {
   onChunk: (content: string) => void;
   // Optional — omitting it just drops the tool-activity notes.
   onStatus?: (status: string) => void;
+  // Optional — omitting it just drops the provenance.
+  onSources?: (sources: Source[]) => void;
 };
 
 export async function streamChat(
@@ -250,6 +276,7 @@ export async function streamChat(
         handlers.onConversationId(parsed.conversationId);
       if (parsed.type === "chunk") handlers.onChunk(parsed.content);
       if (parsed.type === "status") handlers.onStatus?.(parsed.status);
+      if (parsed.type === "sources") handlers.onSources?.(parsed.sources);
     }
   }
 
