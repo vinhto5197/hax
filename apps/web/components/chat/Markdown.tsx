@@ -4,6 +4,8 @@ import ReactMarkdown, {
 } from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+import { DataTable } from "@/components/chat/DataTable";
+
 interface MarkdownProps {
   content: string;
 }
@@ -40,7 +42,9 @@ const PROSE_CLASSES = [
   "prose-p:my-2 prose-p:first:mt-0 prose-p:last:mb-0",
   "prose-headings:my-2 prose-headings:font-semibold",
   "prose-h1:text-base prose-h2:text-base prose-h3:text-sm",
-  "prose-pre:my-2 prose-pre:bg-black/10 dark:prose-pre:bg-white/10",
+  // Typography's code block is dark with light text in both themes; an
+  // override of only the background once left light text on near-white.
+  "prose-pre:my-2",
   "prose-code:before:content-none prose-code:after:content-none",
   "prose-ul:my-2 prose-ol:my-2 prose-li:my-0",
 ].join(" ");
@@ -48,7 +52,11 @@ const PROSE_CLASSES = [
 export function Markdown({ content }: MarkdownProps) {
   return (
     <div className={PROSE_CLASSES}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={urlTransform}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        urlTransform={urlTransform}
+        components={{ table: DataTable }}
+      >
         {content}
       </ReactMarkdown>
     </div>
