@@ -148,3 +148,24 @@ on model behaviour.
 Links are deliberately left clickable and may point anywhere: a click is user
 consent, and stripping links would cost the product a real affordance to buy
 little — the zero-click path is the one that had to close.
+
+## Addendum (2026-10-06) — provenance is observed by the harness, not attributed by the model
+
+The answer shows which passages the model had in front of it. The mechanism
+is the harness's: `search_documents` returns `ToolOutput(text, sources)`, the
+loop sends only `text` to the model and yields a `{"sources": […]}` event,
+the stream wrapper deduplicates by (document, chunk) and persists the list on
+the assistant message beside the text, and the conversation route returns it.
+The model is not involved and the text it sees is unchanged.
+
+Rejected: the API's native citations (`search_result` blocks with
+`citations_delta`), which give sentence-level attribution the model itself
+makes. They are a property of this provider's training and server-side
+parsing, and the product's retrieval provenance must not depend on one
+provider's request surface; the harness-level mechanism works with any model
+that calls tools. The trade is attribution granularity: the footer says what
+was searched and found, not which sentence rests on which passage.
+
+Contract: sources are persisted for the client and never replayed into the
+prompt (`load_history` selects text only); a snapshot, so deleting the
+document later does not erase the provenance of past answers.

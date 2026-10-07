@@ -276,7 +276,7 @@ graph TB
   end
 ```
 
-- `/api/chat` is the single, **agentic** chat route: the model invokes tools in a loop (document search over pgvector, calculator, datetime, mocked email) — retrieval is never injected, always model-invoked.
+- `/api/chat` is the single, **agentic** chat route: the model invokes tools in a loop (document search over pgvector, calculator, datetime, mocked email) — retrieval is never injected, always model-invoked. Each answer that searched carries the passages it found, shown as sources under the reply.
 - Chat responses stream (SSE) directly from FastAPI to the browser; they are not queued through Celery.
 - Celery + Redis handle background work — four tasks today: conversation titles, document ingestion (chunk → embed → store), transactional email, and the daily sweep of aged demo visitors. Two queues, two workers: ingestion has its own, so a slow parse never delays an email or a title.
 - pgvector lives in Postgres; no separate vector DB.

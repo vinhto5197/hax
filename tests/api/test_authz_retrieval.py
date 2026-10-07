@@ -95,3 +95,34 @@ async def test_no_connection_is_held_across_the_embed_call(
     # session opens after it. A stalled embedding call therefore pins nothing.
     assert checked_out == [0]
     assert [c.content for c in hits] == ["alpha secret"]
+
+
+async def test_retrieved_chunk_carries_document_and_position(
+    user_a, admin_engine, monkeypatch
+):
+    from sqlalchemy import text
+
+    doc = await make_document(admin_engine, user_a.id, filename="lease.pdf")
+    await make_chunk(admin_engine, doc, user_a.id, 3, "one dog allowed", unit_vec(0))
+    # The filename a hit reports comes from the chunk's metadata (written by
+    # ingestion), not the documents row; the factory leaves it empty.
+    async with admin_engine.begin() as conn:
+        await conn.execute(
+            text("UPDATE chunks SET metadata = :m WHERE document_id = :d"),
+            {"m": '{"filename": "lease.pdf"}', "d": doc},
+        )
+
+    async def fake_embed_query(query: str) -> list[float]:
+        return unit_vec(0)
+
+    monkeypatch.setattr(retrieval, "embed_query", fake_embed_query)
+    monkeypatch.setattr(
+        retrieval,
+        "AsyncSessionLocal",
+        async_sessionmaker(admin_engine, expire_on_commit=False),
+    )
+
+    [hit] = await retrieval.retrieve("dog", user_a.id)
+    assert hit.document_id == doc
+    assert hit.chunk_idx == 3
+    assert hit.filename == "lease.pdf"

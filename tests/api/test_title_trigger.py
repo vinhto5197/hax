@@ -238,3 +238,101 @@ async def test_foreign_conversation_404s_and_enqueues_nothing(
     assert excinfo.value.status_code == 404
     assert enqueued == []
     assert await _messages(admin_engine, conv) == [("user", "a's question")]
+
+
+SRC_A = {
+    "document_id": "00000000-0000-0000-0000-00000000d0c1",
+    "filename": "a.md",
+    "chunk_idx": 0,
+    "excerpt": "alpha",
+    "distance": 0.1,
+}
+SRC_A_AGAIN = {**SRC_A, "distance": 0.4}
+SRC_B = {**SRC_A, "chunk_idx": 1, "excerpt": "beta", "distance": 0.2}
+
+
+async def _sources(admin_engine, conv_id):
+    async with admin_engine.connect() as conn:
+        return (
+            await conn.execute(
+                text(
+                    "SELECT sources FROM messages WHERE conversation_id = :c"
+                    " AND role = 'assistant'"
+                ),
+                {"c": conv_id},
+            )
+        ).scalar_one()
+
+
+async def _run_stream(user, conv, events):
+    async def stream_fn(messages):
+        for e in events:
+            yield e
+
+    frames = []
+    async for chunk in chat_service.event_stream(stream_fn, [], conv, user.id):
+        frames.append(chunk)
+    return frames
+
+
+async def test_event_stream_forwards_and_persists_sources(
+    admin_engine, user_a, enqueued
+):
+    conv = await make_conversation(admin_engine, user_a.id)
+    frames = await _as(
+        user_a, _run_stream(user_a, conv, [{"sources": [SRC_A]}, {"content": "Yes."}])
+    )
+    assert any('"sources"' in f for f in frames)
+    assert await _sources(admin_engine, conv) == [SRC_A]
+
+
+async def test_event_stream_dedups_sources_across_searches(
+    admin_engine, user_a, enqueued
+):
+    conv = await make_conversation(admin_engine, user_a.id)
+    await _as(
+        user_a,
+        _run_stream(
+            user_a,
+            conv,
+            [
+                {"status": "Searching documents…"},
+                {"sources": [SRC_A, SRC_B]},
+                {"status": "Searching documents…"},
+                {"sources": [SRC_A_AGAIN]},
+                {"content": "Yes."},
+            ],
+        ),
+    )
+    # First hit wins; order is first-seen.
+    assert await _sources(admin_engine, conv) == [SRC_A, SRC_B]
+
+
+async def test_event_stream_persists_nothing_without_content(
+    admin_engine, user_a, enqueued
+):
+    conv = await make_conversation(admin_engine, user_a.id)
+    await _as(user_a, _run_stream(user_a, conv, [{"sources": [SRC_A]}]))
+    async with admin_engine.connect() as conn:
+        n = (
+            await conn.execute(
+                text("SELECT count(*) FROM messages WHERE conversation_id = :c"),
+                {"c": conv},
+            )
+        ).scalar_one()
+    assert n == 0
+
+
+async def test_event_stream_without_sources_persists_null(
+    admin_engine, user_a, enqueued
+):
+    conv = await make_conversation(admin_engine, user_a.id)
+    await _as(user_a, _run_stream(user_a, conv, [{"content": "Hi."}]))
+    async with admin_engine.connect() as conn:
+        is_null = (
+            await conn.execute(
+                text("SELECT sources IS NULL FROM messages WHERE conversation_id = :c"),
+                {"c": conv},
+            )
+        ).scalar_one()
+    assert is_null is True

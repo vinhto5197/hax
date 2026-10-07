@@ -118,7 +118,7 @@ async def test_agent_search_respects_tool_context(
     out_a = await SEARCH_DOCUMENTS.run(
         SearchDocumentsInput(query="alpha"), ToolContext(user_id=user_a.id)
     )
-    assert "alpha secret" in out_a
+    assert "alpha secret" in out_a.text
 
 
 async def test_guc_less_document_and_chunk_queries_empty(user_a, admin_engine):

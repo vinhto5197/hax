@@ -85,12 +85,17 @@ async def load_history(conversation_id: UUID, user_id: UUID) -> list[MessagePara
 
 
 async def persist_assistant_turn(
-    conversation_id: UUID, user_id: UUID, content: str
+    conversation_id: UUID,
+    user_id: UUID,
+    content: str,
+    sources: list[dict] | None = None,
 ) -> None:
-    """Persist the assistant message and bump the conversation's updated_at.
+    """Persist the assistant message (text + sources) and bump updated_at.
 
     Runs from the stream's finally, so completion AND disconnect both save
-    whatever streamed. No-ops if nothing was streamed.
+    whatever streamed. No-ops if nothing was streamed — sources alone are not
+    a turn. `sources` is the deduplicated provenance from the turn's searches;
+    it is stored for the client and never replayed to the model.
 
     user_id is needed for the title task: the worker has no request to take an
     identity from, so the owner rides the Celery payload and the task announces
@@ -101,7 +106,7 @@ async def persist_assistant_turn(
         return
     async with AsyncSessionLocal() as session:
         await conversations_repo.add_message(
-            session, conversation_id, "assistant", content
+            session, conversation_id, "assistant", content, sources=sources or None
         )
         await conversations_repo.touch(session, conversation_id)
         conversation = await conversations_repo.get_owned(
@@ -123,21 +128,27 @@ async def event_stream(
     """Wrap an LLM stream as SSE, persisting the assistant turn at the end.
 
     `stream_fn` may yield plain text tokens or structured events ({"content": …}
-    deltas, {"status": …} tool-activity notes); bare tokens are normalized to
-    content events. Emits a conversation-id prelude, forwards every event, then
-    [DONE]. Only content is buffered and persisted as the assistant turn —
-    status events (and the harness's tool_use/tool_result blocks) never reach
-    Postgres, which stays the canonical replayable *text* history.
+    deltas, {"status": …} tool-activity notes, {"sources": […]} provenance);
+    bare tokens are normalized to content events. Emits a conversation-id
+    prelude, forwards every event, then [DONE]. Content and sources are
+    buffered and persisted as the assistant turn — status events (and the
+    harness's tool_use/tool_result blocks) never reach Postgres. Sources are
+    deduplicated by (document_id, chunk_idx), first hit wins, across every
+    search of the turn; the forwarded events are unchanged.
     """
     # Prelude: tells the client its conversation id (server-created on turn 1).
     yield sse_event({"conversation_id": str(conversation_id)})
 
     buffer: list[str] = []
+    # Insertion-ordered dedup: a turn may search twice and hit the same chunk.
+    sources: dict[tuple[str, int], dict] = {}
     try:
         async for item in stream_fn(messages):
             event = {"content": item} if isinstance(item, str) else item
             if "content" in event:
                 buffer.append(event["content"])
+            for s in event.get("sources", ()):
+                sources.setdefault((s["document_id"], s["chunk_idx"]), s)
             yield sse_event(event)
         yield "data: [DONE]\n\n"
     finally:
@@ -147,4 +158,6 @@ async def event_stream(
         # write. The shield lets the DB write complete before cancellation
         # propagates.
         with anyio.CancelScope(shield=True):
-            await persist_assistant_turn(conversation_id, user_id, "".join(buffer))
+            await persist_assistant_turn(
+                conversation_id, user_id, "".join(buffer), list(sources.values())
+            )

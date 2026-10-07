@@ -2,8 +2,10 @@
 
 Streams `messages.stream(tools=…)` in a loop: forward text deltas, run requested
 tools from the registry, feed results back, repeat until the model stops asking
-(or MAX_ITERS). Yields structured events — `{"content": …}` deltas and
-`{"status": …}` tool-activity notes — that the route serializes to SSE.
+(or MAX_ITERS). Yields structured events — `{"content": …}` deltas,
+`{"status": …}` tool-activity notes, and `{"sources": […]}` provenance after
+a tool that returned ToolOutput — that the route serializes to SSE. Sources
+are user-facing only: the model receives ToolOutput.text and nothing else.
 """
 
 import logging
@@ -13,7 +15,7 @@ from collections.abc import AsyncIterator
 from anthropic import AsyncAnthropic
 from anthropic.types import MessageParam
 
-from packages.core.agent.tools import TOOLS, ToolContext
+from packages.core.agent.tools import TOOLS, Source, ToolContext, ToolOutput
 
 logger = logging.getLogger(__name__)
 
@@ -57,21 +59,26 @@ def _cache_last(messages: list[MessageParam]) -> list[MessageParam]:
     return [*messages[:-1], last]
 
 
-async def _run_tool(name: str, raw_input: dict, ctx: ToolContext) -> tuple[str, bool]:
-    """Dispatch one tool_use to its executor; return (result_text, is_error).
+async def _run_tool(
+    name: str, raw_input: dict, ctx: ToolContext
+) -> tuple[str, bool, tuple[Source, ...]]:
+    """Dispatch one tool_use to its executor; return (result_text, is_error, sources).
 
     A bad tool name, invalid input, or an executor exception becomes an error
-    result (is_error=True) rather than a crash, so the model can see the failure
-    and recover on the next turn.
+    result (is_error=True, no sources) rather than a crash, so the model can
+    see the failure and recover on the next turn.
     """
     try:
         tool = TOOLS[name]
         parsed = tool.input_model.model_validate(raw_input)
-        return await tool.run(parsed, ctx), False
+        out = await tool.run(parsed, ctx)
+        if isinstance(out, ToolOutput):
+            return out.text, False, out.sources
+        return out, False, ()
     except Exception as exc:  # noqa: BLE001 — tool faults must not crash the loop
         # Type name only: the message can quote the model-authored arguments.
         logger.warning("agentic tool %s failed: %s", name, type(exc).__name__)
-        return f"Error running {name}: {exc}", True
+        return f"Error running {name}: {exc}", True, ()
 
 
 async def stream_completion_agentic(
@@ -82,7 +89,8 @@ async def stream_completion_agentic(
     ctx: ToolContext,
     tools: bool = True,
 ) -> AsyncIterator[dict]:
-    """Run the tool-use loop, yielding {"content": …} / {"status": …} events.
+    """Run the tool-use loop, yielding {"content": …} / {"status": …} /
+    {"sources": …} events.
 
     tools=False sends no tool schemas, so the model can only answer in prose
     (the demo visitor's mode); the loop then ends after its first iteration.
@@ -146,13 +154,17 @@ async def stream_completion_agentic(
                 block.name,
                 sorted(block.input) if isinstance(block.input, dict) else "?",
             )
-            out, is_error = await _run_tool(block.name, block.input, ctx)
+            out, is_error, sources = await _run_tool(block.name, block.input, ctx)
             logger.info(
-                "agentic tool_result: name=%s is_error=%s out_len=%d",
+                "agentic tool_result: name=%s is_error=%s out_len=%d sources=%d",
                 block.name,
                 is_error,
                 len(out),
+                len(sources),
             )
+            if sources:
+                # Provenance for the client; never appended to `messages`.
+                yield {"sources": [s.as_dict() for s in sources]}
             tool_results.append(
                 {
                     "type": "tool_result",

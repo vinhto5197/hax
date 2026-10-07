@@ -36,6 +36,42 @@ class ToolContext:
 
 
 @dataclass(frozen=True)
+class Source:
+    """One retrieved chunk the model had in context, snapshotted for the user.
+
+    Cross-module contract: this is user-facing provenance only. It never enters
+    the model's messages (the harness sends ToolOutput.text alone) and it is
+    persisted on the assistant message, never replayed into the prompt.
+    """
+
+    document_id: uuid.UUID
+    filename: str
+    chunk_idx: int
+    excerpt: str
+    distance: float
+
+    def as_dict(self) -> dict:
+        # JSON-safe: the wire (SSE) and the column (JSONB) carry ids as str.
+        return {
+            "document_id": str(self.document_id),
+            "filename": self.filename,
+            "chunk_idx": self.chunk_idx,
+            "excerpt": self.excerpt,
+            "distance": self.distance,
+        }
+
+
+@dataclass(frozen=True)
+class ToolOutput:
+    """A tool result with a user-facing side channel. `text` is all the model
+    sees; `sources` go to the client. Tools with nothing for the user return a
+    plain str instead."""
+
+    text: str
+    sources: tuple[Source, ...] = ()
+
+
+@dataclass(frozen=True)
 class Tool:
     """One agent tool.
 
@@ -43,14 +79,14 @@ class Tool:
     - `label`: status line shown to the USER while it runs.
     - `input_model`: Pydantic model for the arguments — its JSON Schema becomes
       the Anthropic `input_schema`, and it validates incoming tool_use input.
-    - `run`: async executor (validated input in, `tool_result` string out).
+    - `run`: async executor (validated input in, tool_result str or ToolOutput out).
     """
 
     name: str
     description: str
     label: str
     input_model: type[BaseModel]
-    run: Callable[[Any, ToolContext], Awaitable[str]]
+    run: Callable[[Any, ToolContext], Awaitable[str | ToolOutput]]
 
     def to_anthropic(self) -> dict:
         return {
@@ -68,15 +104,22 @@ class SearchDocumentsInput(BaseModel):
     )
 
 
-async def _run_search_documents(inp: SearchDocumentsInput, ctx: ToolContext) -> str:
+async def _run_search_documents(
+    inp: SearchDocumentsInput, ctx: ToolContext
+) -> str | ToolOutput:
     chunks = await retrieve(inp.query, ctx.user_id)
     if not chunks:
         return "No relevant passages were found in the uploaded documents."
     # Returned as a structured tool_result block — no text fence for document
     # content to break out of (prompt-injection surface).
-    return "\n\n".join(
+    text = "\n\n".join(
         f"[{i}] from {c.filename}:\n{c.content}" for i, c in enumerate(chunks, 1)
     )
+    sources = tuple(
+        Source(c.document_id, c.filename, c.chunk_idx, c.content, c.distance)
+        for c in chunks
+    )
+    return ToolOutput(text=text, sources=sources)
 
 
 SEARCH_DOCUMENTS = Tool(

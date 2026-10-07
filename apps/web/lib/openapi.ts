@@ -430,6 +430,8 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Sources */
+            sources?: components["schemas"]["SourceOut"][] | null;
         };
         /** OAuthUpsertIn */
         OAuthUpsertIn: {
@@ -468,6 +470,26 @@ export interface components {
             password: string;
             /** Name */
             name?: string | null;
+        };
+        /**
+         * SourceOut
+         * @description One retrieved passage the model had in context for the turn — a
+         *     snapshot taken at answer time, so it outlives the document.
+         */
+        SourceOut: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Filename */
+            filename: string;
+            /** Chunk Idx */
+            chunk_idx: number;
+            /** Excerpt */
+            excerpt: string;
+            /** Distance */
+            distance: number;
         };
         /** TokenIn */
         TokenIn: {
