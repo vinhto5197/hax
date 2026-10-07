@@ -72,7 +72,8 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
    - Slice 2b *(2026-10-07)*: the sources footer — chips per document,
      expandable to the verbatim passages; committed replies only.
    - Slice 3 *(2026-10-07)*: tabular answers as Markdown tables rendered as
-     sortable data tables with CSV copy/download; the code-block light-mode
+     sortable data tables with copy (tab-separated) and CSV download; the
+     code-block light-mode
      fix.
    - Table / structured view for results (not only free-form text) *(shipped)*
    - Citation/source display (what data the answer used) *(shipped)*

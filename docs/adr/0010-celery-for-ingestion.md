@@ -212,7 +212,8 @@ means restored, not died — and a restored message (a warm shutdown at a
 deploy, or a visibility timeout of ten minutes after a hard kill) simply runs
 again, which every task here tolerates. The document a lost worker leaves at
 `processing` gets its terminal status from the API instead: listing a user's
-documents fails any of theirs still pending or processing after ten minutes,
+documents fails any of theirs still processing after ten minutes (a pending
+row is merely queued and is left alone),
 as the caller, under RLS (a deadline that fires on a live attempt is
 harmless: the attempt still writes `ready` over it). The worker's `stop_grace_period` is above
 `task_time_limit`, so a deploy waits for in-flight work rather than killing it.
@@ -233,7 +234,9 @@ same image: `worker` consumes only `ingest` (one child, the 1 GiB memory
 fence, the long stop grace), and `worker-fast` consumes only `celery` (one
 child, a smaller fence, a short grace) and carries the embedded beat. Neither
 worker ever listens on the other's queue, so a parse can never hold up an
-email and an ingest can never land in the small container. `make worker`
+email. The one way an ingest reaches the default queue is a roll that changes
+the routing while a producer still runs the old table, which is why
+`worker-fast` keeps a 512 MiB fence rather than a smaller one. `make worker`
 starts the same two consumers on the laptop. A test pins the route table:
 every registered task has an explicit route, so a new task is placed by
 choice, not by default.

@@ -69,15 +69,18 @@ async def delete_owned(
 async def fail_stale(
     session: AsyncSession, user_id: uuid.UUID, cutoff: datetime, error: str
 ) -> int:
-    """Record 'failed' on the caller's documents still pending or processing
-    since before `cutoff`; returns how many. The pipeline cannot give itself
-    this deadline: a worker killed mid-task leaves no one to write the
-    terminal status. Scoped to one user, so it runs under RLS as the caller."""
+    """Record 'failed' on the caller's documents still processing since
+    before `cutoff`; returns how many. The pipeline cannot give itself this
+    deadline: a worker killed mid-task leaves no one to write the terminal
+    status. Only 'processing' qualifies — a 'pending' row is merely queued
+    behind the single ingest slot, and failing it would let the worker later
+    flip it back to 'ready' beside the user's re-upload. Scoped to one user,
+    so it runs under RLS as the caller."""
     result = await session.execute(
         update(Document)
         .where(
             Document.user_id == user_id,
-            Document.status.in_(("pending", "processing")),
+            Document.status == "processing",
             Document.updated_at < cutoff,
         )
         .values(status="failed", error=error)
