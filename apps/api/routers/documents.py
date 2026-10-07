@@ -41,7 +41,7 @@ TEXT_SUFFIXES = {".txt", ".md"}
 # Whole file is buffered in memory; streaming uploads are out of v0 scope.
 # Text is dense, so its cap is smaller; binary formats carry layout overhead.
 TEXT_MAX_BYTES = 256 * 1024
-# An ingest still pending or processing this long has lost its worker: one
+# An ingest still processing this long has lost its worker: one
 # attempt is capped at 300 s and a deploy waits up to that for in-flight work.
 # A deadline that fires on a live attempt costs a flicker, not the document:
 # the attempt still writes 'ready' over it when it finishes.

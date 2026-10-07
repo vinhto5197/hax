@@ -75,18 +75,30 @@ function columnIsNumeric(rows: Row[], col: number): boolean {
   return real.length > 0 && real.every((r) => asNumber(r[col]) !== null);
 }
 
+// Cells are model output, and an uploaded file can author model output (the
+// invariant behind Markdown.tsx's image guard). In a spreadsheet a cell that
+// starts with = + - @ or a control character is a formula, so an export must
+// not hand one over verbatim: a leading apostrophe makes it text. Signed
+// figures ("-5", "-$1,850") parse as numbers and are left alone.
+function inert(c: Cell): Cell {
+  return /^[=+\-@\t\r]/.test(c.trim()) && asNumber(c) === null ? `'${c}` : c;
+}
+
 // For the clipboard: spreadsheets split pasted text on tabs without being
 // asked (Sheets never splits pasted commas), so a copy is tab-separated. A
 // tab or newline inside a cell would break the grid; collapse it to a space.
 function toTsv(header: Row, rows: Row[]): string {
-  const flat = (c: Cell) => c.replace(/[\t\n\r]+/g, " ");
+  const flat = (c: Cell) => inert(c.replace(/[\t\n\r]+/g, " "));
   return [header, ...rows].map((r) => r.map(flat).join("\t")).join("\n");
 }
 
 // For the download: RFC 4180 CSV, the file format every spreadsheet imports.
-// Quote a cell holding a comma, a quote or a newline; double quotes.
+// Quote a cell holding a comma, a quote or a line break; double quotes.
 function toCsv(header: Row, rows: Row[]): string {
-  const q = (c: Cell) => (/[",\n]/.test(c) ? `"${c.replace(/"/g, '""')}"` : c);
+  const q = (raw: Cell) => {
+    const c = inert(raw);
+    return /[",\r\n]/.test(c) ? `"${c.replace(/"/g, '""')}"` : c;
+  };
   return [header, ...rows].map((r) => r.map(q).join(",")).join("\n");
 }
 

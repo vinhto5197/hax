@@ -249,7 +249,7 @@ Check what's running at any time with `make status` (a TCP probe of each service
 2. **Data + RAG** *(shipped)* — User data upload (files), Celery ingestion (chunk → embed → pgvector), conversation memory, and chat as a single **agentic** route: retrieval is a model-invoked tool (`search_documents`, alongside a calculator, datetime, and a mocked email send) behind a hand-rolled tool-use harness with prompt caching and a model selector.
 2.5. **Auth + background titles** *(shipped)* — email/password + Google via NextAuth/Auth.js, `users` table, Postgres row-level security, email verification + password reset, conversations + documents scoped to a user; background chat title generation (Celery + Redis, `TITLE_MODEL`), with every API-side publish off the event loop (`apps/api/enqueue.py`).
 3. **Live on AWS** *(shipped; live since 2026-09-27)* — the smallest live stack first: one EC2 box running the compose topology (api, worker, web, Redis, Caddy) against managed RDS Postgres + pgvector and S3, all in Terraform; CI/CD that rolls the box on every merge; an anonymous demo on the landing page (a few turns about hax, no account). **3.5** grows it when each piece earns its cost: ALB, ElastiCache, SES, alarms, Fargate.
-4. **Structured outputs + polish** — table/structured view for results, citation/source display, cohesive UI.
+4. **Structured outputs + polish** — table/structured view for results *(shipped)*, citation/source display *(shipped)*, cohesive UI.
 5. **Cleanup + hardening + eval** — test + eval infrastructure, drain backlogs, tighten deferred foot-guns.
 
 ## Architecture (v0)
@@ -276,7 +276,7 @@ graph TB
   end
 ```
 
-- `/api/chat` is the single, **agentic** chat route: the model invokes tools in a loop (document search over pgvector, calculator, datetime, mocked email) — retrieval is never injected, always model-invoked. Each answer that searched carries the passages it found, shown as sources under the reply.
+- `/api/chat` is the single, **agentic** chat route: the model invokes tools in a loop (document search over pgvector, calculator, datetime, mocked email) — retrieval is never injected, always model-invoked. Each answer that searched carries the passages it found, shown as sources under the reply; tabular answers render as sortable tables with copy and CSV download.
 - Chat responses stream (SSE) directly from FastAPI to the browser; they are not queued through Celery.
 - Celery + Redis handle background work — four tasks today: conversation titles, document ingestion (chunk → embed → store), transactional email, and the daily sweep of aged demo visitors. Two queues, two workers: ingestion has its own, so a slow parse never delays an email or a title.
 - pgvector lives in Postgres; no separate vector DB.

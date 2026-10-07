@@ -35,19 +35,25 @@ export function MessageList({
     const el = scrollRef.current;
     if (!el) return;
     if (stuckRef.current) el.scrollTop = el.scrollHeight;
+    // The browser also clamps scrollTop when content shrinks (the status line
+    // leaving); record what it settled on so that clamp never reads as the
+    // user scrolling up.
+    lastTopRef.current = el.scrollTop;
   }, [messages, streamingContent, status]);
 
-  // Any upward scroll releases the follow at once (one wheel notch is less
-  // than the re-engage distance, so a threshold alone would keep dragging a
-  // rereading user down); scrolling back near the bottom re-engages it. The
-  // effect's own scrolls only move down, so they never release it.
+  // An upward scroll that leaves the bottom releases the follow at once (one
+  // wheel notch is less than the re-engage distance, so a threshold alone
+  // would keep dragging a rereading user down); scrolling back near the
+  // bottom re-engages it. A clamp from shrinking content moves up but stays
+  // at the bottom, so the distance check keeps it from releasing.
   function onScroll() {
     const el = scrollRef.current;
     if (!el) return;
     const top = el.scrollTop;
-    if (top < lastTopRef.current) {
+    const fromBottom = el.scrollHeight - top - el.clientHeight;
+    if (top < lastTopRef.current && fromBottom > STICK_THRESHOLD_PX) {
       stuckRef.current = false;
-    } else if (el.scrollHeight - top - el.clientHeight <= STICK_THRESHOLD_PX) {
+    } else if (fromBottom <= STICK_THRESHOLD_PX) {
       stuckRef.current = true;
     }
     lastTopRef.current = top;
