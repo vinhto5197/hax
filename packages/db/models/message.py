@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from packages.db.session import Base
@@ -30,6 +30,15 @@ class Message(Base):
     )
     role: Mapped[str]
     content: Mapped[str]
+    # User-facing provenance for an assistant turn: the retrieved passages the
+    # model had in context, snapshotted (a later document delete does not
+    # erase it). NULL unless the turn searched and found something. Never read
+    # when the history is replayed to the model (load_history selects content).
+    # none_as_null: a Python None must land as SQL NULL, not the JSON value
+    # 'null', or "IS NULL" lies about every row written without sources.
+    sources: Mapped[list[dict] | None] = mapped_column(
+        JSONB(none_as_null=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

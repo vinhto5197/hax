@@ -1,4 +1,7 @@
+import json
 import uuid
+
+from sqlalchemy import text
 
 from tests.api.conftest import bearer
 from tests.api.factories import make_conversation, make_message
@@ -70,3 +73,45 @@ async def test_chat_append_to_foreign_conversation_404(
         headers=bearer(user_b),
     )
     assert r.status_code == 404
+
+
+SRC = {
+    "document_id": "00000000-0000-0000-0000-00000000d0c1",
+    "filename": "lease.pdf",
+    "chunk_idx": 0,
+    "excerpt": "one dog allowed",
+    "distance": 0.1,
+}
+
+
+async def _insert_assistant_with_sources(admin_engine, conv_id, sources):
+    async with admin_engine.begin() as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO messages (conversation_id, role, content, sources)"
+                " VALUES (:c, 'assistant', 'Yes.', CAST(:s AS jsonb))"
+            ),
+            {"c": conv_id, "s": json.dumps(sources)},
+        )
+
+
+async def test_detail_returns_sources(client, user_a, admin_engine):
+    conv = await make_conversation(admin_engine, user_a.id)
+    await make_message(admin_engine, conv, "user", "dog?")
+    await _insert_assistant_with_sources(admin_engine, conv, [SRC])
+    r = await client.get(f"/api/conversations/{conv}", headers=bearer(user_a))
+    assert r.status_code == 200
+    msgs = r.json()["messages"]
+    assert msgs[0]["sources"] is None
+    assert msgs[1]["sources"] == [SRC]
+
+
+async def test_detail_returns_sources_after_document_delete(
+    client, user_a, admin_engine
+):
+    # Provenance is a snapshot: the row references no document, so deleting
+    # (or never having had) the document leaves it intact.
+    conv = await make_conversation(admin_engine, user_a.id)
+    await _insert_assistant_with_sources(admin_engine, conv, [SRC])
+    r = await client.get(f"/api/conversations/{conv}", headers=bearer(user_a))
+    assert r.json()["messages"][0]["sources"][0]["filename"] == "lease.pdf"

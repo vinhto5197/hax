@@ -66,9 +66,17 @@ async def delete_owned(
 
 
 async def add_message(
-    session: AsyncSession, conversation_id: uuid.UUID, role: str, content: str
+    session: AsyncSession,
+    conversation_id: uuid.UUID,
+    role: str,
+    content: str,
+    sources: list[dict] | None = None,
 ) -> None:
-    session.add(Message(conversation_id=conversation_id, role=role, content=content))
+    session.add(
+        Message(
+            conversation_id=conversation_id, role=role, content=content, sources=sources
+        )
+    )
 
 
 async def touch(session: AsyncSession, conversation_id: uuid.UUID) -> None:

@@ -25,6 +25,10 @@ class RetrievedChunk:
     content: str
     filename: str
     distance: float  # cosine distance: 0 = identical direction, 2 = opposite
+    # Identity for user-facing provenance (the sources footer); the model-facing
+    # text is built from content + filename only.
+    document_id: uuid.UUID
+    chunk_idx: int
 
 
 async def retrieve(
@@ -62,7 +66,13 @@ async def retrieve(
             # Postgres; the HNSW index serves the nearest-k ordering.
             distance = Chunk.embedding.cosine_distance(qvec)
             stmt = (
-                select(Chunk.content, Chunk.chunk_metadata, distance.label("distance"))
+                select(
+                    Chunk.content,
+                    Chunk.chunk_metadata,
+                    Chunk.document_id,
+                    Chunk.idx,
+                    distance.label("distance"),
+                )
                 .join(Chunk.document)
                 .where(Document.status == "ready", Chunk.user_id == user_id)
             )
@@ -74,8 +84,10 @@ async def retrieve(
                     content=content,
                     filename=(meta or {}).get("filename", "unknown"),
                     distance=float(dist),
+                    document_id=document_id,
+                    chunk_idx=idx,
                 )
-                for content, meta, dist in rows
+                for content, meta, document_id, idx, dist in rows
             ]
             # Debug observability: what came back and how near (ascending).
             logger.info(
