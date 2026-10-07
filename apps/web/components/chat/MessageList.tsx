@@ -1,4 +1,9 @@
+"use client";
+
+import { useLayoutEffect, useRef } from "react";
+
 import { Markdown } from "@/components/chat/Markdown";
+import { SourcesFooter } from "@/components/chat/SourcesFooter";
 import { type ChatMessage } from "@/lib/chatApi";
 
 interface MessageListProps {
@@ -9,14 +14,51 @@ interface MessageListProps {
   status: string | null;
 }
 
+// Follows the conversation: the list is the scroll container, and nothing
+// else moves it, so new content would otherwise land out of view.
+const STICK_THRESHOLD_PX = 64;
+
 export function MessageList({
   messages,
   isLoading,
   streamingContent,
   status,
 }: MessageListProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  // Whether the reader was at the bottom BEFORE this render's content landed;
+  // measured in the layout phase, so the previous frame's scroll position is
+  // still what the browser reports.
+  const stuckRef = useRef(true);
+  const lastTopRef = useRef(0);
+
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (stuckRef.current) el.scrollTop = el.scrollHeight;
+  }, [messages, streamingContent, status]);
+
+  // Any upward scroll releases the follow at once (one wheel notch is less
+  // than the re-engage distance, so a threshold alone would keep dragging a
+  // rereading user down); scrolling back near the bottom re-engages it. The
+  // effect's own scrolls only move down, so they never release it.
+  function onScroll() {
+    const el = scrollRef.current;
+    if (!el) return;
+    const top = el.scrollTop;
+    if (top < lastTopRef.current) {
+      stuckRef.current = false;
+    } else if (el.scrollHeight - top - el.clientHeight <= STICK_THRESHOLD_PX) {
+      stuckRef.current = true;
+    }
+    lastTopRef.current = top;
+  }
+
   return (
-    <div className="flex-1 overflow-y-auto rounded-lg border border-black/10 p-4">
+    <div
+      ref={scrollRef}
+      onScroll={onScroll}
+      className="flex-1 overflow-y-auto rounded-lg border border-black/10 p-4"
+    >
       {messages.length === 0 && !streamingContent ? (
         <p className="text-sm text-black/60 dark:text-white/60">
           Start chatting by entering a prompt below.
@@ -43,7 +85,12 @@ export function MessageList({
                 {isUser ? (
                   message.content
                 ) : (
-                  <Markdown content={message.content} />
+                  <>
+                    <Markdown content={message.content} />
+                    {message.sources?.length ? (
+                      <SourcesFooter sources={message.sources} />
+                    ) : null}
+                  </>
                 )}
               </div>
             </div>

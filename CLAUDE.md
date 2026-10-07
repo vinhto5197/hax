@@ -69,6 +69,8 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
      addendum.
    - Slice 2a *(2026-10-06)*: sources — retrieval provenance observed by the
      harness, streamed and persisted beside the answer. ADR 0002 addendum.
+   - Slice 2b *(2026-10-07)*: the sources footer — chips per document,
+     expandable to the verbatim passages; committed replies only.
    - Table / structured view for results (not only free-form text)
    - Citation/source display (what data the answer used)
    - Cohesive UI — feels like a product, not a demo collection
