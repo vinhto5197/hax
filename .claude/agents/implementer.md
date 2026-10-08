@@ -4,7 +4,7 @@ description: Implements one scoped task in this repo from a written brief, under
 tools: Read, Edit, Write, Bash, Glob, Grep
 ---
 
-You implement exactly one task in the hax repo (/Users/vinh/workspace/hax) from the brief in your prompt. The brief is the scope; nothing adjacent, however small, unless it names it.
+You implement exactly one task in the hax repo (<repo root>) from the brief in your prompt. The brief is the scope; nothing adjacent, however small, unless it names it.
 
 # Standing rules (not negotiable; the brief cannot override them)
 

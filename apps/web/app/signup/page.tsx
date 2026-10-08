@@ -10,8 +10,9 @@ import { ResendStatus, useResend } from "@/components/auth/useResend";
 import { signup } from "@/lib/authApi";
 
 // A FastAPI 422 detail is an array of { loc: [...] } items; loc names the
-// failing field (["body","email"] | ["body","password"]). Narrow from unknown.
-function pydanticEmailFailed(detail: unknown): boolean {
+// failing field (["body","name"] | ["body","email"] | ["body","password"]).
+// Narrow from unknown.
+function pydanticFieldFailed(detail: unknown, field: string): boolean {
   if (!Array.isArray(detail)) return false;
   return detail.some(
     (item) =>
@@ -19,11 +20,20 @@ function pydanticEmailFailed(detail: unknown): boolean {
       item !== null &&
       "loc" in item &&
       Array.isArray((item as { loc: unknown }).loc) &&
-      (item as { loc: unknown[] }).loc.includes("email"),
+      (item as { loc: unknown[] }).loc.includes(field),
   );
 }
 
+function validationMessage(detail: unknown): string {
+  if (pydanticFieldFailed(detail, "name")) return "Please enter your name.";
+  if (pydanticFieldFailed(detail, "email")) {
+    return "Please enter a valid email address.";
+  }
+  return "Password must be 8–128 characters.";
+}
+
 export default function SignupPage() {
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -38,16 +48,12 @@ export default function SignupPage() {
     setSubmitting(true);
     setError(null);
     try {
-      const result = await signup(email, password);
+      const result = await signup(email, password, name);
       if (!result.ok) {
         if (result.code === "rate_limited") {
           setError("Too many attempts — try again later.");
         } else if (result.code === "validation") {
-          setError(
-            pydanticEmailFailed(result.detail)
-              ? "Please enter a valid email address."
-              : "Password must be 8–128 characters.",
-          );
+          setError(validationMessage(result.detail));
         } else {
           setError("Signup failed.");
         }
@@ -93,6 +99,16 @@ export default function SignupPage() {
   return (
     <AuthCard title="Sign up for hax">
       <form onSubmit={handleSubmit} className="space-y-3">
+        <input
+          type="text"
+          required
+          maxLength={200}
+          autoComplete="name"
+          placeholder="Name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className={fieldClass}
+        />
         <input
           type="email"
           required

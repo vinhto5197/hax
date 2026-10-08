@@ -56,8 +56,8 @@ async function post<T>(path: string, body: unknown): Promise<Result<T>> {
   }
 }
 
-export const signup = (email: string, password: string) =>
-  post<AcceptedOut>("/api/auth/signup", { email, password });
+export const signup = (email: string, password: string, name: string) =>
+  post<AcceptedOut>("/api/auth/signup", { email, password, name });
 export const resendVerification = (email: string) =>
   post<AcceptedOut>("/api/auth/resend-verification", { email });
 export const verifyEmail = (token: string) =>
