@@ -471,3 +471,20 @@ async def test_signup_ip_rate_limit_unchanged(client, outbox):
         "/api/auth/signup", json={"email": "u10@example.com", "password": "password1"}
     )
     assert res.status_code == 429
+
+
+async def test_signup_stores_the_name(client, admin_engine, outbox):
+    res = await client.post(
+        "/api/auth/signup",
+        json={
+            "email": "named@example.com",
+            "password": "password1",
+            "name": "Ada Lovelace",
+        },
+    )
+    assert res.status_code == 202 and res.json() == BODY
+    async with admin_engine.connect() as conn:
+        name = await conn.scalar(
+            text("SELECT name FROM users WHERE email = 'named@example.com'")
+        )
+    assert name == "Ada Lovelace"
