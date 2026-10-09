@@ -8,6 +8,7 @@ import { signOut, useSession } from "next-auth/react";
 import { useConversations } from "@/components/chat/ConversationsProvider";
 import { DocumentsPanel } from "@/components/chat/DocumentsPanel";
 import { type ConversationSummary, deleteConversation } from "@/lib/chatApi";
+import { formatRelative } from "@/lib/time";
 
 export function Sidebar() {
   // Shared list from context (see ConversationsProvider), not a prop.
@@ -98,14 +99,21 @@ export function Sidebar() {
               >
                 <Link
                   href={`/chat/${conversation.id}`}
-                  className={`min-w-0 flex-1 truncate px-3 py-2 text-sm ${
-                    active ? "" : "text-black/70 dark:text-white/70"
-                  } ${conversation.title ? "" : "italic text-black/40 dark:text-white/40"}`}
+                  className="min-w-0 flex-1 px-3 py-2 text-sm"
                 >
                   {/* Titling runs in the worker off the first user message and
                       can land mid-stream; until it does, the entry must read as
                       state, not as a name. */}
-                  {conversation.title ?? "Untitled"}
+                  <span
+                    className={`block truncate ${
+                      active ? "" : "text-black/70 dark:text-white/70"
+                    } ${conversation.title ? "" : "italic text-black/40 dark:text-white/40"}`}
+                  >
+                    {conversation.title ?? "Untitled"}
+                  </span>
+                  <span className="block text-[11px] text-black/40 dark:text-white/40">
+                    {formatRelative(conversation.updated_at)}
+                  </span>
                 </Link>
                 <button
                   type="button"

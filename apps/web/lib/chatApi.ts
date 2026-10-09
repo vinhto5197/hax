@@ -9,6 +9,9 @@ export type ChatMessage = {
   content: string;
   // Present only on assistant turns that searched and found something.
   sources?: Source[];
+  // ISO instant from the API (UTC) or the client clock for a live turn;
+  // rendered viewer-local by lib/time.ts.
+  created_at?: string;
 };
 
 // Response shapes generated from the FastAPI OpenAPI spec (see `make types`).
