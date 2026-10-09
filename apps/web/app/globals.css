@@ -25,8 +25,46 @@ body {
 }
 
 /* Transient highlight on a documents-panel row, set from SourcesFooter's
-   "Show in panel" through the DOM; the row's own transition fades it in and
-   out rather than switching. */
+   "Show in panel" through the DOM. */
 [data-flash="true"] {
   background-color: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+/* highlight.js token colours (rehype-highlight, bundled — no CDN stylesheet
+   under the CSP). Scoped to fenced blocks so inline code is untouched; no
+   background rules — Typography owns the block background, which is dark in
+   BOTH themes, so one palette (One Dark) serves both. */
+.prose pre code .hljs-keyword {
+  color: #c678dd;
+}
+.prose pre code .hljs-string,
+.prose pre code .hljs-regexp {
+  color: #98c379;
+}
+.prose pre code .hljs-number,
+.prose pre code .hljs-literal,
+.prose pre code .hljs-symbol {
+  color: #d19a66;
+}
+.prose pre code .hljs-comment,
+.prose pre code .hljs-meta {
+  color: #7f848e;
+  font-style: italic;
+}
+.prose pre code .hljs-title,
+.prose pre code .hljs-function {
+  color: #61afef;
+}
+.prose pre code .hljs-type,
+.prose pre code .hljs-class,
+.prose pre code .hljs-built_in,
+.prose pre code .hljs-title.class_ {
+  color: #e5c07b;
+}
+.prose pre code .hljs-attr,
+.prose pre code .hljs-attribute,
+.prose pre code .hljs-property,
+.prose pre code .hljs-name,
+.prose pre code .hljs-variable {
+  color: #e06c75;
 }

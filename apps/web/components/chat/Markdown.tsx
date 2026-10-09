@@ -2,6 +2,7 @@ import ReactMarkdown, {
   defaultUrlTransform,
   type UrlTransform,
 } from "react-markdown";
+import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
 
 import { DataTable } from "@/components/chat/DataTable";
@@ -54,6 +55,10 @@ export function Markdown({ content }: MarkdownProps) {
     <div className={PROSE_CLASSES}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
+        // detect: false — an untagged fence stays plain rather than guessed.
+        // An unknown language tag falls through to plain text (rehype-highlight
+        // reports it on the vfile, never throws).
+        rehypePlugins={[[rehypeHighlight, { detect: false }]]}
         urlTransform={urlTransform}
         components={{ table: DataTable }}
       >
