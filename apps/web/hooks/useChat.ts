@@ -44,14 +44,14 @@ export function useChat(
   // the route prop stayed null (the URL was updated shallowly, not navigated).
   const [activeId, setActiveId] = useState<string | null>(conversationId);
 
-  // Load history when the route's conversation changes; a new chat (null)
-  // starts empty.
+  // Load history when the route's conversation changes. A new chat (null)
+  // starts empty by construction — the session is keyed per conversation, so
+  // it is always a fresh mount — and must NOT be cleared here: an effect can
+  // run twice on mount (strict mode), and a second clear would wipe the
+  // optimistic first turn a mount-send had already placed.
   useEffect(() => {
     setActiveId(conversationId);
-    if (!conversationId) {
-      setMessages([]);
-      return;
-    }
+    if (!conversationId) return;
     // Race guard: each run owns this flag; cleanup flips it on navigation so a
     // slower earlier fetch can't overwrite the conversation we moved to.
     let cancelled = false;
