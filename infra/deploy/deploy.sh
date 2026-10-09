@@ -109,10 +109,16 @@ curl -fsSL "$raw/compose.prod.yml" -o compose.prod.yml.new
 curl -fsSL "$raw/Caddyfile" -o Caddyfile.new
 printf 'HAX_PYTHON_IMAGE=%s\nHAX_WEB_IMAGE=%s\n' '$PY_IMAGE' '$WEB_IMAGE' > images.env.next
 compose() { docker compose --env-file .env --env-file "\${IMAGES_ENV:-images.env}" -f "\${COMPOSE_FILE:-compose.prod.yml}" "\$@"; }
+# Reclaim before pulling, not only after: a prune that was skipped by an
+# earlier roll must not be able to fill the root volume and fail this one.
+# Only images no container uses go; the running ones stay.
+docker image prune -af > /dev/null
 IMAGES_ENV=images.env.next COMPOSE_FILE=compose.prod.yml.new compose pull --quiet
-# stdin from /dev/null: SSM feeds this script to the shell on stdin, and a
-# `run` that attaches stdin would swallow the rest of the script as its
-# input — the roll would end here, "successfully", with nothing promoted.
+# stdin from /dev/null on EVERY command that attaches it (run, exec): SSM
+# feeds this script to the shell on stdin, and an attached stdin swallows
+# the rest of the script as the command's input — the roll ends there,
+# "successfully", with whatever follows never run. (No backticks in these
+# comments: the heredoc is unquoted, so a backtick would execute locally.)
 IMAGES_ENV=images.env.next COMPOSE_FILE=compose.prod.yml.new compose run --rm -T migrate < /dev/null
 mv compose.prod.yml.new compose.prod.yml
 # The Caddyfile is written IN PLACE, not renamed over: the caddy container
@@ -128,8 +134,8 @@ compose up -d --remove-orphans
 # — when the container still sees the host's file. If its view differs (the
 # mount is pinned to an inode the host no longer has), recreate it once; the
 # certificates live in a volume, so that costs a second, not a new issuance.
-if compose exec -T caddy cat /etc/caddy/Caddyfile | cmp -s - Caddyfile; then
-  compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
+if compose exec -T caddy cat /etc/caddy/Caddyfile < /dev/null | cmp -s - Caddyfile; then
+  compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile < /dev/null
 else
   echo "caddy's Caddyfile differs from the host's: recreating caddy"
   compose up -d --force-recreate caddy
