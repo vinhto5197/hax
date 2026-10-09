@@ -48,7 +48,7 @@ export function useChat(
   // starts empty by construction — the session is keyed per conversation, so
   // it is always a fresh mount — and must NOT be cleared here: an effect can
   // run twice on mount (strict mode), and a second clear would wipe the
-  // optimistic first turn a mount-send had already placed.
+  // optimistic first turn a mount-send had placed.
   useEffect(() => {
     setActiveId(conversationId);
     if (!conversationId) return;
@@ -66,6 +66,7 @@ export function useChat(
             content: m.content,
             // null (user rows, sourceless turns) and undefined both mean no footer.
             sources: m.sources ?? undefined,
+            created_at: m.created_at,
           })),
         );
       })
@@ -84,7 +85,10 @@ export function useChat(
       if (!prompt || isLoading) return;
 
       // Optimistically show the user's message before the network round-trip.
-      setMessages((prev) => [...prev, { role: "user", content: prompt }]);
+      setMessages((prev) => [
+        ...prev,
+        { role: "user", content: prompt, created_at: new Date().toISOString() },
+      ]);
       setIsLoading(true);
       setStreamingContent("");
       setError(null);
@@ -151,6 +155,7 @@ export function useChat(
               role: "assistant",
               content: fullContent,
               sources: sources.size ? [...sources.values()] : undefined,
+              created_at: new Date().toISOString(),
             },
           ]);
         }
