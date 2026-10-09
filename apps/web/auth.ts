@@ -23,7 +23,9 @@ class EmailUnverified extends CredentialsSignin {
 // preserved across re-issues — FastAPI's revocation compares it to
 // users.sessions_valid_after, so refreshing must never launder an old login.
 // email is null for an anonymous user and is the only marker of one; the key
-// is always emitted.
+// is always emitted. name rides along for the web shell only (FastAPI
+// ignores it); encode whitelists claims, so a claim the shell needs must be
+// listed there or the cookie drops it.
 const ISSUER = "hax";
 const AUDIENCE = "hax-api";
 const MAX_AGE_S = 7 * 24 * 60 * 60;
@@ -143,6 +145,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       // non-UUID sub), it cannot leak.
       user.id = hax.id;
       user.email = hax.email;
+      user.name = hax.name;
       return true;
     },
     jwt({ token, user }) {
@@ -151,6 +154,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         // above has already swapped in the hax id).
         token.sub = (user as { id: string }).id;
         token.email = user.email ?? null;
+        token.name = user.name ?? null;
         token.auth_time = Math.floor(Date.now() / 1000);
         token.jti = crypto.randomUUID();
       }
@@ -165,6 +169,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const user = session.user as Session["user"];
         user.id = token.sub as string;
         user.email = token.email ?? null;
+        user.name = (token.name as string | null) ?? null;
       }
       return session;
     },
@@ -173,12 +178,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     maxAge: MAX_AGE_S,
     // Auth.js pairs encode/decode: override both together or sessions break.
     async encode({ token }) {
-      const { sub, email, auth_time, jti } = (token ?? {}) as Record<
+      const { sub, email, name, auth_time, jti } = (token ?? {}) as Record<
         string,
         unknown
       >;
       return await new SignJWT({
         email: email ?? null,
+        name: name ?? null,
         auth_time,
         jti: jti as string | undefined,
       })

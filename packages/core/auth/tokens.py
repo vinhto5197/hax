@@ -1,7 +1,8 @@
 """Session-JWT verification — the FastAPI half of the Auth.js bridge.
 
 Cross-module contract with apps/web/auth.ts (the minting half): HS256, shared
-AUTH_SECRET, iss "hax", aud "hax-api", claims sub/email/iat/exp/jti/auth_time.
+AUTH_SECRET, iss "hax", aud "hax-api", claims sub/email/iat/exp/jti/auth_time
+(plus name, which only the web shell reads; it is ignored here).
 auth_time is the LOGIN moment and is preserved across Auth.js re-issues —
 revocation compares it to users.sessions_valid_after, so a re-issue must never
 carry a fresher auth_time than the login that produced it.

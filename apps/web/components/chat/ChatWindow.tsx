@@ -25,19 +25,23 @@ const MODEL_OPTIONS = [
 const TITLE_POLL_MS = 1000;
 const TITLE_POLL_TICKS = 10;
 
-// The demo: the landing page renders the chat in place for a visitor. The
-// conversation gets no URL (a real request for /chat/* ends a demo — see
-// proxy.ts), the first message is sent on mount, and there is no model choice
-// (the API ignores it for visitors anyway).
-export type DemoOptions = { initialPrompt: string };
+// A ChatWindow is mounted only once there is something to show: a routed
+// conversation, or a new one whose first message (`initialPrompt`, from the
+// NewChat screen) is sent on mount. `demo` marks the landing page's visitor
+// chat: the conversation gets no URL (a real request for /chat/* ends a demo —
+// see proxy.ts) and there is no model choice (the API ignores it for
+// visitors anyway).
+interface ChatWindowProps {
+  conversationId: string | null;
+  initialPrompt?: string;
+  demo?: boolean;
+}
 
 export function ChatWindow({
   conversationId,
-  demo,
-}: {
-  conversationId: string | null;
-  demo?: DemoOptions;
-}) {
+  initialPrompt,
+  demo = false,
+}: ChatWindowProps) {
   // Session identity = (conversationId, newChatNonce). The key forces a clean
   // remount when either changes — covering "+ New chat" from a lazy-created
   // conversation (same route, no prop change; the nonce is the only signal) —
@@ -53,18 +57,13 @@ export function ChatWindow({
     <ChatSession
       key={`${conversationId ?? "new"}:${newChatNonce}`}
       conversationId={conversationId}
+      initialPrompt={initialPrompt}
       demo={demo}
     />
   );
 }
 
-function ChatSession({
-  conversationId,
-  demo,
-}: {
-  conversationId: string | null;
-  demo?: DemoOptions;
-}) {
+function ChatSession({ conversationId, initialPrompt, demo }: ChatWindowProps) {
   const [model, setModel] = useState("");
   // From context (see ConversationsProvider); called after a turn to refresh
   // the sidebar.
@@ -114,14 +113,14 @@ function ChatSession({
     return () => clearInterval(timer);
   }, [createdId, isLoading, titled, refresh]);
 
-  // The demo's first message, sent once on mount (the ref survives re-renders;
-  // the key on ChatSession guarantees a fresh mount per demo).
+  // A new conversation's first message, sent once on mount (the ref survives
+  // re-renders; the key on ChatSession guarantees a fresh mount per session).
   const sentInitial = useRef(false);
   useEffect(() => {
-    if (!demo || sentInitial.current) return;
+    if (!initialPrompt || sentInitial.current) return;
     sentInitial.current = true;
-    void send(demo.initialPrompt);
-  }, [demo, send]);
+    void send(initialPrompt);
+  }, [initialPrompt, send]);
 
   return (
     <div className="mx-auto flex h-full w-full max-w-4xl flex-col gap-4 p-4">
