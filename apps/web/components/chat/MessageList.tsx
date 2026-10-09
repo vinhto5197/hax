@@ -65,12 +65,6 @@ export function MessageList({
       onScroll={onScroll}
       className="flex-1 overflow-y-auto rounded-lg border border-black/10 p-4"
     >
-      {messages.length === 0 && !streamingContent ? (
-        <p className="text-sm text-black/60 dark:text-white/60">
-          Start chatting by entering a prompt below.
-        </p>
-      ) : null}
-
       <div className="space-y-3">
         {messages.map((message, index) => {
           const isUser = message.role === "user";

@@ -1,7 +1,10 @@
-import { ChatWindow } from "@/components/chat/ChatWindow";
+import { auth } from "@/auth";
+import { NewChatFlow } from "@/components/chat/NewChatFlow";
 
 // The "new chat" landing: no conversation yet. The first message lazily
-// creates one server-side and the URL becomes /chat/[id].
-export default function ChatPage() {
-  return <ChatWindow conversationId={null} />;
+// creates one server-side and the URL becomes /chat/[id]. The name is read
+// here, server-side, so the greeting has it on the first render.
+export default async function ChatPage() {
+  const session = await auth();
+  return <NewChatFlow name={session?.user?.name ?? null} />;
 }

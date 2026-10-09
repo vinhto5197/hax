@@ -23,11 +23,17 @@ export function Sidebar() {
   // Rendering off the live value would unmount just this block and leave the
   // shell half-dissolved. Eviction is owned elsewhere — apiFetch's 401 handler
   // (lib/chatApi.ts) signs out and middleware redirects, as does a reload.
-  const [accountEmail, setAccountEmail] = useState<string | null>(null);
+  const [account, setAccount] = useState<{
+    email: string;
+    name: string | null;
+  } | null>(null);
   const liveEmail = session?.user?.email ?? null;
+  const liveName = session?.user?.name ?? null;
   useEffect(() => {
-    if (liveEmail) setAccountEmail(liveEmail);
-  }, [liveEmail]);
+    if (liveEmail) setAccount({ email: liveEmail, name: liveName });
+  }, [liveEmail, liveName]);
+  // A nameless account shows its email once, as the name line.
+  const displayName = account?.name?.trim() || account?.email;
 
   async function handleDelete(conversation: ConversationSummary) {
     // Irreversible (drops the conversation + all its messages) — confirm first.
@@ -74,7 +80,7 @@ export function Sidebar() {
       <nav className="flex flex-1 flex-col gap-1 overflow-y-auto">
         {conversations.length === 0 ? (
           <p className="px-1 py-2 text-xs text-black/50 dark:text-white/50">
-            No conversations yet.
+            No conversations yet. Start one above.
           </p>
         ) : (
           conversations.map((conversation) => {
@@ -116,11 +122,21 @@ export function Sidebar() {
         )}
       </nav>
 
-      {accountEmail && (
+      {account && (
         <div className="flex items-center justify-between gap-2 border-t border-black/10 pt-3 text-xs text-black/60 dark:border-white/10 dark:text-white/60">
-          <span className="truncate" title={accountEmail}>
-            {accountEmail}
-          </span>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium" title={displayName}>
+              {displayName}
+            </p>
+            {displayName !== account.email ? (
+              <p
+                className="truncate text-xs text-black/50 dark:text-white/50"
+                title={account.email}
+              >
+                {account.email}
+              </p>
+            ) : null}
+          </div>
           <button
             type="button"
             onClick={() => signOut({ callbackUrl: "/login" })}
