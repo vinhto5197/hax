@@ -75,6 +75,11 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
      sortable data tables with copy (tab-separated) and CSV download; the
      code-block light-mode
      fix.
+   - Slice 4a *(2026-10-08)*: the polish pass — the name in the shell, a
+     new-chat screen (time-of-day greeting, composer, example chips for
+     visitors), branded Google sign-in, source chips that reach the panel,
+     highlighted code (bundled), hover-only times with a copy button,
+     in-place sign-out on public pages.
    - Table / structured view for results (not only free-form text) *(shipped)*
    - Citation/source display (what data the answer used) *(shipped)*
    - Cohesive UI — feels like a product, not a demo collection

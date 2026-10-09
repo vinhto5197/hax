@@ -39,7 +39,11 @@ async function apiFetch(input: string, init?: RequestInit): Promise<Response> {
   const response = await fetch(input, { ...init, credentials: "include" });
   if (response.status === 401 && !evictingSession) {
     evictingSession = true;
-    void signOut({ callbackUrl: "/login" }).catch(() => {
+    // A public page signs out in place (the landing re-renders logged-out);
+    // the app returns to login. Decided by location, not by session: a 401 is
+    // exactly the moment the session cannot be trusted.
+    const callbackUrl = window.location.pathname === "/" ? "/" : "/login";
+    void signOut({ callbackUrl }).catch(() => {
       evictingSession = false;
     });
   }
