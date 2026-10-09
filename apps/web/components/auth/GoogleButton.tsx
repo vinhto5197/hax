@@ -42,7 +42,7 @@ export function GoogleButton({ label }: { label: string }) {
           setBusy(false),
         );
       }}
-      className="flex w-full items-center justify-center gap-2 rounded-md border border-black/20 px-3 py-2 text-sm disabled:opacity-50 dark:border-white/20"
+      className="flex w-full items-center justify-center gap-3 rounded-md border border-[#747775] bg-white px-3 py-2 text-sm font-medium text-[#1f1f1f] hover:bg-[#f8f9fa] disabled:opacity-50 dark:border-[#8e918f] dark:bg-[#131314] dark:text-[#e3e3e3] dark:hover:bg-[#1e1f20]"
     >
       <GoogleMark />
       {busy ? "Redirecting…" : label}
