@@ -8,6 +8,19 @@ interface SourcesFooterProps {
   sources: Source[];
 }
 
+const FLASH_MS = 1200;
+
+// Reaches the documents panel by DOM id: its state is local to it, and a
+// provenance link must not couple the two components. The sources are a
+// snapshot that outlives the document, so a missing row is normal.
+function showInPanel(documentId: string) {
+  const row = document.getElementById(`doc-${documentId}`);
+  if (!row) return;
+  row.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  row.setAttribute("data-flash", "true");
+  window.setTimeout(() => row.removeAttribute("data-flash"), FLASH_MS);
+}
+
 // Provenance under an assistant reply: the passages the model had in front
 // of it, grouped by document. Shown only on committed turns — the live
 // bubble has the status line instead. "Searched", not "cited": nothing here
@@ -60,16 +73,25 @@ export function SourcesFooter({ sources }: SourcesFooterProps) {
         })}
       </div>
       {open && byDocument.has(open) ? (
-        <ul className="mt-2 space-y-2">
-          {byDocument.get(open)!.passages.map((p) => (
-            <li
-              key={`${p.document_id}:${p.chunk_idx}`}
-              className="whitespace-pre-wrap wrap-break-word rounded-md bg-black/5 px-2 py-1.5 text-black/70 dark:bg-white/5 dark:text-white/70"
-            >
-              {p.excerpt}
-            </li>
-          ))}
-        </ul>
+        <>
+          <button
+            type="button"
+            onClick={() => showInPanel(open)}
+            className="mt-2 text-xs text-black/60 underline-offset-2 hover:underline dark:text-white/60"
+          >
+            Show in panel
+          </button>
+          <ul className="mt-1 space-y-2">
+            {byDocument.get(open)!.passages.map((p) => (
+              <li
+                key={`${p.document_id}:${p.chunk_idx}`}
+                className="whitespace-pre-wrap wrap-break-word rounded-md bg-black/5 px-2 py-1.5 text-black/70 dark:bg-white/5 dark:text-white/70"
+              >
+                {p.excerpt}
+              </li>
+            ))}
+          </ul>
+        </>
       ) : null}
     </div>
   );

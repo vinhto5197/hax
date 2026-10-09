@@ -140,6 +140,27 @@ export async function deleteDocument(id: string): Promise<void> {
   throw new Error(detail);
 }
 
+// Through apiFetch so credentials and the 401 eviction apply; a blob rather
+// than a plain link because dev is cross-origin and a bare anchor would not
+// carry the session.
+export async function downloadDocument(
+  id: string,
+  filename: string,
+): Promise<void> {
+  const response = await apiFetch(`${API_BASE}/api/documents/${id}/download`);
+  if (!response.ok) {
+    throw new Error(`API ${response.status}: ${response.statusText}`);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  // Revoking synchronously can cancel the download in WebKit; defer it.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 // 204 on success. A 404 means the conversation was already gone (stale
 // sidebar, another tab) — the caller's goal holds, so treat it as success
 // (mirrors deleteDocument).

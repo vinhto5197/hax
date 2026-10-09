@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
+from urllib.parse import quote
 from uuid import UUID
 
 import anyio
@@ -198,3 +199,53 @@ async def delete_document(
             )
 
     return Response(status_code=204)
+
+
+def _content_disposition(filename: str) -> str:
+    # The filename is user-supplied and lands in a response header: a CR/LF
+    # in it would inject a header. The ASCII fallback keeps printable ASCII
+    # only (quote and backslash replaced, so the quoted-string cannot be
+    # broken out of); the RFC 5987 form percent-encodes everything else.
+    fallback = "".join(
+        "_" if c in '"\\' else c for c in filename if " " <= c <= "~"
+    ).strip()
+    encoded = quote(filename, safe="")
+    return (
+        f"attachment; filename=\"{fallback or 'download'}\"; filename*=UTF-8''{encoded}"
+    )
+
+
+@router.get(
+    "/{document_id}/download",
+    responses={
+        403: {"description": "demo_limit: sign up to download"},
+        404: {"description": "document not found"},
+    },
+)
+async def download_document(
+    document_id: UUID,
+    session: AsyncSession = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
+) -> Response:
+    refuse_visitor(user)
+    doc = await documents_repo.get_owned(session, user.id, document_id)
+    # A row whose put never succeeded has no bytes; it answers like a miss so
+    # the two are indistinguishable. Any status is downloadable otherwise: the
+    # bytes exist from the moment the put succeeded, pending or failed alike.
+    if doc is None or doc.storage_key is None:
+        raise HTTPException(status_code=404, detail="document not found")
+    try:
+        data = await asyncio.to_thread(storage.get, doc.storage_key)
+    except storage.StorageKeyNotFound:
+        # The row outlived its object (a failed delete's second half, or a
+        # sweep): to the caller that is a missing document, not a server fault.
+        raise HTTPException(status_code=404, detail="document not found") from None
+    # Content-Type as a header, not media_type: Starlette appends a charset to
+    # text/* and the bytes go out exactly as stored.
+    return Response(
+        content=data,
+        headers={
+            "Content-Type": doc.mime_type,
+            "Content-Disposition": _content_disposition(doc.filename),
+        },
+    )

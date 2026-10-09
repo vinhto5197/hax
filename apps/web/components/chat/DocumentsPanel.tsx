@@ -5,6 +5,7 @@ import { type ChangeEvent, useEffect, useRef, useState } from "react";
 import {
   type DocumentSummary,
   deleteDocument,
+  downloadDocument,
   listDocuments,
   uploadDocument,
 } from "@/lib/chatApi";
@@ -76,6 +77,15 @@ export function DocumentsPanel() {
     }
   }
 
+  async function handleDownload(doc: DocumentSummary) {
+    setError(null);
+    try {
+      await downloadDocument(doc.id, doc.filename);
+    } catch {
+      setError("Couldn't download that file.");
+    }
+  }
+
   async function handleFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -129,7 +139,7 @@ export function DocumentsPanel() {
 
       {documents.length === 0 ? (
         <p className="px-1 text-xs text-black/40 dark:text-white/40">
-          No documents yet.
+          No documents yet. Upload a .txt, .md, .pdf or .docx to chat over it.
         </p>
       ) : (
         <ul className="flex max-h-40 flex-col gap-1 overflow-y-auto">
@@ -137,11 +147,23 @@ export function DocumentsPanel() {
             const statusClass =
               STATUS_STYLES[doc.status] ?? "text-black/40 dark:text-white/40";
             return (
-              <li key={doc.id} className="px-1 text-xs">
+              // The id is the reach-in point for SourcesFooter's "Show in
+              // panel" (scroll + data-flash), which must not share state with
+              // this panel.
+              <li
+                key={doc.id}
+                id={`doc-${doc.id}`}
+                className="scroll-mt-2 rounded px-1 text-xs transition-colors duration-500 ease-in-out"
+              >
                 <div className="flex items-center gap-2">
-                  <span className="flex-1 truncate text-black/70 dark:text-white/70">
+                  <button
+                    type="button"
+                    onClick={() => handleDownload(doc)}
+                    title="Download"
+                    className="flex-1 truncate text-left text-black/70 hover:underline dark:text-white/70"
+                  >
                     {doc.filename}
-                  </span>
+                  </button>
                   {doc.error ? (
                     // A failed document's reason opens on tap, not hover.
                     <button

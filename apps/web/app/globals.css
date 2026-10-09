@@ -23,3 +23,10 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Transient highlight on a documents-panel row, set from SourcesFooter's
+   "Show in panel" through the DOM; the row's own transition fades it in and
+   out rather than switching. */
+[data-flash="true"] {
+  background-color: color-mix(in srgb, currentColor 12%, transparent);
+}
