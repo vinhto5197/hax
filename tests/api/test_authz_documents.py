@@ -183,3 +183,106 @@ async def test_listing_fails_documents_stuck_in_flight_past_the_deadline(
             )
         ).scalar_one()
     assert status == "processing"
+
+
+async def test_owner_download_returns_the_stored_bytes(
+    client, user_a, admin_engine, monkeypatch
+):
+    from packages.core import storage
+
+    a_doc = await make_document(
+        admin_engine, user_a.id, filename="a.txt", storage_key="documents/x/a.txt"
+    )
+    monkeypatch.setattr(storage, "get", lambda key: b"hello world")
+    r = await client.get(f"/api/documents/{a_doc}/download", headers=bearer(user_a))
+    assert r.status_code == 200
+    assert r.content == b"hello world"
+    assert r.headers["content-type"] == "text/plain"
+    assert r.headers["content-disposition"].startswith("attachment;")
+    assert "a.txt" in r.headers["content-disposition"]
+
+
+async def test_download_foreign_document_404_without_touching_storage(
+    client, user_a, user_b, admin_engine, monkeypatch
+):
+    from packages.core import storage
+
+    a_doc = await make_document(
+        admin_engine, user_a.id, storage_key="documents/x/a.txt"
+    )
+    touched = []
+    monkeypatch.setattr(storage, "get", lambda key: touched.append(key) or b"")
+    r = await client.get(f"/api/documents/{a_doc}/download", headers=bearer(user_b))
+    assert r.status_code == 404
+    assert touched == []
+
+
+async def test_download_without_stored_bytes_404(
+    client, user_a, admin_engine, monkeypatch
+):
+    # A row whose put never succeeded has no storage_key: same answer as a miss.
+    from packages.core import storage
+
+    a_doc = await make_document(admin_engine, user_a.id, storage_key=None)
+    touched = []
+    monkeypatch.setattr(storage, "get", lambda key: touched.append(key) or b"")
+    r = await client.get(f"/api/documents/{a_doc}/download", headers=bearer(user_a))
+    assert r.status_code == 404
+    assert r.json()["detail"] == "document not found"
+    assert touched == []
+
+
+async def test_download_filename_cannot_inject_a_header(
+    client, user_a, admin_engine, monkeypatch
+):
+    from packages.core import storage
+
+    a_doc = await make_document(
+        admin_engine,
+        user_a.id,
+        filename='evil"\r\nX-Injected: 1.txt',
+        storage_key="documents/x/evil.txt",
+    )
+    monkeypatch.setattr(storage, "get", lambda key: b"x")
+    r = await client.get(f"/api/documents/{a_doc}/download", headers=bearer(user_a))
+    assert r.status_code == 200
+    assert "x-injected" not in r.headers
+    cd = r.headers["content-disposition"]
+    assert "\r" not in cd and "\n" not in cd
+    fallback = cd.split('filename="', 1)[1].split('"; filename*=', 1)[0]
+    assert '"' not in fallback
+    assert fallback == "evil_X-Injected: 1.txt"
+    assert cd.endswith("filename*=UTF-8''evil%22%0D%0AX-Injected%3A%201.txt")
+
+
+async def test_visitor_cannot_download(client, user_a, admin_engine, monkeypatch):
+    from packages.core import storage
+    from tests.api.factories import make_visitor
+
+    visitor = await make_visitor(admin_engine)
+    a_doc = await make_document(
+        admin_engine, visitor.id, storage_key="documents/x/a.txt"
+    )
+    touched = []
+    monkeypatch.setattr(storage, "get", lambda key: touched.append(key) or b"")
+    r = await client.get(
+        f"/api/documents/{a_doc}/download", headers=bearer(visitor, anonymous=True)
+    )
+    assert r.status_code == 403
+    assert r.json()["detail"] == {"code": "demo_limit"}
+    assert touched == []
+
+
+async def test_download_of_a_missing_object_is_a_404(
+    client, user_a, admin_engine, monkeypatch
+):
+    from packages.core import storage
+
+    doc = await make_document(admin_engine, user_a.id, storage_key="documents/x/a.txt")
+
+    def gone(key):
+        raise storage.StorageKeyNotFound(key)
+
+    monkeypatch.setattr(storage, "get", gone)
+    r = await client.get(f"/api/documents/{doc}/download", headers=bearer(user_a))
+    assert r.status_code == 404
