@@ -64,7 +64,7 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="flex h-screen w-64 shrink-0 flex-col gap-3 border-r border-black/10 p-3 dark:border-white/10">
+    <aside className="flex h-screen w-64 shrink-0 flex-col gap-3 border-r border-border p-3">
       <div className="flex items-center justify-between">
         <Link
           href="/chat"
@@ -79,19 +79,17 @@ export function Sidebar() {
         <Link
           href="/chat"
           onClick={startNewChat}
-          className="rounded-control border border-border-control px-3 py-1.5 text-small text-ink hover:bg-surface-2"
+          className="rounded-control bg-accent px-3 py-1.5 text-small font-medium text-accent-ink"
         >
           + New chat
         </Link>
       </div>
 
-      {error && (
-        <p className="px-1 text-xs text-red-600 dark:text-red-400">{error}</p>
-      )}
+      {error && <p className="px-1 text-caption text-status-failed">{error}</p>}
 
       <nav className="flex flex-1 flex-col gap-1 overflow-y-auto">
         {conversations.length === 0 ? (
-          <p className="px-1 py-2 text-xs text-black/50 dark:text-white/50">
+          <p className="px-1 py-2 text-small text-ink-3">
             No conversations yet. Start one above.
           </p>
         ) : (
@@ -100,29 +98,35 @@ export function Sidebar() {
             return (
               // A row is a div, not a Link: the delete button can't nest inside
               // an anchor (invalid HTML; nested interactive elements).
+              // ink-3 holds contrast on ground and surface-2 only, so the active
+              // row (surface-3) steps its secondary text up to ink-2.
               <div
                 key={conversation.id}
-                className={`flex items-center rounded-md ${
-                  active
-                    ? "bg-black/10 dark:bg-white/15"
-                    : "hover:bg-black/5 dark:hover:bg-white/10"
+                className={`flex items-center rounded-control ${
+                  active ? "bg-surface-3" : "hover:bg-surface-2"
                 }`}
               >
                 <Link
                   href={`/chat/${conversation.id}`}
-                  className="min-w-0 flex-1 px-3 py-2 text-sm"
+                  className="min-w-0 flex-1 px-3 py-2 text-small"
                 >
                   {/* Titling runs in the worker off the first user message and
                       can land mid-stream; until it does, the entry must read as
                       state, not as a name. */}
                   <span
                     className={`block truncate ${
-                      active ? "" : "text-black/70 dark:text-white/70"
-                    } ${conversation.title ? "" : "italic text-black/40 dark:text-white/40"}`}
+                      conversation.title
+                        ? active
+                          ? "text-ink"
+                          : "text-ink-2"
+                        : `italic ${active ? "text-ink-2" : "text-ink-3"}`
+                    }`}
                   >
                     {conversation.title ?? "Untitled"}
                   </span>
-                  <span className="block text-[11px] text-black/40 dark:text-white/40">
+                  <span
+                    className={`block text-caption ${active ? "text-ink-2" : "text-ink-3"}`}
+                  >
                     {formatRelative(conversation.updated_at)}
                   </span>
                 </Link>
@@ -131,7 +135,7 @@ export function Sidebar() {
                   onClick={() => handleDelete(conversation)}
                   disabled={deletingId === conversation.id}
                   aria-label={`Delete ${conversation.title ?? "conversation"}`}
-                  className="shrink-0 px-2 py-2 text-sm leading-none text-black/30 hover:text-red-600 disabled:opacity-50 dark:text-white/30 dark:hover:text-red-400"
+                  className={`shrink-0 px-2 py-2 text-sm leading-none hover:text-status-failed disabled:opacity-50 ${active ? "text-ink-2" : "text-ink-3"}`}
                 >
                   ×
                 </button>
@@ -141,15 +145,20 @@ export function Sidebar() {
         )}
       </nav>
 
+      <DocumentsPanel />
+
       {account && (
-        <div className="flex items-center justify-between gap-2 border-t border-black/10 pt-3 text-xs text-black/60 dark:border-white/10 dark:text-white/60">
+        <div className="flex items-center justify-between gap-2 border-t border-border pt-3">
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium" title={displayName}>
+            <p
+              className="truncate text-small font-medium text-ink"
+              title={displayName}
+            >
               {displayName}
             </p>
             {displayName !== account.email ? (
               <p
-                className="truncate text-xs text-black/50 dark:text-white/50"
+                className="truncate text-caption text-ink-3"
                 title={account.email}
               >
                 {account.email}
@@ -159,14 +168,12 @@ export function Sidebar() {
           <button
             type="button"
             onClick={() => signOut({ callbackUrl: "/login" })}
-            className="shrink-0 hover:text-foreground"
+            className="shrink-0 text-small text-ink-2 hover:text-ink"
           >
             Sign out
           </button>
         </div>
       )}
-
-      <DocumentsPanel />
     </aside>
   );
 }
