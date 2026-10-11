@@ -34,7 +34,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
       <input
         ref={inputRef}
         type="text"
-        className="flex-1 rounded-md border border-black/20 bg-transparent px-3 py-2 text-sm"
+        className="flex-1 rounded-control border border-border-control bg-surface-1 px-3 py-2 text-body text-ink"
         placeholder="Type your prompt..."
         value={input}
         onChange={(event) => setInput(event.target.value)}
@@ -42,7 +42,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
       />
       <button
         type="submit"
-        className="rounded-md bg-foreground px-4 py-2 text-sm text-background disabled:cursor-not-allowed disabled:opacity-50"
+        className="rounded-control bg-accent px-4 py-2 text-small font-medium text-accent-ink disabled:cursor-not-allowed disabled:opacity-50"
         disabled={disabled || !input.trim()}
       >
         Send

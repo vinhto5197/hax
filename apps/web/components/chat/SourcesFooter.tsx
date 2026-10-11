@@ -11,11 +11,13 @@ interface SourcesFooterProps {
 const FLASH_MS = 1200;
 
 // Reaches the documents panel by DOM id: its state is local to it, and a
-// provenance link must not couple the two components. The sources are a
-// snapshot that outlives the document, so a missing row is normal.
+// provenance link must not couple the two components; opens the panel if
+// collapsed. The sources are a snapshot that outlives the document, so a
+// missing row is normal.
 function showInPanel(documentId: string) {
   const row = document.getElementById(`doc-${documentId}`);
   if (!row) return;
+  row.closest("details")?.setAttribute("open", "");
   row.scrollIntoView({ block: "nearest", behavior: "smooth" });
   row.setAttribute("data-flash", "true");
   window.setTimeout(() => row.removeAttribute("data-flash"), FLASH_MS);
