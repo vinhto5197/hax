@@ -64,7 +64,7 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="flex h-screen w-64 shrink-0 flex-col gap-3 border-r border-border p-3">
+    <aside className="flex h-screen w-72 shrink-0 flex-col gap-3 border-r border-border p-3">
       <div className="flex items-center justify-between">
         <Link
           href="/chat"
@@ -79,17 +79,17 @@ export function Sidebar() {
         <Link
           href="/chat"
           onClick={startNewChat}
-          className="rounded-control bg-accent px-3 py-1.5 text-small font-medium text-accent-ink"
+          className="rounded-control bg-accent px-3 py-1.5 text-body font-medium text-accent-ink"
         >
           + New chat
         </Link>
       </div>
 
-      {error && <p className="px-1 text-caption text-status-failed">{error}</p>}
+      {error && <p className="px-1 text-small text-status-failed">{error}</p>}
 
       <nav className="flex flex-1 flex-col gap-1 overflow-y-auto">
         {conversations.length === 0 ? (
-          <p className="px-1 py-2 text-small text-ink-3">
+          <p className="px-1 py-2 text-body text-ink-3">
             No conversations yet. Start one above.
           </p>
         ) : (
@@ -108,7 +108,7 @@ export function Sidebar() {
               >
                 <Link
                   href={`/chat/${conversation.id}`}
-                  className="min-w-0 flex-1 px-3 py-2 text-small"
+                  className="min-w-0 flex-1 px-3 py-2 text-body"
                 >
                   {/* Titling runs in the worker off the first user message and
                       can land mid-stream; until it does, the entry must read as
@@ -125,7 +125,7 @@ export function Sidebar() {
                     {conversation.title ?? "Untitled"}
                   </span>
                   <span
-                    className={`block text-caption ${active ? "text-ink-2" : "text-ink-3"}`}
+                    className={`block text-small ${active ? "text-ink-2" : "text-ink-3"}`}
                   >
                     {formatRelative(conversation.updated_at)}
                   </span>
@@ -151,14 +151,14 @@ export function Sidebar() {
         <div className="flex items-center justify-between gap-2 border-t border-border pt-3">
           <div className="min-w-0">
             <p
-              className="truncate text-small font-medium text-ink"
+              className="truncate text-body font-medium text-ink"
               title={displayName}
             >
               {displayName}
             </p>
             {displayName !== account.email ? (
               <p
-                className="truncate text-caption text-ink-3"
+                className="truncate text-small text-ink-3"
                 title={account.email}
               >
                 {account.email}
@@ -168,7 +168,7 @@ export function Sidebar() {
           <button
             type="button"
             onClick={() => signOut({ callbackUrl: "/login" })}
-            className="shrink-0 text-small text-ink-2 hover:text-ink"
+            className="shrink-0 text-body text-ink-2 hover:text-ink"
           >
             Sign out
           </button>

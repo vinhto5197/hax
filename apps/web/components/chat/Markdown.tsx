@@ -34,15 +34,14 @@ const urlTransform: UrlTransform = (url, key, node) => {
   return isRelative ? safe : undefined;
 };
 
-// Tailwind Typography's default `prose` is print-document sized — too big for
-// chat bubbles. `prose-sm` matches the bubble's text-sm; the override classes
-// strip the default vertical margins so consecutive paragraphs don't blow the
-// bubble open, and tighten heading sizes.
+// The reading column is body size, so `prose` is sized by `text-body`; the
+// override classes strip the default vertical margins so consecutive
+// paragraphs don't blow the turn open, and tighten heading sizes.
 const PROSE_CLASSES = [
-  "prose prose-sm dark:prose-invert max-w-none",
+  "prose max-w-none text-body",
   "prose-p:my-2 prose-p:first:mt-0 prose-p:last:mb-0",
   "prose-headings:my-2 prose-headings:font-semibold",
-  "prose-h1:text-base prose-h2:text-base prose-h3:text-sm",
+  "prose-h1:text-title prose-h2:text-lead prose-h3:text-body prose-h4:text-body prose-h4:font-medium",
   // Typography's code block is dark with light text in both themes; an
   // override of only the background once left light text on near-white.
   "prose-pre:my-2",

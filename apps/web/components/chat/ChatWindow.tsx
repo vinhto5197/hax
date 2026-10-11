@@ -123,35 +123,28 @@ function ChatSession({ conversationId, initialPrompt, demo }: ChatWindowProps) {
   }, [initialPrompt, send]);
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-4xl flex-col gap-4 p-4">
-      <header className="flex items-start justify-between gap-4">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-bold">{demo ? "hax" : "hax chat"}</h1>
-          <p className="text-sm text-black/60 dark:text-white/60">
-            {demo ? (
-              <>
-                You&apos;re trying hax as a guest: a few turns, then{" "}
-                <Link href="/signup" className="underline">
-                  sign up
-                </Link>{" "}
-                to chat over your own documents.
-              </>
-            ) : (
-              <>
-                Conversations are saved — pick one from the sidebar or start a
-                new chat.
-              </>
-            )}
+    <div className="flex h-full flex-col">
+      <div
+        className={`mx-auto flex w-full max-w-4xl items-center px-4 pt-4 ${
+          demo ? "justify-start" : "justify-end"
+        }`}
+      >
+        {demo ? (
+          <p className="text-small text-ink-3">
+            You&apos;re trying hax as a guest: a few turns, then{" "}
+            <Link href="/signup" className="text-accent hover:underline">
+              sign up
+            </Link>{" "}
+            to chat over your own documents.
           </p>
-        </div>
-        {demo ? null : (
-          <label className="flex flex-col gap-1 text-xs text-black/60 dark:text-white/60">
+        ) : (
+          <label className="flex items-center gap-2 text-caption text-ink-3">
             Model
             <select
               value={model}
               onChange={(event) => setModel(event.target.value)}
               disabled={isLoading}
-              className="rounded-md border border-black/20 bg-transparent px-2 py-1 text-sm text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-control border border-border-control bg-surface-1 px-2 py-1 text-small text-ink disabled:cursor-not-allowed disabled:opacity-50"
             >
               {MODEL_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -161,7 +154,7 @@ function ChatSession({ conversationId, initialPrompt, demo }: ChatWindowProps) {
             </select>
           </label>
         )}
-      </header>
+      </div>
 
       <MessageList
         messages={messages}
@@ -170,11 +163,12 @@ function ChatSession({ conversationId, initialPrompt, demo }: ChatWindowProps) {
         status={status}
       />
 
-      {error ? (
-        <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-      ) : null}
-
-      <ChatInput onSend={send} disabled={isLoading || limited} />
+      <div className="mx-auto w-full max-w-4xl px-4 pb-6 pt-2">
+        {error ? (
+          <p className="mb-2 text-small text-status-failed">{error}</p>
+        ) : null}
+        <ChatInput onSend={send} disabled={isLoading || limited} />
+      </div>
 
       {limited ? <DemoLimitModal /> : null}
     </div>
