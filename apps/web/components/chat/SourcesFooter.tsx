@@ -49,9 +49,9 @@ export function SourcesFooter({ sources }: SourcesFooterProps) {
   }
 
   return (
-    <div className="mt-2 border-t border-black/10 pt-2 text-xs dark:border-white/10">
+    <div className="mt-3 border-t border-border pt-2 text-small">
       <div className="flex flex-wrap items-center gap-1.5">
-        <span className="text-black/50 dark:text-white/50">Sources</span>
+        <span className="text-caption font-medium text-ink-3">Sources</span>
         {[...byDocument.entries()].map(([documentId, group]) => {
           const isOpen = open === documentId;
           return (
@@ -60,14 +60,14 @@ export function SourcesFooter({ sources }: SourcesFooterProps) {
               type="button"
               aria-expanded={isOpen}
               onClick={() => setOpen(isOpen ? null : documentId)}
-              className={`max-w-full truncate rounded-full border px-2 py-0.5 ${
+              className={`max-w-full truncate rounded-full border px-2.5 py-0.5 text-ink ${
                 isOpen
-                  ? "border-foreground/40 bg-black/10 dark:bg-white/15"
-                  : "border-black/15 hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+                  ? "border-ink-2 bg-surface-3"
+                  : "border-border-control hover:bg-surface-2"
               }`}
             >
               {group.filename}
-              <span className="ml-1 text-black/50 dark:text-white/50">
+              <span className={`ml-1 ${isOpen ? "text-ink-2" : "text-ink-3"}`}>
                 {group.passages.length}
               </span>
             </button>
@@ -79,7 +79,7 @@ export function SourcesFooter({ sources }: SourcesFooterProps) {
           <button
             type="button"
             onClick={() => showInPanel(open)}
-            className="mt-2 text-xs text-black/60 underline-offset-2 hover:underline dark:text-white/60"
+            className="mt-2 text-small text-ink-2 underline-offset-2 hover:underline"
           >
             Show in panel
           </button>
@@ -87,7 +87,7 @@ export function SourcesFooter({ sources }: SourcesFooterProps) {
             {byDocument.get(open)!.passages.map((p) => (
               <li
                 key={`${p.document_id}:${p.chunk_idx}`}
-                className="whitespace-pre-wrap wrap-break-word rounded-md bg-black/5 px-2 py-1.5 text-black/70 dark:bg-white/5 dark:text-white/70"
+                className="whitespace-pre-wrap wrap-break-word rounded-control bg-surface-2 px-3 py-2 text-ink-2"
               >
                 {p.excerpt}
               </li>

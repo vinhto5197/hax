@@ -169,10 +169,10 @@ export function DataTable({ node }: ExtraProps) {
   if (header.length === 0 && rows.length === 0) return null;
 
   return (
-    <div className="not-prose my-2 text-sm">
-      <div className="overflow-x-auto rounded-md border border-black/10 dark:border-white/10">
+    <div className="not-prose my-2 text-small">
+      <div className="overflow-x-auto rounded-control border border-border bg-surface-1">
         <table className="w-full border-collapse">
-          <thead className="bg-black/5 dark:bg-white/10">
+          <thead className="bg-surface-2">
             <tr>
               {header.map((h, i) => (
                 <th
@@ -185,7 +185,7 @@ export function DataTable({ node }: ExtraProps) {
                         : "descending"
                       : "none"
                   }
-                  className="px-2 py-1 text-left font-semibold"
+                  className="px-3 py-1.5 text-left font-medium text-ink"
                 >
                   <button
                     type="button"
@@ -205,14 +205,11 @@ export function DataTable({ node }: ExtraProps) {
           </thead>
           <tbody>
             {sorted.map((r, ri) => (
-              <tr
-                key={ri}
-                className="border-t border-black/10 dark:border-white/10"
-              >
+              <tr key={ri} className="border-t border-border">
                 {r.map((c, ci) => (
                   <td
                     key={ci}
-                    className="px-2 py-1 align-top whitespace-pre-wrap"
+                    className="px-3 py-1.5 align-top whitespace-pre-wrap text-ink"
                   >
                     {c}
                   </td>
@@ -222,7 +219,7 @@ export function DataTable({ node }: ExtraProps) {
           </tbody>
         </table>
       </div>
-      <div className="mt-1 flex gap-3 text-xs text-black/50 dark:text-white/50">
+      <div className="mt-1 flex gap-3 text-caption text-ink-3">
         <button type="button" onClick={copyTable} className="hover:underline">
           {copied ? "Copied" : "Copy table"}
         </button>
