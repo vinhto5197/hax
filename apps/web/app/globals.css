@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
+@custom-variant touch (@media (hover: none));
 
 /* Design tokens, both themes; the theme follows the system (no toggle, no
    `.dark` class). New UI takes colour only from these; the starter's
@@ -100,6 +101,26 @@ body {
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--border-control) transparent;
+}
+/* Typography reads the tokens; the code block stays dark in both themes
+   because the highlight palette below assumes it. */
+.prose {
+  --tw-prose-body: var(--ink);
+  --tw-prose-headings: var(--ink);
+  --tw-prose-lead: var(--ink-2);
+  --tw-prose-links: var(--accent);
+  --tw-prose-bold: var(--ink);
+  --tw-prose-counters: var(--ink-3);
+  --tw-prose-bullets: var(--ink-3);
+  --tw-prose-hr: var(--border);
+  --tw-prose-quotes: var(--ink);
+  --tw-prose-quote-borders: var(--border);
+  --tw-prose-captions: var(--ink-3);
+  --tw-prose-code: var(--ink);
+  --tw-prose-pre-code: #e6e6e6;
+  --tw-prose-pre-bg: #1f2225;
+  --tw-prose-th-borders: var(--border);
+  --tw-prose-td-borders: var(--border);
 }
 /* Transient highlight on a documents-panel row, set from SourcesFooter's
    "Show in panel" through the DOM. */

@@ -41,7 +41,7 @@ function CopyButton({ content }: { content: string }) {
       type="button"
       onClick={copy}
       aria-label="Copy message"
-      className="rounded p-0.5 text-black/40 hover:bg-black/10 hover:text-black/70 dark:text-white/40 dark:hover:bg-white/15 dark:hover:text-white/80"
+      className="rounded p-0.5 text-ink-3 hover:bg-surface-2 hover:text-ink"
     >
       <svg
         width="14"
@@ -109,12 +109,8 @@ export function MessageList({
   }
 
   return (
-    <div
-      ref={scrollRef}
-      onScroll={onScroll}
-      className="flex-1 overflow-y-auto rounded-lg border border-black/10 p-4"
-    >
-      <div className="space-y-4">
+    <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto">
+      <div className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6">
         {messages.map((message, index) => {
           const isUser = message.role === "user";
           const time = message.created_at ? (
@@ -129,27 +125,21 @@ export function MessageList({
               key={`${message.role}-${index}`}
               className={`group flex flex-col ${isUser ? "items-end" : "items-start"}`}
             >
-              <div
-                className={`max-w-[85%] rounded-lg px-3 py-2 text-sm wrap-break-word ${
-                  isUser
-                    ? "bg-foreground text-background whitespace-pre-wrap"
-                    : "bg-black/5 text-foreground dark:bg-white/10"
-                }`}
-              >
-                {isUser ? (
-                  message.content
-                ) : (
-                  <>
-                    <Markdown content={message.content} />
-                    {message.sources?.length ? (
-                      <SourcesFooter sources={message.sources} />
-                    ) : null}
-                  </>
-                )}
-              </div>
+              {isUser ? (
+                <div className="max-w-[85%] rounded-card bg-bubble-user px-4 py-2.5 text-body whitespace-pre-wrap wrap-break-word text-bubble-user-ink">
+                  {message.content}
+                </div>
+              ) : (
+                <div className="w-full min-w-0 text-body text-ink wrap-break-word">
+                  <Markdown content={message.content} />
+                  {message.sources?.length ? (
+                    <SourcesFooter sources={message.sources} />
+                  ) : null}
+                </div>
+              )}
               {/* Hover-only slot of fixed height: always laid out, so showing
-                  it never moves the bubbles below. */}
-              <div className="mt-1 flex h-4 items-center gap-1.5 text-[11px] leading-4 text-black/40 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 dark:text-white/40">
+                  it never moves the turns below. */}
+              <div className="mt-1 flex h-4 items-center gap-1.5 text-caption text-ink-3 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 touch:opacity-100">
                 {isUser ? (
                   <>
                     <CopyButton content={message.content} />
@@ -166,20 +156,18 @@ export function MessageList({
           );
         })}
 
-        {/* Live bubble while streaming; on finish useChat commits the content
+        {/* Live turn while streaming; on finish useChat commits the content
             into `messages` and clears this — a seamless swap. */}
         {streamingContent ? (
-          <div className="flex justify-start">
-            <div className="max-w-[85%] rounded-lg bg-black/5 px-3 py-2 text-sm text-foreground dark:bg-white/10">
-              <Markdown content={streamingContent} />
-            </div>
+          <div className="w-full min-w-0 text-body text-ink wrap-break-word">
+            <Markdown content={streamingContent} />
           </div>
         ) : null}
 
         {/* Activity indicator: the live tool status (even mid-stream), else the
             generic line in the gap before the first chunk. */}
         {isLoading && (status || !streamingContent) ? (
-          <p className="animate-pulse text-sm text-black/60 dark:text-white/60">
+          <p className="animate-pulse text-small text-ink-3">
             {status ?? "Assistant is thinking..."}
           </p>
         ) : null}

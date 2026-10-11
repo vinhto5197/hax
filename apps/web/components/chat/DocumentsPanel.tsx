@@ -137,18 +137,18 @@ export function DocumentsPanel() {
       className="group flex shrink-0 flex-col gap-2 border-t border-border pt-3"
       data-documents-panel
     >
-      <summary className="flex cursor-pointer list-none items-center justify-between px-1 text-small font-medium text-ink-2 [&::-webkit-details-marker]:hidden">
+      <summary className="flex cursor-pointer list-none items-center justify-between px-1 text-body font-medium text-ink-2 [&::-webkit-details-marker]:hidden">
         <span className="flex items-center gap-1.5">
           <span
             aria-hidden="true"
-            className="text-small leading-none transition-transform group-open:rotate-90"
+            className="text-body leading-none transition-transform group-open:rotate-90"
           >
             ▸
           </span>
           Documents
           <span className="font-normal text-ink-3">{documents.length}</span>
           {failedCount > 0 ? (
-            <span className="text-caption font-medium text-status-failed">
+            <span className="text-small font-medium text-status-failed">
               · {failedCount} failed
             </span>
           ) : null}
@@ -157,12 +157,12 @@ export function DocumentsPanel() {
           type="button"
           onClick={handleUploadClick}
           disabled={uploading}
-          className="rounded-control border border-border-control px-2 py-0.5 text-caption text-ink hover:bg-surface-2 disabled:opacity-50"
+          className="rounded-control border border-border-control px-2 py-0.5 text-small text-ink hover:bg-surface-2 disabled:opacity-50"
         >
           {uploading ? "Uploading…" : "+ Upload"}
         </button>
       </summary>
-      <p className="px-1 text-caption text-ink-3">
+      <p className="px-1 text-small text-ink-3">
         PDF, Word (.docx), .txt or .md. Text PDFs only, up to 5 MB; plain text
         up to 256 KB.
       </p>
@@ -175,10 +175,10 @@ export function DocumentsPanel() {
         className="hidden"
       />
 
-      {error && <p className="px-1 text-caption text-status-failed">{error}</p>}
+      {error && <p className="px-1 text-small text-status-failed">{error}</p>}
 
       {documents.length === 0 ? (
-        <p className="px-1 text-caption text-ink-3">
+        <p className="px-1 text-small text-ink-3">
           No documents yet. Upload a .txt, .md, .pdf or .docx to chat over it.
         </p>
       ) : (
@@ -192,7 +192,7 @@ export function DocumentsPanel() {
               <li
                 key={doc.id}
                 id={`doc-${doc.id}`}
-                className="scroll-mt-2 rounded-control px-1 text-small transition-colors duration-500 ease-in-out"
+                className="scroll-mt-2 rounded-control px-1 text-body transition-colors duration-500 ease-in-out"
               >
                 <div className="flex items-center gap-2">
                   <button
@@ -215,12 +215,12 @@ export function DocumentsPanel() {
                         })
                       }
                       aria-expanded={openErrorIds.has(doc.id)}
-                      className={`text-caption font-medium underline decoration-dotted underline-offset-2 ${statusClass}`}
+                      className={`text-small font-medium underline decoration-dotted underline-offset-2 ${statusClass}`}
                     >
                       {doc.status}
                     </button>
                   ) : (
-                    <span className={`text-caption font-medium ${statusClass}`}>
+                    <span className={`text-small font-medium ${statusClass}`}>
                       {doc.status}
                     </span>
                   )}
@@ -235,7 +235,7 @@ export function DocumentsPanel() {
                   </button>
                 </div>
                 {doc.error && openErrorIds.has(doc.id) ? (
-                  <p className="mt-0.5 text-caption text-status-failed">
+                  <p className="mt-0.5 text-small text-status-failed">
                     {doc.error}
                   </p>
                 ) : null}
