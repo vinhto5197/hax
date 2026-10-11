@@ -79,7 +79,7 @@ export function Sidebar() {
         <Link
           href="/chat"
           onClick={startNewChat}
-          className="rounded-control bg-accent px-3 py-1.5 text-body font-medium text-accent-ink"
+          className="rounded-control border border-border-control px-3 py-1.5 text-body text-ink hover:bg-surface-2"
         >
           + New chat
         </Link>

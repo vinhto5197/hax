@@ -45,6 +45,7 @@ const PROSE_CLASSES = [
   // Typography's code block is dark with light text in both themes; an
   // override of only the background once left light text on near-white.
   "prose-pre:my-2",
+  "prose-strong:font-bold",
   "prose-code:before:content-none prose-code:after:content-none",
   "prose-ul:my-2 prose-ol:my-2 prose-li:my-0",
 ].join(" ");
