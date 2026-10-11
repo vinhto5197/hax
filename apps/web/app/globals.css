@@ -94,6 +94,13 @@ body {
   background: var(--color-ground);
   color: var(--color-ink);
 }
+
+/* Every scroll area draws a thin thumb on no track, so it reads as open
+   rather than boxed; the composer, the thread and the sidebar lists share it. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-control) transparent;
+}
 /* Transient highlight on a documents-panel row, set from SourcesFooter's
    "Show in panel" through the DOM. */
 [data-flash="true"] {
