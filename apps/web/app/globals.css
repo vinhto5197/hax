@@ -1,29 +1,99 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
+/* Design tokens, both themes; the theme follows the system (no toggle, no
+   `.dark` class). New UI takes colour only from these; the starter's
+   black/white opacities survive in unmigrated components and go as each is
+   restyled. `--background` / `--foreground` are aliases of ground / ink kept
+   for the classes still using them. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+  --ground: #fbfaf7;
+  --surface-1: #ffffff;
+  --surface-2: #f2f0eb;
+  --surface-3: #e7e4dd;
+  --ink: #26241f;
+  --ink-2: #5b584f;
+  --ink-3: #6e6b62;
+  --border: #e4e1da;
+  --border-control: #89857b;
+  --accent: #2a6cb0;
+  --accent-ink: #ffffff;
+  --status-ready: #2a7a4b;
+  --status-failed: #b8352b;
+  --bubble-user: #dbeaf9;
+  --bubble-user-ink: #1b2a3a;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --background: var(--ground);
+  --foreground: var(--ink);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --ground: #1b1b19;
+    --surface-1: #262523;
+    --surface-2: #2f2e2b;
+    --surface-3: #3c3a36;
+    --ink: #f0eee8;
+    --ink-2: #bdb9af;
+    --ink-3: #9f9b91;
+    --border: #403e39;
+    --border-control: #7b776d;
+    --accent: #8ec4f2;
+    --accent-ink: #1b1b19;
+    --status-ready: #79c796;
+    --status-failed: #f28f85;
+    --bubble-user: #2b3d50;
+    --bubble-user-ink: #e8f1fb;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@theme inline {
+  --color-ground: var(--ground);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-border: var(--border);
+  --color-border-control: var(--border-control);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-status-ready: var(--status-ready);
+  --color-status-failed: var(--status-failed);
+  --color-bubble-user: var(--bubble-user);
+  --color-bubble-user-ink: var(--bubble-user-ink);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --font-sans: var(--font-instrument-sans), system-ui, sans-serif;
+  --font-serif: var(--font-instrument-serif), Georgia, serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo,
+    monospace;
+
+  --text-caption: 11px;
+  --text-caption--line-height: 16px;
+  --text-small: 13px;
+  --text-small--line-height: 18px;
+  --text-body: 15px;
+  --text-body--line-height: 22px;
+  --text-lead: 17px;
+  --text-lead--line-height: 24px;
+  --text-title: 20px;
+  --text-title--line-height: 28px;
+  --text-display: 34px;
+  --text-display--line-height: 40px;
+  --text-code: 13px;
+  --text-code--line-height: 20px;
+
+  --radius-control: 8px;
+  --radius-card: 14px;
 }
 
+body {
+  background: var(--color-ground);
+  color: var(--color-ink);
+}
 /* Transient highlight on a documents-panel row, set from SourcesFooter's
    "Show in panel" through the DOM. */
 [data-flash="true"] {

@@ -7,6 +7,7 @@ import { signIn } from "next-auth/react";
 import { ChatWindow } from "@/components/chat/ChatWindow";
 import { ConversationsProvider } from "@/components/chat/ConversationsProvider";
 import { NewChat } from "@/components/chat/NewChat";
+import { Wordmark } from "@/components/Wordmark";
 
 // Example prompts for the visitor; each is answerable from the guest prompt
 // alone (a visitor has no tools).
@@ -15,6 +16,8 @@ const DEMO_CHIPS = [
   "Can another user see my files?",
   "How are my documents searched?",
 ];
+
+const FOOTER_LINKS = [{ href: "/privacy", label: "Privacy" }] as const;
 
 // Public landing (proxy.ts: exact-match "/"; members are sent to /chat). The
 // first send starts a demo — a new anonymous session — and the chat renders
@@ -58,23 +61,39 @@ export default function Home() {
 
   return (
     <main className="flex min-h-screen flex-col justify-center">
-      <NewChat
-        name={null}
-        chips={DEMO_CHIPS}
-        onSend={start}
-        error={error}
-        disabled={starting}
-      />
-      <p className="mx-auto w-full max-w-4xl px-4 pb-4 text-sm text-black/60 dark:text-white/60">
-        Have an account?{" "}
-        <Link href="/login" className="underline">
-          Log in
-        </Link>{" "}
-        ·{" "}
-        <Link href="/privacy" className="underline">
-          Privacy
-        </Link>
-      </p>
+      <header className="flex w-full items-center justify-between px-8 py-4 text-ink">
+        <Wordmark />
+        <nav className="flex items-center gap-4">
+          <Link href="/login" className="text-small text-ink-2 hover:underline">
+            Log in
+          </Link>
+          <Link
+            href="/signup"
+            className="rounded-control bg-accent px-3 py-1.5 text-small font-medium text-accent-ink"
+          >
+            Sign up
+          </Link>
+        </nav>
+      </header>
+      <div className="grid flex-1">
+        <NewChat
+          name={null}
+          chips={DEMO_CHIPS}
+          onSend={start}
+          error={error}
+          disabled={starting}
+        />
+      </div>
+      <nav className="flex justify-center gap-2 px-4 pb-4 text-small text-ink-2">
+        {FOOTER_LINKS.map((link, i) => (
+          <span key={link.href} className="flex gap-2">
+            {i > 0 ? <span aria-hidden="true">·</span> : null}
+            <Link href={link.href} className="hover:underline">
+              {link.label}
+            </Link>
+          </span>
+        ))}
+      </nav>
     </main>
   );
 }

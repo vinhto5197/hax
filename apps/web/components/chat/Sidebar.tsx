@@ -7,6 +7,7 @@ import { signOut, useSession } from "next-auth/react";
 
 import { useConversations } from "@/components/chat/ConversationsProvider";
 import { DocumentsPanel } from "@/components/chat/DocumentsPanel";
+import { Wordmark } from "@/components/Wordmark";
 import { type ConversationSummary, deleteConversation } from "@/lib/chatApi";
 import { formatRelative } from "@/lib/time";
 
@@ -64,15 +65,25 @@ export function Sidebar() {
 
   return (
     <aside className="flex h-screen w-64 shrink-0 flex-col gap-3 border-r border-black/10 p-3 dark:border-white/10">
-      {/* startNewChat itself decides whether a nonce bump is needed (only when
-          no real /chat/[id] is mounted — see ConversationsProvider). */}
-      <Link
-        href="/chat"
-        onClick={startNewChat}
-        className="rounded-md bg-foreground px-3 py-2 text-center text-sm text-background"
-      >
-        + New chat
-      </Link>
+      <div className="flex items-center justify-between">
+        <Link
+          href="/chat"
+          onClick={startNewChat}
+          aria-label="hax home"
+          className="text-ink"
+        >
+          <Wordmark />
+        </Link>
+        {/* startNewChat itself decides whether a nonce bump is needed (only when
+            no real /chat/[id] is mounted — see ConversationsProvider). */}
+        <Link
+          href="/chat"
+          onClick={startNewChat}
+          className="rounded-control border border-border-control px-3 py-1.5 text-small text-ink hover:bg-surface-2"
+        >
+          + New chat
+        </Link>
+      </div>
 
       {error && (
         <p className="px-1 text-xs text-red-600 dark:text-red-400">{error}</p>

@@ -40,35 +40,41 @@ export function NewChat({
   const visitor = chips.length > 0;
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-4xl flex-col justify-center gap-4 p-4">
-      <h1 className="min-h-8 text-2xl font-semibold">
-        {mounted ? greeting : "\u00a0"}
-      </h1>
-      {visitor ? (
-        <p className="text-sm text-black/60 dark:text-white/60">
-          Chat with your own documents. Try it without an account: ask about hax
-          itself.
-        </p>
-      ) : null}
-      {visitor ? (
-        <div className="flex flex-wrap gap-2">
-          {chips.map((chip) => (
-            <button
-              key={chip}
-              type="button"
-              disabled={disabled}
-              onClick={() => void onSend(chip)}
-              className="rounded-full border px-3 py-1 text-sm hover:bg-black/5 disabled:opacity-50 dark:hover:bg-white/10"
-            >
-              {chip}
-            </button>
-          ))}
-        </div>
-      ) : null}
-      <ChatInput onSend={onSend} disabled={disabled} />
-      {error ? (
-        <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-      ) : null}
+    // Two equal halves: the greeting sits at the bottom of the upper one, so
+    // its baseline is the vertical centre whatever follows it.
+    <div className="mx-auto flex h-full w-full max-w-4xl flex-col p-4">
+      <div className="flex flex-1 flex-col justify-end pb-4">
+        <h1 className="text-center font-serif text-display text-ink">
+          {mounted ? greeting : "\u00a0"}
+        </h1>
+      </div>
+      <div className="flex flex-1 flex-col gap-4">
+        {visitor ? (
+          <p className="text-center text-sm text-black/60 dark:text-white/60">
+            Chat with your own documents. Try it without an account: ask about
+            hax itself.
+          </p>
+        ) : null}
+        {visitor ? (
+          <div className="flex flex-wrap justify-center gap-2">
+            {chips.map((chip) => (
+              <button
+                key={chip}
+                type="button"
+                disabled={disabled}
+                onClick={() => void onSend(chip)}
+                className="rounded-full border px-3 py-1 text-sm hover:bg-black/5 disabled:opacity-50 dark:hover:bg-white/10"
+              >
+                {chip}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        <ChatInput onSend={onSend} disabled={disabled} />
+        {error ? (
+          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+        ) : null}
+      </div>
     </div>
   );
 }
