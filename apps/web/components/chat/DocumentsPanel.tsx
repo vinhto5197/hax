@@ -6,6 +6,7 @@ import {
   useEffect,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 
 import {
@@ -24,6 +25,7 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 const POLL_INTERVAL_MS = 2500;
+const SHORT = "(max-height: 500px)";
 const IN_FLIGHT: ReadonlySet<string> = new Set(["pending", "processing"]);
 
 // Failed rows sort above the fold of the capped list, then in-flight, then
@@ -47,6 +49,23 @@ export function DocumentsPanel() {
     () => new Set(),
   );
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Open unless the viewport is short (a landscape phone), where the panel
+  // would hide the conversations; the server cannot see the viewport, so it
+  // renders open and the client corrects after hydration. A user's own toggle
+  // wins from then on. The toggle event keeps this state in step with the DOM
+  // attribute, which the Upload button and "Show in panel" set directly.
+  const short = useSyncExternalStore(
+    (onChange) => {
+      const mq = window.matchMedia(SHORT);
+      mq.addEventListener("change", onChange);
+      return () => mq.removeEventListener("change", onChange);
+    },
+    () => window.matchMedia(SHORT).matches,
+    () => false,
+  );
+  const [toggled, setToggled] = useState<boolean | null>(null);
+  const open = toggled ?? !short;
 
   useEffect(() => {
     listDocuments()
@@ -133,7 +152,8 @@ export function DocumentsPanel() {
 
   return (
     <details
-      open
+      open={open}
+      onToggle={(e) => setToggled(e.currentTarget.open)}
       className="group flex shrink-0 flex-col gap-2 border-t border-border pt-3"
       data-documents-panel
     >
@@ -181,7 +201,7 @@ export function DocumentsPanel() {
           No documents yet. Upload a .txt, .md, .pdf or .docx to chat over it.
         </p>
       ) : (
-        <ul className="flex max-h-24 flex-col gap-1 overflow-y-auto">
+        <ul className="flex max-h-24 flex-col gap-1 overflow-y-auto short:max-h-12">
           {ordered.map((doc) => {
             const statusClass = STATUS_STYLES[doc.status] ?? "text-ink-3";
             return (
