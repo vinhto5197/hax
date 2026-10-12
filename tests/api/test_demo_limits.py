@@ -1,12 +1,14 @@
 """A visitor (token with no email) gets the guest prompt with no tools, a
-lifetime turn cap checked before anything is persisted, and no uploads.
-Members are untouched."""
+lifetime turn cap checked before anything is persisted, and no uploads. The
+model choice is honoured for everyone, within the allowlist. Members are
+otherwise untouched."""
 
 import asyncio
 
 import pytest
 from sqlalchemy import text
 
+import apps.api.demo as demo
 import apps.api.routers.chat as chat_router
 from packages.core.demo.prompt import DEMO_SYSTEM_PROMPT
 from tests.api.conftest import bearer
@@ -60,14 +62,43 @@ async def test_visitor_gets_the_guest_prompt_and_no_tools(client, visitor, harne
     assert harness[0]["tools"] is False
 
 
-async def test_visitor_model_choice_is_ignored(client, visitor, harness):
+async def test_visitor_is_pinned_to_the_default_model(client, visitor, harness):
     r = await client.post(
         "/api/chat",
-        json={"prompt": "hi", "model": "claude-opus-4-8"},
+        json={"prompt": "hi", "model": "claude-sonnet-4-6"},
         headers=bearer(visitor, anonymous=True),
     )
     assert r.status_code == 200
     assert harness[0]["model"] == chat_router.DEFAULT_MODEL
+
+
+async def test_visitor_without_a_model_gets_the_default(client, visitor, harness):
+    r = await client.post(
+        "/api/chat", json={"prompt": "hi"}, headers=bearer(visitor, anonymous=True)
+    )
+    assert r.status_code == 200
+    assert harness[0]["model"] == chat_router.DEFAULT_MODEL
+
+
+@pytest.mark.parametrize("anonymous", [True, False])
+async def test_model_outside_the_allowlist_is_refused(
+    client, visitor, user_a, harness, anonymous
+):
+    user = visitor if anonymous else user_a
+    r = await client.post(
+        "/api/chat",
+        json={"prompt": "hi", "model": "gpt-5"},
+        headers=bearer(user, anonymous=anonymous),
+    )
+    assert r.status_code == 422
+    assert harness == []
+    # No turn was spent: the visitor still has the whole cap.
+    if anonymous:
+        for _ in range(demo._turn_limit()):
+            ok = await client.post(
+                "/api/chat", json={"prompt": "hi"}, headers=bearer(user, anonymous=True)
+            )
+            assert ok.status_code == 200
 
 
 async def test_member_gets_the_agentic_prompt_and_tools(client, user_a, harness):

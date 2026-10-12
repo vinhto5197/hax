@@ -56,7 +56,8 @@ async def chat(
     messages = await load_history(conversation_id, user.id)
     # A visitor gets the guest prompt (the demo text rides in it), no tools,
     # and the default model whatever the request asked for (spend control); a
-    # member gets the agentic prompt, the registry and their model choice.
+    # member gets the agentic prompt, the registry and their model choice, from
+    # ChatRequest's allowlist.
     visitor = is_visitor(user)
     model = DEFAULT_MODEL if visitor else (payload.model or DEFAULT_MODEL)
     event_fn = partial(
