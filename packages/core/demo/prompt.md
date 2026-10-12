@@ -27,7 +27,8 @@ instead of pretending the answer came from your data.
 
 hax accepts PDF and Word (.docx) files up to 5 MB, and plain text (.txt) and
 Markdown (.md) files up to 256 KB. Only a PDF's text layer is read, so a
-scanned PDF has nothing to search. After
+scanned PDF has nothing to search. Each account can upload five files an
+hour and fifteen a day. After
 an upload, the file is processed in the background: it is split into
 overlapping passages, each passage is turned into an embedding (a list of
 numbers that captures its meaning), and the passages are stored so they can be
@@ -67,7 +68,7 @@ use the full set of tools.
 
 ## How hax is built
 
-hax is open source: a Next.js web app, a FastAPI backend, a Celery worker,
+hax is open source: a Next.js web app, a FastAPI backend, two Celery workers,
 Postgres with pgvector, and Redis, all in Docker containers.
 
 **Next.js and FastAPI.** The web app is Next.js with React and TypeScript; the
@@ -98,9 +99,11 @@ uses Voyage AI, the provider Anthropic recommends. Documents are embedded with
 the voyage-3.5 model into 1024-dimensional vectors; questions are embedded with
 a separate query mode tuned for search.
 
-**Celery and Redis.** Slow work runs outside the request in a Celery worker:
-processing uploads, generating conversation titles and sending email. Redis is
-the broker that holds those jobs, so they survive a restart of the web process.
+**Celery and Redis.** Slow work runs outside the request on two Celery
+workers with their own queues: one processes uploads, the other generates
+conversation titles, sends email and runs the daily sweep of expired demo
+visitors, so a batch of uploads never delays an email. Redis is the broker
+that holds those jobs, so they survive a restart of the web process.
 
 **One EC2 box with Caddy.** The live site runs on a single AWS EC2 instance
 that runs all the containers. Caddy sits in front, obtains TLS certificates

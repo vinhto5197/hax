@@ -38,7 +38,7 @@ a screen canvas) and is recorded here only in the form the code consumes.
   (control 8, card 14) are tokens with their own names; Tailwind's defaults
   are left intact so untouched components keep rendering as before.
 - **Three literals stay outside the tokens**, each for a reason the tokens
-  cannot express: the modal scrim and the code block are dark in both themes
+  cannot express: the modal and drawer scrims and the code block are dark in both themes
   (the highlight palette assumes a dark block), and the Google sign-in button
   keeps Google's own light and dark colours, which its brand guidelines
   require.
@@ -54,6 +54,24 @@ a screen canvas) and is recorded here only in the form the code consumes.
   inline SVG (lowercase "hax", one stroke, round terminals) in
   `currentColor`, and `app/icon.svg` is the x of that mark on the accent
   tile. The name is a graphic only there; in prose it is the plain word.
+  The proxy's matcher excludes `icon.svg`, since a logged-out page's favicon
+  request would otherwise be redirected to the login page.
+- **Two global rules carry accessibility**: keyboard focus is a 2 px accent
+  ring on every control (`:focus-visible`, in the base layer so a component
+  can opt out), and `prefers-reduced-motion` reduces every animation and
+  transition to a single instant frame.
+
+## Alternatives considered
+
+- **Keep the starter's styles and tidy them.** Rejected: two colour systems
+  (black-at-an-opacity and a dark-mode guess per component) cannot be
+  tuned from one place, which is the whole requirement.
+- **A component library** (shadcn/ui, Radix themes). Rejected for v0: the
+  app has eight components, and a library's own tokens and dark-mode
+  mechanism would sit on top of the ones designed for hax.
+- **CSS-in-JS or a theme object in TypeScript.** Rejected: Tailwind v4's
+  `@theme` already turns CSS variables into utilities, so a second theme
+  representation would duplicate the stylesheet.
 
 ## Consequences
 

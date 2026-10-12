@@ -65,8 +65,6 @@ export function ChatWindow({
 
 function ChatSession({ conversationId, initialPrompt, demo }: ChatWindowProps) {
   const [model, setModel] = useState("");
-  // From context (see ConversationsProvider); called after a turn to refresh
-  // the sidebar.
   const { conversations, refresh } = useConversations();
   // The conversation this session created, if any: the one whose title is
   // awaited below. A demo has no sidebar, so it never sets this.
@@ -85,7 +83,6 @@ function ChatSession({ conversationId, initialPrompt, demo }: ChatWindowProps) {
     [refresh, demo],
   );
 
-  // One useChat owns all chat state; children get values via props.
   const {
     messages,
     isLoading,

@@ -119,8 +119,8 @@ export function MessageList({
             </time>
           ) : null;
           return (
-            // Index keys are safe here — messages are append-only (no reorders
-            // or deletes), so React's positional matching never breaks.
+            // Index keys are safe: messages only append, or drop the trailing
+            // optimistic turn, neither of which breaks positional matching.
             <div
               key={`${message.role}-${index}`}
               className={`group flex flex-col ${isUser ? "items-end" : "items-start"}`}

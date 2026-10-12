@@ -81,10 +81,8 @@ export function useChat(
   const send = useCallback(
     async (text: string): Promise<void> => {
       const prompt = text.trim();
-      // Ignore empty input and block a second send while one is streaming.
       if (!prompt || isLoading) return;
 
-      // Optimistically show the user's message before the network round-trip.
       setMessages((prev) => [
         ...prev,
         { role: "user", content: prompt, created_at: new Date().toISOString() },
@@ -100,7 +98,7 @@ export function useChat(
       // Provenance for this turn. The server dedups only what it persists
       // and forwards every event unchanged, so two searches that hit the
       // same chunk arrive twice here; dedup by the server's key, first-seen
-      // order, so the live bubble matches the reloaded one.
+      // order, so the live turn's sources match the reloaded ones.
       const sources = new Map<string, Source>();
       try {
         await streamChat(
@@ -131,7 +129,6 @@ export function useChat(
           model,
         );
 
-        // Let the caller refresh the sidebar (new conversation / updated order).
         onTurnComplete?.();
       } catch (err) {
         if (err instanceof DemoLimitError) {

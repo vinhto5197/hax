@@ -59,7 +59,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             }),
           },
         );
-        // Rate-limited is safe to distinguish (no account-existence leak).
         if (res.status === 429) throw new RateLimit();
         // Unverified is also safe to distinguish — the password already
         // matched, so this isn't a credential-guessing oracle.

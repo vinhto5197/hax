@@ -11,7 +11,6 @@ import { signup } from "@/lib/authApi";
 
 // A FastAPI 422 detail is an array of { loc: [...] } items; loc names the
 // failing field (["body","name"] | ["body","email"] | ["body","password"]).
-// Narrow from unknown.
 function pydanticFieldFailed(detail: unknown, field: string): boolean {
   if (!Array.isArray(detail)) return false;
   return detail.some(
@@ -66,8 +65,7 @@ export default function SignupPage() {
   }
 
   async function handleResend() {
-    // Only reachable once sentTo is set (the check-your-inbox panel below);
-    // the guard satisfies the type.
+    // Only reachable once sentTo is set (the check-your-inbox panel below).
     if (!sentTo) return;
     await resend(sentTo);
   }

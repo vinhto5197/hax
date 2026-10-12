@@ -118,8 +118,8 @@ body {
     scroll-behavior: auto !important;
   }
 }
-/* Typography reads the tokens; the code block stays dark in both themes
-   because the highlight palette below assumes it. */
+/* Typography reads the tokens; the code block's colours are fixed (see the
+   highlight palette below). */
 .prose {
   --tw-prose-body: var(--ink);
   --tw-prose-headings: var(--ink);

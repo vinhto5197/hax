@@ -79,7 +79,7 @@ reminder too):
 make worker
 ```
 
-Stop all services (API, web, and the worker):
+Stop all services (API, web, and both workers):
 
 ```bash
 make dev-stop
@@ -224,13 +224,13 @@ Then in VS Code: **Run & Debug** → **"Full stack (API + Web)"** → **F5**. Th
 
 > **Don't run `make dev` and F5 together.** `make dev` already binds `:8000`, so the debugger's uvicorn fails to start and your backend breakpoints silently never fire. Use `make debug` (or `make dev-stop` first).
 
-Check what's running at any time with `make status` (a TCP probe of each service's port, plus a process check for the port-less Celery worker).
+Check what's running at any time with `make status` (a TCP probe of each service's port, plus a process check that a Celery worker is running; it does not tell the two apart).
 
 ## Stack
 
 | Layer      | Tech                                                               |
 | ---------- | ------------------------------------------------------------------ |
-| Frontend   | Next.js (SSR + routing), React, TypeScript                         |
+| Frontend   | Next.js (SSR + routing), React, TypeScript, Tailwind v4 (design tokens, ADR 0014) |
 | Backend    | FastAPI                                                            |
 | LLM        | Anthropic SDK — hand-rolled agentic tool-use loop (ADR 0002)       |
 | Embeddings | Voyage AI (ADR 0007); LangChain for text splitting only (ADR 0009) |
@@ -249,7 +249,7 @@ Check what's running at any time with `make status` (a TCP probe of each service
 2. **Data + RAG** *(shipped)* — User data upload (files), Celery ingestion (chunk → embed → pgvector), conversation memory, and chat as a single **agentic** route: retrieval is a model-invoked tool (`search_documents`, alongside a calculator, datetime, and a mocked email send) behind a hand-rolled tool-use harness with prompt caching and a model selector.
 2.5. **Auth + background titles** *(shipped)* — email/password + Google via NextAuth/Auth.js, `users` table, Postgres row-level security, email verification + password reset, conversations + documents scoped to a user; background chat title generation (Celery + Redis, `TITLE_MODEL`), with every API-side publish off the event loop (`apps/api/enqueue.py`).
 3. **Live on AWS** *(shipped; live since 2026-09-27)* — the smallest live stack first: one EC2 box running the compose topology (api, worker, web, Redis, Caddy) against managed RDS Postgres + pgvector and S3, all in Terraform; CI/CD that rolls the box on every merge; an anonymous demo on the landing page (a few turns about hax, no account). **3.5** grows it when each piece earns its cost: ALB, ElastiCache, SES, alarms, Fargate.
-4. **Structured outputs + polish** — table/structured view for results *(shipped)*, citation/source display *(shipped)*, cohesive UI.
+4. **Structured outputs + polish** — table/structured view for results *(shipped)*, citation/source display *(shipped)*, cohesive UI *(shipped)*.
 5. **Cleanup + hardening + eval** — test + eval infrastructure, drain backlogs, tighten deferred foot-guns.
 
 ## Architecture (v0)

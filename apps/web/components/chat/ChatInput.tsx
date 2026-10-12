@@ -59,7 +59,6 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
     const prompt = input.trim();
     if (!prompt || disabled) return;
 
-    // Clear optimistically — the input empties before the stream starts.
     setInput("");
     await onSend(prompt);
   }
