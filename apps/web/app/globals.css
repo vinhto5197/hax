@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 @custom-variant touch (@media (hover: none));
+@custom-variant short (@media (max-height: 500px));
 
 /* Design tokens, both themes; the theme follows the system (no toggle, no
    `.dark` class). Every colour in the app comes from these, except the modal
