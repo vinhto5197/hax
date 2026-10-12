@@ -97,9 +97,7 @@ function LoginForm() {
   return (
     <AuthCard title="Log in to hax">
       {arrivalBanner && (
-        <p className="text-sm text-green-600 dark:text-green-400">
-          {arrivalBanner}
-        </p>
+        <p className="text-small text-status-ready">{arrivalBanner}</p>
       )}
       <form onSubmit={handleSubmit} className="space-y-3">
         <input
@@ -118,9 +116,9 @@ function LoginForm() {
         />
         {error && (
           <div className="space-y-1">
-            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+            <p className="text-small text-status-failed">{error}</p>
             {showGoogleHint && (
-              <p className="text-sm text-black/60 dark:text-white/60">
+              <p className="text-small text-ink-2">
                 Signed up with Google? Use the button below — or reset your
                 password to add one.
               </p>
@@ -130,7 +128,7 @@ function LoginForm() {
                 type="button"
                 onClick={handleResend}
                 disabled={resendState === "sending"}
-                className="text-sm underline disabled:opacity-50"
+                className="text-small text-accent hover:underline disabled:opacity-50"
               >
                 Resend verification email
               </button>
@@ -144,13 +142,19 @@ function LoginForm() {
       </form>
       <OrDivider />
       <GoogleButton label="Continue with Google" />
-      <p className="text-sm text-black/60 dark:text-white/60">
+      <p className="text-small text-ink-2">
         No account?{" "}
-        <Link href="/signup" className="underline">
+        <Link
+          href="/signup"
+          className="text-accent underline underline-offset-2"
+        >
           Sign up
         </Link>{" "}
         ·{" "}
-        <Link href="/forgot-password" className="underline">
+        <Link
+          href="/forgot-password"
+          className="text-accent underline underline-offset-2"
+        >
           Forgot password?
         </Link>
       </p>

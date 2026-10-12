@@ -39,20 +39,18 @@ export function ResendStatus({
   sentCopy?: string;
 }) {
   if (state === "sent") {
-    return (
-      <p className="text-sm text-black/60 dark:text-white/60">{sentCopy}</p>
-    );
+    return <p className="text-small text-ink-2">{sentCopy}</p>;
   }
   if (state === "rate_limited") {
     return (
-      <p className="text-sm text-red-600 dark:text-red-400">
+      <p className="text-small text-status-failed">
         Too many attempts — try again in a few minutes.
       </p>
     );
   }
   if (state === "error") {
     return (
-      <p className="text-sm text-red-600 dark:text-red-400">
+      <p className="text-small text-status-failed">
         Something went wrong. Please try again.
       </p>
     );

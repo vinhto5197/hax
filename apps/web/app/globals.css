@@ -3,10 +3,9 @@
 @custom-variant touch (@media (hover: none));
 
 /* Design tokens, both themes; the theme follows the system (no toggle, no
-   `.dark` class). New UI takes colour only from these; the starter's
-   black/white opacities survive in unmigrated components and go as each is
-   restyled. `--background` / `--foreground` are aliases of ground / ink kept
-   for the classes still using them. */
+   `.dark` class). Every colour in the app comes from these, except the modal
+   scrim and the code block, which are dark in both themes, and the Google
+   button, which keeps Google's own colours. */
 :root {
   --ground: #fbfaf7;
   --surface-1: #ffffff;
@@ -23,9 +22,6 @@
   --status-failed: #b8352b;
   --bubble-user: #dbeaf9;
   --bubble-user-ink: #1b2a3a;
-
-  --background: var(--ground);
-  --foreground: var(--ink);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -64,8 +60,6 @@
   --color-status-failed: var(--status-failed);
   --color-bubble-user: var(--bubble-user);
   --color-bubble-user-ink: var(--bubble-user-ink);
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
 
   --font-sans: var(--font-instrument-sans), system-ui, sans-serif;
   --font-serif: var(--font-instrument-serif), Georgia, serif;

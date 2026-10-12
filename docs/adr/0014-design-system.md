@@ -34,13 +34,22 @@ a screen canvas) and is recorded here only in the form the code consumes.
   Mono for code), set as `--font-sans/serif/mono` so Tailwind's preflight
   applies the sans by default. Fetched at build time and served from our
   origin, so the CSP's `font-src 'self'` holds and no request leaves the
-  page. The text styles (caption 11/16 … display 28/34) and two radii
+  page. The text styles (caption 11/16 … display 34/40) and two radii
   (control 8, card 14) are tokens with their own names; Tailwind's defaults
   are left intact so untouched components keep rendering as before.
-- **`--background` and `--foreground` are aliases** of `ground` and `ink`,
-  not a second set of values, kept only until the classes that use them are
-  migrated. Components adopt the tokens one at a time; a component that has
-  not been migrated renders on the new page colours through the aliases.
+- **Three literals stay outside the tokens**, each for a reason the tokens
+  cannot express: the modal scrim and the code block are dark in both themes
+  (the highlight palette assumes a dark block), and the Google sign-in button
+  keeps Google's own light and dark colours, which its brand guidelines
+  require.
+- **Links**: a link inside a sentence is underlined, since colour alone does
+  not separate it from the words around it; a link standing on its own (a
+  footer row, a "back" line) is the accent with an underline on hover.
+- **Buttons** come in three tiers, and a screen has at most one of the first:
+  the accent fill for the primary action, the outlined control for secondary
+  actions, plain text for the rest. The composer's send square is the chat
+  screen's primary and is grey until there is something to send; the shell's
+  New chat is secondary.
 - **The wordmark is drawn, not typed**: `components/Wordmark.tsx` is an
   inline SVG (lowercase "hax", one stroke, round terminals) in
   `currentColor`, and `app/icon.svg` is the x of that mark on the accent
@@ -53,6 +62,6 @@ a screen canvas) and is recorded here only in the form the code consumes.
 - Builds depend on fonts.googleapis.com being reachable once. If that ever
   blocks a deploy, the upgrade is `next/font/local` with the OFL-licensed
   files vendored; nothing else changes.
-- The starter's utilities (`bg-black/5` and kin) remain valid CSS and are
-  removed only as each component is migrated, so the migration is reviewable
-  per component rather than as one diff.
+- The starter's utilities (`bg-black/5` and kin) were removed component by
+  component, each diff reviewable on its own; the `--background` and
+  `--foreground` aliases that bridged the migration went with the last one.

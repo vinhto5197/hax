@@ -87,9 +87,7 @@ function ResetPasswordForm() {
   if (checking) {
     return (
       <AuthCard title="Reset your password">
-        <p className="text-sm text-black/60 dark:text-white/60">
-          Checking your link…
-        </p>
+        <p className="text-small text-ink-2">Checking your link…</p>
       </AuthCard>
     );
   }
@@ -97,11 +95,14 @@ function ResetPasswordForm() {
   if (errorCode === "invalid_token") {
     return (
       <AuthCard title="Reset your password">
-        <p className="text-sm text-red-600 dark:text-red-400">
+        <p className="text-small text-status-failed">
           This link is invalid or has expired.
         </p>
-        <p className="text-sm text-black/60 dark:text-white/60">
-          <Link href="/forgot-password" className="underline">
+        <p className="text-small text-ink-2">
+          <Link
+            href="/forgot-password"
+            className="text-accent underline underline-offset-2"
+          >
             Request a new link
           </Link>
         </p>
@@ -121,7 +122,7 @@ function ResetPasswordForm() {
           onChange={(e) => setPassword(e.target.value)}
         />
         {errorCode && (
-          <p className="text-sm text-red-600 dark:text-red-400">
+          <p className="text-small text-status-failed">
             {errorCode === "rate_limited"
               ? "Too many attempts — try again in a few minutes."
               : errorCode === "validation"
