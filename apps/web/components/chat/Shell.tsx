@@ -10,12 +10,14 @@ import { Wordmark } from "@/components/Wordmark";
 import { SHOW_DOCUMENT_EVENT, revealDocumentRow } from "@/lib/showInPanel";
 
 const DESKTOP = "(min-width: 768px)";
+const SHORT = "(max-height: 500px)";
 const REVEAL_POLL_MS = 100;
 const REVEAL_TIMEOUT_MS = 2000;
 
 // The server cannot know the viewport, so it renders the desktop shell; the
-// static column is also CSS-hidden below `md`, which keeps a phone's first
-// paint free of the sidebar until the client measures and unmounts it.
+// static column is also CSS-hidden below `md` and under `short`, which keeps
+// a phone's first paint free of the sidebar until the client measures and
+// unmounts it.
 function useIsDesktop(): boolean {
   return useSyncExternalStore(
     (onChange) => {
@@ -28,15 +30,30 @@ function useIsDesktop(): boolean {
   );
 }
 
-// The shell owns the drawer, which exists only below `md`. The sidebar is
-// mounted once at a time: in the static column on desktop, in the drawer on a
-// phone while it is open, nowhere while it is closed. "Show in panel" and the
-// documents poll depend on that single mount. The drawer closes on navigation
-// so a tap on a conversation does not leave it covering the page.
+function useIsShort(): boolean {
+  return useSyncExternalStore(
+    (onChange) => {
+      const mq = window.matchMedia(SHORT);
+      mq.addEventListener("change", onChange);
+      return () => mq.removeEventListener("change", onChange);
+    },
+    () => window.matchMedia(SHORT).matches,
+    () => false,
+  );
+}
+
+// The shell owns the drawer, which exists only on a phone shell: a viewport
+// narrower than `md` or shorter than 500 px (a landscape phone). The sidebar
+// is mounted once at a time: in the static column on desktop, in the drawer
+// on a phone while it is open, nowhere while it is closed. "Show in panel"
+// and the documents poll depend on that single mount. The drawer closes on
+// navigation so a tap on a conversation does not leave it covering the page.
 export function Shell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const isDesktop = useIsDesktop();
+  const isShort = useIsShort();
+  const phoneShell = !isDesktop || isShort;
   const { startNewChat } = useConversations();
   const menuRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -52,8 +69,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
     setSeenPathname(pathname);
     setOpen(false);
   }
-  const drawerOpen = open && !isDesktop;
-  if (open && isDesktop) setOpen(false);
+  const drawerOpen = open && phoneShell;
+  if (open && !phoneShell) setOpen(false);
 
   // "Show in panel" (lib/showInPanel.ts): with the sidebar in the static
   // column the row is revealed at once; on a phone it is not mounted, so the
@@ -62,7 +79,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     function onShowDocument(event: Event) {
       const { documentId } = (event as CustomEvent<{ documentId: string }>)
         .detail;
-      if (isDesktop) {
+      if (!phoneShell) {
         revealDocumentRow(documentId);
         return;
       }
@@ -76,10 +93,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
     window.addEventListener(SHOW_DOCUMENT_EVENT, onShowDocument);
     return () => {
       window.removeEventListener(SHOW_DOCUMENT_EVENT, onShowDocument);
-      // A request made on one side of `md` does not carry to the other.
+      // A request made on one shell does not carry to the other.
       pendingDocRef.current = null;
     };
-  }, [isDesktop]);
+  }, [phoneShell]);
 
   useEffect(() => {
     if (!drawerOpen) return;
@@ -119,13 +136,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-dvh">
-      {isDesktop ? (
-        <div className="hidden w-72 shrink-0 md:block">
+      {phoneShell ? null : (
+        <div className="hidden w-72 shrink-0 md:block short:hidden">
           <Sidebar />
         </div>
-      ) : null}
+      )}
       {drawerOpen ? (
-        <div className="fixed inset-0 z-40 md:hidden">
+        <div className="fixed inset-0 z-40">
           <button
             type="button"
             aria-label="Close menu"
@@ -145,7 +162,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </div>
       ) : null}
       <div className="flex min-w-0 flex-1 flex-col" inert={drawerOpen}>
-        <header className="flex items-center justify-between border-b border-border px-1 py-1 md:hidden">
+        {/* Guarded by media query, not by `phoneShell`: the server renders the
+            desktop shell, and a phone's first paint must already show the bar. */}
+        <header className="flex items-center justify-between border-b border-border px-1 py-1 md:hidden short:flex">
           <button
             ref={menuRef}
             type="button"
