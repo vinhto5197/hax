@@ -7,8 +7,11 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useConversations } from "@/components/chat/ConversationsProvider";
 import { Sidebar } from "@/components/chat/Sidebar";
 import { Wordmark } from "@/components/Wordmark";
+import { SHOW_DOCUMENT_EVENT, revealDocumentRow } from "@/lib/showInPanel";
 
 const DESKTOP = "(min-width: 768px)";
+const REVEAL_POLL_MS = 100;
+const REVEAL_TIMEOUT_MS = 2000;
 
 // The server cannot know the viewport, so it renders the desktop shell; the
 // static column is also CSS-hidden below `md`, which keeps a phone's first
@@ -37,6 +40,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const { startNewChat } = useConversations();
   const menuRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const pendingDocRef = useRef<string | null>(null);
+  // The control that opened the drawer, to return focus to on close.
+  const openerRef = useRef<HTMLElement | null>(null);
 
   // Route change closes the drawer (the back button included), and so does
   // crossing to desktop with it open. Adjusted during render rather than in an
@@ -49,6 +55,32 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const drawerOpen = open && !isDesktop;
   if (open && isDesktop) setOpen(false);
 
+  // "Show in panel" (lib/showInPanel.ts): with the sidebar in the static
+  // column the row is revealed at once; on a phone it is not mounted, so the
+  // id waits for the drawer to open.
+  useEffect(() => {
+    function onShowDocument(event: Event) {
+      const { documentId } = (event as CustomEvent<{ documentId: string }>)
+        .detail;
+      if (isDesktop) {
+        revealDocumentRow(documentId);
+        return;
+      }
+      pendingDocRef.current = documentId;
+      openerRef.current =
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null;
+      setOpen(true);
+    }
+    window.addEventListener(SHOW_DOCUMENT_EVENT, onShowDocument);
+    return () => {
+      window.removeEventListener(SHOW_DOCUMENT_EVENT, onShowDocument);
+      // A request made on one side of `md` does not carry to the other.
+      pendingDocRef.current = null;
+    };
+  }, [isDesktop]);
+
   useEffect(() => {
     if (!drawerOpen) return;
     function onKeyDown(event: KeyboardEvent) {
@@ -58,9 +90,25 @@ export function Shell({ children }: { children: React.ReactNode }) {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     // Focus follows the dialog in, and returns to the control that opened it.
-    const opener = menuRef.current;
+    const opener = openerRef.current ?? menuRef.current;
+    openerRef.current = null;
     panelRef.current?.focus();
+    // The drawer's documents panel fetches its list after mount, so a pending
+    // reveal may find no row yet: poll briefly, until the row appears or the
+    // drawer closes.
+    const pending = pendingDocRef.current;
+    pendingDocRef.current = null;
+    let revealTimer: number | undefined;
+    if (pending) {
+      const deadline = Date.now() + REVEAL_TIMEOUT_MS;
+      const attempt = () => {
+        if (revealDocumentRow(pending) || Date.now() >= deadline) return;
+        revealTimer = window.setTimeout(attempt, REVEAL_POLL_MS);
+      };
+      attempt();
+    }
     return () => {
+      window.clearTimeout(revealTimer);
       document.removeEventListener("keydown", onKeyDown);
       document.body.style.overflow = previousOverflow;
       opener?.focus();
