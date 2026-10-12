@@ -16,8 +16,6 @@ import {
   uploadDocument,
 } from "@/lib/chatApi";
 
-// Upload a .txt/.md/.pdf/.docx file and watch ingestion status: uploads return 'pending'
-// and the panel polls until ready|failed. Local state — only this panel reads it.
 const STATUS_STYLES: Record<string, string> = {
   ready: "text-status-ready",
   failed: "text-status-failed",
@@ -36,6 +34,8 @@ function statusRank(doc: DocumentSummary): number {
   return 2;
 }
 
+// Local state; only this panel reads it. SourcesFooter reaches rows by DOM id
+// and nothing else.
 export function DocumentsPanel() {
   const [documents, setDocuments] = useState<DocumentSummary[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -166,7 +166,6 @@ export function DocumentsPanel() {
         PDF, Word (.docx), .txt or .md. Text PDFs only, up to 5 MB; plain text
         up to 256 KB.
       </p>
-      {/* Hidden file control; the styled button above proxies to it. */}
       <input
         ref={inputRef}
         type="file"
@@ -186,9 +185,7 @@ export function DocumentsPanel() {
           {ordered.map((doc) => {
             const statusClass = STATUS_STYLES[doc.status] ?? "text-ink-3";
             return (
-              // The id is the reach-in point for SourcesFooter's "Show in
-              // panel" (scroll + data-flash), which must not share state with
-              // this panel.
+              // Reach-in point for SourcesFooter's showInPanel.
               <li
                 key={doc.id}
                 id={`doc-${doc.id}`}
@@ -204,7 +201,6 @@ export function DocumentsPanel() {
                     {doc.filename}
                   </button>
                   {doc.error ? (
-                    // A failed document's reason opens on tap, not hover.
                     <button
                       type="button"
                       onClick={() =>

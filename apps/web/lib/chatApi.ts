@@ -18,7 +18,7 @@ export type ChatMessage = {
 export type ConversationSummary = components["schemas"]["ConversationOut"];
 export type ConversationDetail = components["schemas"]["ConversationDetailOut"];
 export type DocumentSummary = components["schemas"]["DocumentOut"];
-// One retrieved passage the model had in context for the turn (slice-level
+// One retrieved passage the model had in context for the turn (turn-level
 // provenance, not a citation): the server snapshots it on the message.
 export type Source = components["schemas"]["SourceOut"];
 

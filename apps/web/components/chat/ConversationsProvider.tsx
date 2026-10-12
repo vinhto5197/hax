@@ -11,13 +11,15 @@ import {
 
 import { type ConversationSummary, listConversations } from "@/lib/chatApi";
 
-// Shares the conversation list + refresh() between Sidebar and ChatWindow via
-// context, mounted once in the chat layout so navigation doesn't refetch.
+// Shares the conversation list and refresh() through context. Mounted in the
+// chat layout (and on the landing page for a demo), so navigation doesn't
+// refetch the list.
 type ConversationsContextValue = {
   conversations: ConversationSummary[];
   // Stable identity — safe as an effect/callback dep.
   refresh: () => void;
-  // Bumped by "+ New chat". A lazy-created conversation updates the URL via
+  // Bumped by startNewChat (every new-chat link, and deleting the open
+  // conversation). A lazy-created conversation updates the URL via
   // history.replaceState, which Next's router never sees — so clicking
   // "+ New chat" from that state is a same-route navigation with NO prop
   // change. The nonce is the reset signal routing can't provide: ChatWindow
@@ -60,14 +62,11 @@ export function ConversationsProvider({
   }, []);
 
   const startNewChat = useCallback(() => {
-    // On a real /chat/[id], navigation alone resets the session (prop change ->
-    // key change); bump only when the prop is null (lazy-created or fresh chat).
     if (routedIdRef.current === null) {
       setNewChatNonce((n) => n + 1);
     }
   }, []);
 
-  // Initial load; refresh is stable so this runs once.
   useEffect(() => {
     refresh();
   }, [refresh]);
@@ -87,8 +86,6 @@ export function ConversationsProvider({
   );
 }
 
-// Read the context. The guard fails loudly outside a Provider and narrows the
-// return type from `... | null` to non-null.
 export function useConversations(): ConversationsContextValue {
   const context = useContext(ConversationsContext);
   if (!context) {

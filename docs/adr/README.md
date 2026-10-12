@@ -20,7 +20,7 @@ Each ADR is a single markdown file: `NNNN-kebab-case-title.md` with a numeric pr
 ## Rules
 
 - **One decision per ADR.** Don't bundle.
-- **Immutable.** Once accepted, edit only to mark `superseded by`. If the decision changes, write a new ADR that supersedes the old one.
+- **Stable once accepted.** A refinement of the same decision is a dated addendum at the end; a change of decision is a new ADR that supersedes the old one. Edits in place are for the milestone that produced the ADR, before it closes.
 - **Decisions, not aspirations.** ADRs describe choices that are *in the code*, not "we should do X someday."
 
 ## Inspired by

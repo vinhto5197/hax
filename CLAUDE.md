@@ -80,9 +80,15 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
      visitors), branded Google sign-in, source chips that reach the panel,
      highlighted code (bundled), hover-only times with a copy button,
      in-place sign-out on public pages.
+   - Slice 4b *(2026-10-11)*: the design pass — a design system (tokens for
+     both themes, three self-hosted typefaces, text and radius scales) in
+     the Tailwind theme, a drawn wordmark and favicon, every screen on the
+     tokens: open chat thread with prose replies, a growing composer, a
+     collapsible documents panel, the sidebar as a drawer on a phone, focus
+     ring and reduced motion. ADR 0014.
    - Table / structured view for results (not only free-form text) *(shipped)*
    - Citation/source display (what data the answer used) *(shipped)*
-   - Cohesive UI — feels like a product, not a demo collection
+   - Cohesive UI — feels like a product, not a demo collection *(shipped)*
 
 5. **Milestone 5 — Cleanup + hardening + eval** *(final pass before v0 is "done")*
    - Test infrastructure: extend the pytest suite (async DB/API fixtures and a
@@ -126,7 +132,7 @@ this repo. Write prod-level comments only:
 - **Never:** tutorials, language-feature explanations, milestone/session
   history, or narration of what the next line visibly does.
 # Tech stack
-- Frontend: Next.js (SSR + routing) + React + TypeScript
+- Frontend: Next.js (SSR + routing) + React + TypeScript + Tailwind v4 (design tokens in `apps/web/app/globals.css`, ADR 0014)
 - Backend: FastAPI (LangChain only for text splitting — ADR 0009)
 - Streaming: SSE (FastAPI StreamingResponse) for chat
 - Async: Celery (tasks) + Redis (broker + cache)

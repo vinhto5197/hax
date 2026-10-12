@@ -19,8 +19,8 @@ function apiOrigin(): string {
 // are the load-bearing directives; the rest close the usual framing and
 // form-post exits.
 // - 'unsafe-inline' in script-src is required by Next's inline bootstrap and
-//   hydration scripts; a per-request nonce needs middleware + dynamic
-//   rendering and is not in place yet.
+//   hydration scripts; a per-request nonce needs proxy.ts + dynamic
+//   rendering, so 'unsafe-inline' stays.
 // - 'unsafe-eval' is only Next dev's HMR/react-refresh and never ships to prod.
 // - The Auth.js Google flow needs no extra origin: signIn() POSTs same-origin
 //   and then assigns window.location (a top-level navigation, which CSP does

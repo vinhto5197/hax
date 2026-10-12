@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export const metadata = { title: "Privacy — hax" };
 
-// Public (middleware). Plain statements of what the service stores and who
+// Public (proxy.ts PUBLIC_PREFIXES). Plain statements of what the service stores and who
 // processes it; keep it true when a provider or a data flow changes.
 export default function Privacy() {
   return (

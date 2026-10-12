@@ -12,7 +12,6 @@ import { type ConversationSummary, deleteConversation } from "@/lib/chatApi";
 import { formatRelative } from "@/lib/time";
 
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
-  // Shared list from context (see ConversationsProvider), not a prop.
   const { conversations, startNewChat, refresh } = useConversations();
   const { data: session } = useSession();
   const pathname = usePathname();
@@ -24,7 +23,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   // tab, so the live session can flip to null under a still-mounted shell.
   // Rendering off the live value would unmount just this block and leave the
   // shell half-dissolved. Eviction is owned elsewhere — apiFetch's 401 handler
-  // (lib/chatApi.ts) signs out and middleware redirects, as does a reload.
+  // (lib/chatApi.ts) signs out and proxy.ts redirects, as does a reload.
   const [account, setAccount] = useState<{
     email: string;
     name: string | null;
@@ -46,12 +45,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     try {
       await deleteConversation(conversation.id);
       if (pathname === `/chat/${conversation.id}`) {
-        // Deleting the open conversation resets to a fresh chat. Two cases,
-        // each a no-op in the other: a lazy-created conversation only has this
-        // URL via history.replaceState (the router still thinks it's on /chat,
-        // so push() won't remount — the nonce from startNewChat is the reset);
-        // a real /chat/[id] remounts via push()'s prop change (no nonce bump —
-        // startNewChat skips it when a routed id is reported).
+        // Reset to a fresh chat: startNewChat covers a lazy-created URL, push()
+        // covers a routed one (see ConversationsProvider).
         startNewChat();
         router.push("/chat");
       }
@@ -77,8 +72,6 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         >
           <Wordmark />
         </Link>
-        {/* startNewChat itself decides whether a nonce bump is needed (only when
-            no real /chat/[id] is mounted — see ConversationsProvider). */}
         <Link
           href="/chat"
           onClick={() => {

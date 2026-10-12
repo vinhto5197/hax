@@ -42,8 +42,6 @@ const PROSE_CLASSES = [
   "prose-p:my-2 prose-p:first:mt-0 prose-p:last:mb-0",
   "prose-headings:my-2 prose-headings:font-semibold",
   "prose-h1:text-title prose-h2:text-lead prose-h3:text-body prose-h4:text-body prose-h4:font-medium",
-  // Typography's code block is dark with light text in both themes; an
-  // override of only the background once left light text on near-white.
   "prose-pre:my-2",
   "prose-strong:font-bold",
   "prose-code:before:content-none prose-code:after:content-none",

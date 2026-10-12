@@ -25,7 +25,7 @@ function showInPanel(documentId: string) {
 
 // Provenance under an assistant reply: the passages the model had in front
 // of it, grouped by document. Shown only on committed turns — the live
-// bubble has the status line instead. "Searched", not "cited": nothing here
+// turn shows the status line instead. "Searched", not "cited": nothing here
 // claims which sentence rests on which passage.
 export function SourcesFooter({ sources }: SourcesFooterProps) {
   const [open, setOpen] = useState<string | null>(null);

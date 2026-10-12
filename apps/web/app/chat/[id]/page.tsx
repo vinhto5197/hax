@@ -1,6 +1,5 @@
 import { ChatWindow } from "@/components/chat/ChatWindow";
 
-// Next 15+ passes route params as a Promise.
 export default async function ChatConversationPage({
   params,
 }: {
