@@ -50,7 +50,7 @@ export function NewChat({
       </div>
       <div className="flex flex-1 flex-col gap-4">
         {visitor ? (
-          <p className="text-center text-sm text-black/60 dark:text-white/60">
+          <p className="text-center text-lead text-ink-2">
             Chat with your own documents. Try it without an account: ask about
             hax itself.
           </p>
@@ -63,7 +63,7 @@ export function NewChat({
                 type="button"
                 disabled={disabled}
                 onClick={() => void onSend(chip)}
-                className="rounded-full border px-3 py-1 text-sm hover:bg-black/5 disabled:opacity-50 dark:hover:bg-white/10"
+                className="rounded-full border border-border-control px-3 py-1.5 text-small text-ink hover:bg-surface-2 disabled:opacity-50"
               >
                 {chip}
               </button>
@@ -72,7 +72,7 @@ export function NewChat({
         ) : null}
         <ChatInput onSend={onSend} disabled={disabled} />
         {error ? (
-          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+          <p className="text-small text-status-failed">{error}</p>
         ) : null}
       </div>
     </div>

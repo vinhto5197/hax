@@ -60,7 +60,7 @@ function VerifyEmailForm() {
   if (status === "invalid_token") {
     return (
       <AuthCard title="Verify your email">
-        <p className="text-sm text-red-600 dark:text-red-400">
+        <p className="text-small text-status-failed">
           This link is invalid or has expired.
         </p>
         <form onSubmit={handleResendSubmit} className="space-y-2">
@@ -84,8 +84,11 @@ function VerifyEmailForm() {
           state={resendState}
           sentCopy="Sent — if an account exists, a new link is on its way."
         />
-        <p className="text-sm text-black/60 dark:text-white/60">
-          <Link href="/login" className="underline">
+        <p className="text-small text-ink-2">
+          <Link
+            href="/login"
+            className="text-accent underline underline-offset-2"
+          >
             Back to log in
           </Link>
         </p>
@@ -96,7 +99,7 @@ function VerifyEmailForm() {
   return (
     <AuthCard title="Confirm your email">
       {confirmError && (
-        <p className="text-sm text-red-600 dark:text-red-400">{confirmError}</p>
+        <p className="text-small text-status-failed">{confirmError}</p>
       )}
       <button
         type="button"

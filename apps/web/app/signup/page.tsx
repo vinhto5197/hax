@@ -75,7 +75,7 @@ export default function SignupPage() {
   if (sentTo) {
     return (
       <AuthCard title="Check your inbox">
-        <p className="text-sm">
+        <p className="text-body">
           We sent a verification link to {sentTo}. It expires in 24 hours.
         </p>
         <button
@@ -87,8 +87,11 @@ export default function SignupPage() {
           Didn&apos;t get it? Resend
         </button>
         <ResendStatus state={resendState} />
-        <p className="text-sm text-black/60 dark:text-white/60">
-          <Link href="/login" className="underline">
+        <p className="text-small text-ink-2">
+          <Link
+            href="/login"
+            className="text-accent underline underline-offset-2"
+          >
             Back to log in
           </Link>
         </p>
@@ -125,18 +128,19 @@ export default function SignupPage() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
-        {error && (
-          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-        )}
+        {error && <p className="text-small text-status-failed">{error}</p>}
         <button type="submit" disabled={submitting} className={buttonClass}>
           {submitting ? "Signing up…" : "Sign up"}
         </button>
       </form>
       <OrDivider />
       <GoogleButton label="Continue with Google" />
-      <p className="text-sm text-black/60 dark:text-white/60">
+      <p className="text-small text-ink-2">
         Already have an account?{" "}
-        <Link href="/login" className="underline">
+        <Link
+          href="/login"
+          className="text-accent underline underline-offset-2"
+        >
           Log in
         </Link>
       </p>

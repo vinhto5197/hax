@@ -36,12 +36,15 @@ export default function ForgotPasswordPage() {
   if (sentTo) {
     return (
       <AuthCard title="Check your inbox">
-        <p className="text-sm">
+        <p className="text-body">
           If an account exists for {sentTo}, we&apos;ve sent a reset link (valid
           for 1 hour).
         </p>
-        <p className="text-sm text-black/60 dark:text-white/60">
-          <Link href="/login" className="underline">
+        <p className="text-small text-ink-2">
+          <Link
+            href="/login"
+            className="text-accent underline underline-offset-2"
+          >
             Back to log in
           </Link>
         </p>
@@ -60,15 +63,16 @@ export default function ForgotPasswordPage() {
           onChange={(e) => setEmail(e.target.value)}
           className={fieldClass}
         />
-        {error && (
-          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-        )}
+        {error && <p className="text-small text-status-failed">{error}</p>}
         <button type="submit" disabled={submitting} className={buttonClass}>
           {submitting ? "Sending…" : "Send reset link"}
         </button>
       </form>
-      <p className="text-sm text-black/60 dark:text-white/60">
-        <Link href="/login" className="underline">
+      <p className="text-small text-ink-2">
+        <Link
+          href="/login"
+          className="text-accent underline underline-offset-2"
+        >
           Back to log in
         </Link>
       </p>
