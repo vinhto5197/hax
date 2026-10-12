@@ -1,9 +1,11 @@
 """Chat REQUEST (input) schema — the body POST /api/chat parses."""
 
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, StringConstraints
+
+ModelId = Literal["claude-haiku-4-5", "claude-sonnet-4-6", "claude-opus-4-8"]
 
 
 class ChatRequest(BaseModel):
@@ -21,6 +23,8 @@ class ChatRequest(BaseModel):
     # None on the first turn of a new chat — the server lazily creates a
     # conversation and returns its id in the SSE prelude.
     conversation_id: UUID | None = None
-    # Optional per-request model override (UI dropdown: haiku/sonnet/opus);
-    # None -> the server's DEFAULT_MODEL (env LLM_MODEL).
-    model: str | None = None
+    # Optional per-request model override. The allowed ids are exactly the
+    # choices the UI offers (ChatWindow's MODEL_OPTIONS); anything else is a
+    # 422 before any model is called. None -> the server's DEFAULT_MODEL
+    # (env LLM_MODEL); the web sends null, never "", for Default.
+    model: ModelId | None = None

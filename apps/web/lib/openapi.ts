@@ -331,7 +331,7 @@ export interface components {
             /** Conversation Id */
             conversation_id?: string | null;
             /** Model */
-            model?: string | null;
+            model?: ("claude-haiku-4-5" | "claude-sonnet-4-6" | "claude-opus-4-8") | null;
         };
         /** ConversationDetailOut */
         ConversationDetailOut: {

@@ -350,3 +350,5 @@ retrieval (built in a fast pass, dropped: more machinery than the demo
 needs; the reference texts fit in the prompt). A persistent demo
 conversation with a URL (dropped: the demo is one sitting). A
 `sessionStorage` tab marker to end the demo (dropped: a proxy rule does it).
+
+**2026-10-11 — the model allowlist.** `ChatRequest.model` is an allowlist of the ids the UI offers (a `Literal`; anything else is a 422 before a turn is spent or a model is called) — a member could previously name any model id the SDK would accept. A visitor stays pinned to the default model; the turn cap is the demo's spend bound. The model select is a member's, and the first turn of a new chat carries the choice too.
