@@ -3,6 +3,7 @@
 import { useState, useSyncExternalStore } from "react";
 
 import { ChatInput } from "@/components/chat/ChatInput";
+import { ModelSelect } from "@/components/chat/ModelSelect";
 import { pickGreeting } from "@/lib/greeting";
 
 interface NewChatProps {
@@ -12,6 +13,11 @@ interface NewChatProps {
   // also what marks the screen as the visitor's.
   chips: string[];
   onSend: (text: string) => Promise<void>;
+  // The model for the first turn; `onModelChange` marks a member and shows
+  // the select (a visitor has no choice, and `name` is no marker: a nameless
+  // member exists).
+  model?: string;
+  onModelChange?: (value: string) => void;
   error?: string | null;
   disabled?: boolean;
 }
@@ -23,6 +29,8 @@ export function NewChat({
   name,
   chips,
   onSend,
+  model,
+  onModelChange,
   error,
   disabled = false,
 }: NewChatProps) {
@@ -44,6 +52,15 @@ export function NewChat({
     // its baseline is the vertical centre whatever follows it.
     <div className="mx-auto flex h-full w-full max-w-4xl flex-col p-4">
       <div className="flex flex-1 flex-col justify-end pb-4">
+        {onModelChange ? (
+          <div className="flex justify-end">
+            <ModelSelect
+              value={model ?? ""}
+              onChange={onModelChange}
+              disabled={disabled}
+            />
+          </div>
+        ) : null}
         <h1 className="text-center font-serif text-display text-ink">
           {mounted ? greeting : "\u00a0"}
         </h1>

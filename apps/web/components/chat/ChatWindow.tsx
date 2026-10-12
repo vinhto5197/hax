@@ -7,20 +7,8 @@ import { ChatInput } from "@/components/chat/ChatInput";
 import { DemoLimitModal } from "@/components/chat/DemoLimitModal";
 import { useConversations } from "@/components/chat/ConversationsProvider";
 import { MessageList } from "@/components/chat/MessageList";
+import { ModelSelect } from "@/components/chat/ModelSelect";
 import { useChat } from "@/hooks/useChat";
-import type { components } from "@/lib/openapi";
-
-// "" = server default (env LLM_MODEL). The Default label deliberately names no
-// model — that's server-owned config and a name here would go stale. The ids
-// are typed against the API's allowlist, so a change on either side fails
-// `tsc` rather than a request.
-type ModelId = NonNullable<components["schemas"]["ChatRequest"]["model"]>;
-const MODEL_OPTIONS = [
-  { value: "", label: "Default" },
-  { value: "claude-haiku-4-5", label: "Haiku" },
-  { value: "claude-sonnet-4-6", label: "Sonnet" },
-  { value: "claude-opus-4-8", label: "Opus" },
-] as const satisfies readonly { value: "" | ModelId; label: string }[];
 
 // A new conversation's title is generated in the background and usually lands
 // a moment after the first reply; the sidebar otherwise learns it only on the
@@ -31,19 +19,22 @@ const TITLE_POLL_TICKS = 10;
 
 // A ChatWindow is mounted only once there is something to show: a routed
 // conversation, or a new one whose first message (`initialPrompt`, from the
-// NewChat screen) is sent on mount. `demo` marks the landing page's visitor
-// chat: the conversation gets no URL (a real request for /chat/* ends a demo —
-// see proxy.ts) and there is no model choice (the API pins a visitor to the
+// NewChat screen) is sent on mount, carrying the model chosen on that screen
+// (`initialModel`). `demo` marks the landing page's visitor chat: the
+// conversation gets no URL (a real request for /chat/* ends a demo — see
+// proxy.ts) and there is no model choice (the API pins a visitor to the
 // default model).
 interface ChatWindowProps {
   conversationId: string | null;
   initialPrompt?: string;
+  initialModel?: string;
   demo?: boolean;
 }
 
 export function ChatWindow({
   conversationId,
   initialPrompt,
+  initialModel,
   demo = false,
 }: ChatWindowProps) {
   // Session identity = (conversationId, newChatNonce). The key forces a clean
@@ -62,13 +53,19 @@ export function ChatWindow({
       key={`${conversationId ?? "new"}:${newChatNonce}`}
       conversationId={conversationId}
       initialPrompt={initialPrompt}
+      initialModel={initialModel}
       demo={demo}
     />
   );
 }
 
-function ChatSession({ conversationId, initialPrompt, demo }: ChatWindowProps) {
-  const [model, setModel] = useState("");
+function ChatSession({
+  conversationId,
+  initialPrompt,
+  initialModel,
+  demo,
+}: ChatWindowProps) {
+  const [model, setModel] = useState(initialModel ?? "");
   const { conversations, refresh } = useConversations();
   // The conversation this session created, if any: the one whose title is
   // awaited below. A demo has no sidebar, so it never sets this.
@@ -139,21 +136,7 @@ function ChatSession({ conversationId, initialPrompt, demo }: ChatWindowProps) {
             to chat over your own documents.
           </p>
         ) : (
-          <label className="flex items-center gap-2 text-caption text-ink-3">
-            Model
-            <select
-              value={model}
-              onChange={(event) => setModel(event.target.value)}
-              disabled={isLoading}
-              className="rounded-control border border-border-control bg-surface-1 px-2 py-1 text-small text-ink disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {MODEL_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <ModelSelect value={model} onChange={setModel} disabled={isLoading} />
         )}
       </div>
 
