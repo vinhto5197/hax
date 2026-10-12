@@ -18,16 +18,25 @@ export function NewChatFlow({ name }: { name: string | null }) {
 // Keyed on the nonce above: "+ New chat" from a lazy-created conversation is
 // a same-route navigation (the URL came from history.replaceState), so without
 // the remount the stored prompt would survive and be sent again into the
-// fresh session.
+// fresh session. The model choice travels with the first prompt.
 function NewChatFlowSession({ name }: { name: string | null }) {
   const [prompt, setPrompt] = useState<string | null>(null);
+  const [model, setModel] = useState("");
   if (prompt !== null) {
-    return <ChatWindow conversationId={null} initialPrompt={prompt} />;
+    return (
+      <ChatWindow
+        conversationId={null}
+        initialPrompt={prompt}
+        initialModel={model}
+      />
+    );
   }
   return (
     <NewChat
       name={name}
       chips={[]}
+      model={model}
+      onModelChange={setModel}
       onSend={async (text) => {
         setPrompt(text);
       }}
