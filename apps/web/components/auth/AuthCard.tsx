@@ -1,3 +1,5 @@
+import { PublicHeader } from "@/components/PublicHeader";
+
 export function AuthCard({
   title,
   children,
@@ -6,10 +8,13 @@ export function AuthCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
-      <div className="w-full max-w-sm space-y-4 rounded-card border border-border bg-surface-1 p-6">
-        <h1 className="text-title font-semibold">{title}</h1>
-        {children}
+    <div className="flex min-h-dvh flex-col">
+      <PublicHeader />
+      <div className="flex flex-1 items-center justify-center p-4">
+        <div className="w-full max-w-sm space-y-4 rounded-card border border-border bg-surface-1 p-6">
+          <h1 className="text-title font-semibold">{title}</h1>
+          {children}
+        </div>
       </div>
     </div>
   );
