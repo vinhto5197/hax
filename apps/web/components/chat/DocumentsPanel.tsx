@@ -182,7 +182,7 @@ export function DocumentsPanel() {
           {uploading ? "Uploading…" : "+ Upload"}
         </button>
       </summary>
-      <p className="px-1 text-small text-ink-3">
+      <p className="px-1 text-small text-ink-3 short:hidden">
         PDF, Word (.docx), .txt or .md. Text PDFs only, up to 5 MB; plain text
         up to 256 KB.
       </p>
@@ -201,7 +201,7 @@ export function DocumentsPanel() {
           No documents yet. Upload a .txt, .md, .pdf or .docx to chat over it.
         </p>
       ) : (
-        <ul className="flex max-h-24 flex-col gap-1 overflow-y-auto short:max-h-12">
+        <ul className="flex max-h-24 flex-col gap-1 overflow-y-auto short:max-h-20">
           {ordered.map((doc) => {
             const statusClass = STATUS_STYLES[doc.status] ?? "text-ink-3";
             return (
