@@ -36,8 +36,8 @@ function statusRank(doc: DocumentSummary): number {
   return 2;
 }
 
-// Local state; only this panel reads it. SourcesFooter reaches rows by DOM id
-// and nothing else.
+// Local state; only this panel reads it. Shell reveals a row by DOM id
+// (lib/showInPanel) and nothing else.
 export function DocumentsPanel() {
   const [documents, setDocuments] = useState<DocumentSummary[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -205,7 +205,7 @@ export function DocumentsPanel() {
           {ordered.map((doc) => {
             const statusClass = STATUS_STYLES[doc.status] ?? "text-ink-3";
             return (
-              // Reach-in point for SourcesFooter's showInPanel.
+              // Reach-in point for lib/showInPanel's revealDocumentRow.
               <li
                 key={doc.id}
                 id={`doc-${doc.id}`}

@@ -3,24 +3,10 @@
 import { useState } from "react";
 
 import { type Source } from "@/lib/chatApi";
+import { requestShowInPanel } from "@/lib/showInPanel";
 
 interface SourcesFooterProps {
   sources: Source[];
-}
-
-const FLASH_MS = 1200;
-
-// Reaches the documents panel by DOM id: its state is local to it, and a
-// provenance link must not couple the two components; opens the panel if
-// collapsed. The sources are a snapshot that outlives the document, so a
-// missing row is normal.
-function showInPanel(documentId: string) {
-  const row = document.getElementById(`doc-${documentId}`);
-  if (!row) return;
-  row.closest("details")?.setAttribute("open", "");
-  row.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  row.setAttribute("data-flash", "true");
-  window.setTimeout(() => row.removeAttribute("data-flash"), FLASH_MS);
 }
 
 // Provenance under an assistant reply: the passages the model had in front
@@ -78,7 +64,7 @@ export function SourcesFooter({ sources }: SourcesFooterProps) {
         <>
           <button
             type="button"
-            onClick={() => showInPanel(open)}
+            onClick={() => requestShowInPanel(open)}
             className="mt-2 text-small text-ink-2 underline-offset-2 hover:underline"
           >
             Show in panel
