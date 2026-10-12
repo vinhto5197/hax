@@ -25,13 +25,13 @@ export function ModelSelect({
   disabled?: boolean;
 }) {
   return (
-    <label className="flex items-center gap-2 text-caption text-ink-3">
-      Model
+    <label className="flex items-center gap-1 text-caption text-ink-3">
+      <span className="sr-only">Model</span>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
         disabled={disabled}
-        className="rounded-control border border-border-control bg-surface-1 px-2 py-1 text-small text-ink disabled:cursor-not-allowed disabled:opacity-50"
+        className="rounded-control bg-transparent px-2 py-1 text-small text-ink-2 hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {MODEL_OPTIONS.map((option) => (
           <option key={option.value} value={option.value}>

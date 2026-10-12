@@ -7,7 +7,6 @@ import { ChatInput } from "@/components/chat/ChatInput";
 import { DemoLimitModal } from "@/components/chat/DemoLimitModal";
 import { useConversations } from "@/components/chat/ConversationsProvider";
 import { MessageList } from "@/components/chat/MessageList";
-import { ModelSelect } from "@/components/chat/ModelSelect";
 import { useChat } from "@/hooks/useChat";
 
 // A new conversation's title is generated in the background and usually lands
@@ -122,23 +121,15 @@ function ChatSession({
 
   return (
     <div className="flex h-full flex-col">
-      <div
-        className={`mx-auto flex w-full max-w-4xl items-center px-4 pt-4 ${
-          demo ? "justify-start" : "justify-end"
-        }`}
-      >
-        {demo ? (
-          <p className="text-small text-ink-3">
-            You&apos;re trying hax as a guest: a few turns, then{" "}
-            <Link href="/signup" className="text-accent hover:underline">
-              sign up
-            </Link>{" "}
-            to chat over your own documents.
-          </p>
-        ) : (
-          <ModelSelect value={model} onChange={setModel} disabled={isLoading} />
-        )}
-      </div>
+      {demo ? (
+        <p className="mx-auto w-full max-w-4xl px-4 pt-4 text-small text-ink-3">
+          You&apos;re trying hax as a guest: a few turns, then{" "}
+          <Link href="/signup" className="text-accent hover:underline">
+            sign up
+          </Link>{" "}
+          to chat over your own documents.
+        </p>
+      ) : null}
 
       <MessageList
         messages={messages}
@@ -151,7 +142,12 @@ function ChatSession({
         {error ? (
           <p className="mb-2 text-small text-status-failed">{error}</p>
         ) : null}
-        <ChatInput onSend={send} disabled={isLoading || limited} />
+        <ChatInput
+          onSend={send}
+          disabled={isLoading || limited}
+          model={demo ? undefined : model}
+          onModelChange={demo ? undefined : setModel}
+        />
       </div>
 
       {limited ? <DemoLimitModal /> : null}

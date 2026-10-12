@@ -167,7 +167,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           </div>
           <button
             type="button"
-            onClick={() => signOut({ callbackUrl: "/login" })}
+            onClick={() => signOut({ callbackUrl: "/" })}
             className="shrink-0 text-body text-ink-2 hover:text-ink"
           >
             Sign out

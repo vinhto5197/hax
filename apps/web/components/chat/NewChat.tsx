@@ -3,7 +3,6 @@
 import { useState, useSyncExternalStore } from "react";
 
 import { ChatInput } from "@/components/chat/ChatInput";
-import { ModelSelect } from "@/components/chat/ModelSelect";
 import { pickGreeting } from "@/lib/greeting";
 
 interface NewChatProps {
@@ -78,16 +77,12 @@ export function NewChat({
             ))}
           </div>
         ) : null}
-        <ChatInput onSend={onSend} disabled={disabled} />
-        {onModelChange ? (
-          <div className="flex justify-end">
-            <ModelSelect
-              value={model ?? ""}
-              onChange={onModelChange}
-              disabled={disabled}
-            />
-          </div>
-        ) : null}
+        <ChatInput
+          onSend={onSend}
+          disabled={disabled}
+          model={model}
+          onModelChange={onModelChange}
+        />
         {error ? (
           <p className="text-small text-status-failed">{error}</p>
         ) : null}
