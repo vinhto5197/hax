@@ -120,9 +120,10 @@ body {
   }
 }
 
-/* Below md a control's text is 16 px: iOS Safari zooms the page into any
-   smaller control on focus, and the zoom outlives the keyboard. */
-@media (max-width: 767px) {
+/* On a touchscreen a control's text is 16 px: iOS Safari zooms the page into
+   any smaller control on focus, in either orientation, and the zoom outlives
+   the keyboard. */
+@media (hover: none) {
   input,
   textarea,
   select {
