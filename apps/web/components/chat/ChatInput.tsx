@@ -72,7 +72,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
       <textarea
         ref={inputRef}
         rows={1}
-        className="block max-h-[40vh] min-w-0 flex-1 resize-none bg-transparent py-1.5 pr-1 pl-2 text-body text-ink outline-none"
+        className="block max-h-[40vh] min-w-0 flex-1 resize-none bg-transparent py-1.5 pr-1 pl-2 text-body text-ink outline-hidden"
         placeholder="Type your prompt..."
         value={input}
         onChange={(event) => setInput(event.target.value)}

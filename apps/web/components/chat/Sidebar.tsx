@@ -11,7 +11,7 @@ import { Wordmark } from "@/components/Wordmark";
 import { type ConversationSummary, deleteConversation } from "@/lib/chatApi";
 import { formatRelative } from "@/lib/time";
 
-export function Sidebar() {
+export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   // Shared list from context (see ConversationsProvider), not a prop.
   const { conversations, startNewChat, refresh } = useConversations();
   const { data: session } = useSession();
@@ -64,11 +64,14 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="flex h-screen w-72 shrink-0 flex-col gap-3 border-r border-border p-3">
+    <aside className="flex h-full w-full flex-col gap-3 border-r border-border p-3">
       <div className="flex items-center justify-between">
         <Link
           href="/chat"
-          onClick={startNewChat}
+          onClick={() => {
+            startNewChat();
+            onNavigate?.();
+          }}
           aria-label="hax home"
           className="text-ink"
         >
@@ -78,7 +81,10 @@ export function Sidebar() {
             no real /chat/[id] is mounted — see ConversationsProvider). */}
         <Link
           href="/chat"
-          onClick={startNewChat}
+          onClick={() => {
+            startNewChat();
+            onNavigate?.();
+          }}
           className="rounded-control border border-border-control px-3 py-1.5 text-body text-ink hover:bg-surface-2"
         >
           + New chat
@@ -108,6 +114,7 @@ export function Sidebar() {
               >
                 <Link
                   href={`/chat/${conversation.id}`}
+                  onClick={onNavigate}
                   className="min-w-0 flex-1 px-3 py-2 text-body"
                 >
                   {/* Titling runs in the worker off the first user message and
