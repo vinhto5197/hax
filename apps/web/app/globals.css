@@ -96,6 +96,28 @@ body {
   scrollbar-width: thin;
   scrollbar-color: var(--border-control) transparent;
 }
+
+/* Keyboard focus is the accent ring on every control; pointer focus draws
+   nothing (focus-visible), and the composer's textarea opts out because its
+   frame shows focus instead. In the base layer so a utility (`outline-none`)
+   can override it: an unlayered rule would beat every utility. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
 /* Typography reads the tokens; the code block stays dark in both themes
    because the highlight palette below assumes it. */
 .prose {

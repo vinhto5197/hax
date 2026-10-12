@@ -48,7 +48,7 @@ export default function Home() {
   if (initialPrompt !== null) {
     return (
       <ConversationsProvider>
-        <main className="h-screen">
+        <main className="h-dvh">
           <ChatWindow
             conversationId={null}
             initialPrompt={initialPrompt}
@@ -60,7 +60,7 @@ export default function Home() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col justify-center">
+    <main className="flex min-h-dvh flex-col justify-center">
       <header className="flex w-full items-center justify-between px-8 py-4 text-ink">
         <Wordmark />
         <nav className="flex items-center gap-4">
