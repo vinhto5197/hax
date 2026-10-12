@@ -52,15 +52,6 @@ export function NewChat({
     // its baseline is the vertical centre whatever follows it.
     <div className="mx-auto flex h-full w-full max-w-4xl flex-col p-4">
       <div className="flex flex-1 flex-col justify-end pb-4">
-        {onModelChange ? (
-          <div className="flex justify-end">
-            <ModelSelect
-              value={model ?? ""}
-              onChange={onModelChange}
-              disabled={disabled}
-            />
-          </div>
-        ) : null}
         <h1 className="text-center font-serif text-display text-ink">
           {mounted ? greeting : "\u00a0"}
         </h1>
@@ -88,6 +79,15 @@ export function NewChat({
           </div>
         ) : null}
         <ChatInput onSend={onSend} disabled={disabled} />
+        {onModelChange ? (
+          <div className="flex justify-end">
+            <ModelSelect
+              value={model ?? ""}
+              onChange={onModelChange}
+              disabled={disabled}
+            />
+          </div>
+        ) : null}
         {error ? (
           <p className="text-small text-status-failed">{error}</p>
         ) : null}
