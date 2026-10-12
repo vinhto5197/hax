@@ -147,7 +147,6 @@ export function DocumentsPanel() {
     inputRef.current?.click();
   }
 
-  const failedCount = documents.filter((d) => d.status === "failed").length;
   const ordered = [...documents].sort((a, b) => statusRank(a) - statusRank(b));
 
   return (
@@ -167,11 +166,6 @@ export function DocumentsPanel() {
           </span>
           Documents
           <span className="font-normal text-ink-3">{documents.length}</span>
-          {failedCount > 0 ? (
-            <span className="text-small font-medium text-status-failed">
-              · {failedCount} failed
-            </span>
-          ) : null}
         </span>
         <button
           type="button"
