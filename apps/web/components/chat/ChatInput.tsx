@@ -9,12 +9,23 @@ import {
   useState,
 } from "react";
 
+import { ModelSelect } from "@/components/chat/ModelSelect";
+
 interface ChatInputProps {
   onSend: (text: string) => Promise<void>;
   disabled: boolean;
+  // The model choice belongs to the composer: given a handler, the picker
+  // sits in the frame's bottom row; a visitor's composer passes none.
+  model?: string;
+  onModelChange?: (value: string) => void;
 }
 
-export function ChatInput({ onSend, disabled }: ChatInputProps) {
+export function ChatInput({
+  onSend,
+  disabled,
+  model,
+  onModelChange,
+}: ChatInputProps) {
   const [input, setInput] = useState("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -64,42 +75,55 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
   }
 
   return (
+    // Two rows inside one frame: the text, then the secondary controls on the
+    // left and send on the right, so the picker reads as part of the composer.
     <form
       onSubmit={handleSubmit}
-      className="flex items-end gap-1.5 rounded-control border border-border-control bg-surface-1 p-1.5 focus-within:border-accent"
+      className="flex flex-col rounded-control border border-border-control bg-surface-1 p-1.5 focus-within:border-accent"
     >
       <textarea
         ref={inputRef}
         rows={1}
-        className="block max-h-[40vh] min-w-0 flex-1 resize-none bg-transparent py-1.5 pr-1 pl-2 text-body text-ink outline-hidden"
+        className="block max-h-[40vh] w-full resize-none bg-transparent py-1.5 pr-1 pl-2 text-body text-ink outline-hidden"
         placeholder="Type your prompt..."
         value={input}
         onChange={(event) => setInput(event.target.value)}
         onKeyDown={handleKeyDown}
         disabled={disabled}
       />
-      <button
-        type="submit"
-        aria-label="Send"
-        title="Send"
-        className="flex size-8 shrink-0 items-center justify-center rounded-control bg-accent text-accent-ink disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-ink-3"
-        disabled={disabled || !input.trim()}
-      >
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.75"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
+      <div className="flex items-center justify-between gap-2">
+        {onModelChange ? (
+          <ModelSelect
+            value={model ?? ""}
+            onChange={onModelChange}
+            disabled={disabled}
+          />
+        ) : (
+          <span />
+        )}
+        <button
+          type="submit"
+          aria-label="Send"
+          title="Send"
+          className="flex size-8 shrink-0 items-center justify-center rounded-control bg-accent text-accent-ink disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-ink-3"
+          disabled={disabled || !input.trim()}
         >
-          <path d="M13 3v5a2 2 0 0 1-2 2H4" />
-          <path d="M6.5 7.5 4 10l2.5 2.5" />
-        </svg>
-      </button>
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.75"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M13 3v5a2 2 0 0 1-2 2H4" />
+            <path d="M6.5 7.5 4 10l2.5 2.5" />
+          </svg>
+        </button>
+      </div>
     </form>
   );
 }
