@@ -5,7 +5,7 @@ import uuid
 from collections.abc import Sequence
 from datetime import datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from packages.db.models import Document
@@ -67,21 +67,36 @@ async def delete_owned(
 
 
 async def fail_stale(
-    session: AsyncSession, user_id: uuid.UUID, cutoff: datetime, error: str
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    processing_cutoff: datetime,
+    pending_cutoff: datetime,
+    error: str,
 ) -> int:
-    """Record 'failed' on the caller's documents still processing since
-    before `cutoff`; returns how many. The pipeline cannot give itself this
+    """Record 'failed' on the caller's documents stuck in flight: 'processing'
+    since before `processing_cutoff`, or 'pending' since before
+    `pending_cutoff`; returns how many. The pipeline cannot give itself this
     deadline: a worker killed mid-task leaves no one to write the terminal
-    status. Only 'processing' qualifies — a 'pending' row is merely queued
-    behind the single ingest slot, and failing it would let the worker later
-    flip it back to 'ready' beside the user's re-upload. Scoped to one user,
-    so it runs under RLS as the caller."""
+    status. 'pending' has its own, long deadline because its message can be
+    lost (a process death between the commit and the publish, a lost Redis
+    AOF window) and nothing else would ever move the row. Failing a merely
+    queued row is safe: the worker's claim (ingest.py) is conditional on the
+    row still being in flight, so it cannot resurrect a failed row beside the
+    user's re-upload. Scoped to one user, so it runs under RLS as the caller."""
     result = await session.execute(
         update(Document)
         .where(
             Document.user_id == user_id,
-            Document.status == "processing",
-            Document.updated_at < cutoff,
+            or_(
+                and_(
+                    Document.status == "processing",
+                    Document.updated_at < processing_cutoff,
+                ),
+                and_(
+                    Document.status == "pending",
+                    Document.updated_at < pending_cutoff,
+                ),
+            ),
         )
         .values(status="failed", error=error)
         .returning(Document.id)

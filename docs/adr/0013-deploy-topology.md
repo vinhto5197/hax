@@ -112,9 +112,6 @@ Redis volume).
   rebuilds it (about ten minutes; the Elastic IP and DNS carry over, Caddy
   re-issues certificates). Redis contents (queued jobs, rate-limit counters)
   die with the box; nothing durable lives there.
-- The web image build fetches three typefaces from Google Fonts at
-  `next build` (ADR 0014), so a font-host outage fails a deploy at the build
-  step; the fallback there is vendoring the files behind `next/font/local`.
 - A deploy recreates the app containers, so each deploy is a few seconds of
   downtime. Zero-downtime is an M3.5 concern (a second box behind an ALB).
 - `deploy.sh` enforces "image `<sha>` is commit `<sha>`": build and push
@@ -146,3 +143,9 @@ Redis volume).
 - Every "thin" choice above has its upgrade listed under M3.5 in CLAUDE.md:
   ALB + ACM + Route 53, ElastiCache, SES, CloudWatch alarms, Fargate, a
   staging variable, RDS CA verification, CSP nonce.
+
+## Addendum (2026-10-11): the font fetch at build
+
+- The web image build fetches three typefaces from Google Fonts at
+  `next build` (ADR 0014), so a font-host outage fails a deploy at the build
+  step; the fallback there is vendoring the files behind `next/font/local`.

@@ -212,8 +212,7 @@ means restored, not died — and a restored message (a warm shutdown at a
 deploy, or a visibility timeout of ten minutes after a hard kill) simply runs
 again, which every task here tolerates. The document a lost worker leaves at
 `processing` gets its terminal status from the API instead: listing a user's
-documents fails any of theirs still processing after ten minutes (a pending
-row is merely queued and is left alone),
+documents fails any of theirs still pending or processing after ten minutes,
 as the caller, under RLS (a deadline that fires on a live attempt is
 harmless: the attempt still writes `ready` over it). The worker's `stop_grace_period` is above
 `task_time_limit`, so a deploy waits for in-flight work rather than killing it.
@@ -261,3 +260,43 @@ spends a slot (a rejected suffix or size does not); the check runs after
 validation and before the row exists, so a refused upload leaves nothing
 behind. The limiter fails open when Redis is down, like every limiter in the
 API. A refusal is a 429 whose string detail the upload panel already shows.
+
+## Addendum (2026-10-12): guarded transitions and the queued-row deadline
+
+**The invariant.** `failed` is terminal for the worker. Both status writes
+in `ingest_document_async` are conditional statements, not ORM assignments:
+the claim at the start is `UPDATE … SET status='processing', updated_at=now()
+WHERE id=… AND status IN ('pending','processing')`, and the final write is
+`UPDATE … SET status='ready' WHERE id=… AND status='processing'`, in the one
+transaction that replaces the chunk set. A claim that matches no row raises
+a permanent error unless the row is already `ready` (a message redelivered
+after the work committed returns without redoing it); a final write that
+matches no row returns if another attempt already made the row `ready`, and
+otherwise raises before the commit, so the chunk set rolls back with it.
+The worker's own terminal write (`mark_document_failed`) is conditional too
+(only over `pending` or `processing`): the first terminal write wins, so the
+deadline's "upload the file again" is not overwritten by the attempt it
+stopped, and a late attempt cannot fail a document another attempt finished. The claim also restarts the deadline clock for a retry, which the
+old assignment did not: a row already `processing` emitted no UPDATE.
+
+**Why.** The deadline of 2026-10-01 fired on a live attempt harmlessly only
+because the attempt wrote `ready` over it. That stopped being harmless once
+the user had re-uploaded in the meantime: a slow retry (Voyage degraded,
+other users' jobs ahead on the single ingest slot) could move the original
+from `failed` back to `ready` beside its copy, and every search then
+returned two chunk sets for one file. The interim fix narrowed the deadline
+to `processing` and exempted `pending` for the same reason; the guard makes
+the exemption unnecessary.
+
+**Two deadlines.** `processing` keeps its ten minutes (one attempt is capped
+at 300 s). `pending` gets its own, long deadline of six hours, because a row
+can be stranded there by a lost message: a process death between the commit
+and the publish, or a Redis loss inside its fsync window (the broker lives on
+the box and its queue dies with it). The upload route's mark-failed branch
+covers only a publish that raises, so "`pending` means a task really exists"
+holds for a publish that returned and for nothing after it. Six hours is
+sized past any plausible backlog on the single slot; a real queue that
+outlasts it costs the user a re-upload, since the worker then refuses the
+failed row. Failing a merely queued row is safe
+now that the worker cannot resurrect it. Both deadlines run on the listing,
+as the caller, under RLS, like before.

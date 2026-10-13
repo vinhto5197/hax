@@ -1,9 +1,8 @@
 import asyncio
 from uuid import UUID
 
-from sqlalchemy import delete
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm.exc import StaleDataError
 
 from packages.core import storage
 from packages.core.rag.embeddings import embed_documents
@@ -12,6 +11,11 @@ from packages.core.rag.extract import extract_text
 from packages.core.rag.splitter import split_text
 from packages.db import AsyncSessionLocal
 from packages.db.models import Chunk, Document
+
+# The states a worker may claim. 'ready' and 'failed' are terminal: the API
+# writes 'failed' too (its deadline in routers/documents.py, a publish that
+# fails), and the worker never leaves either.
+IN_FLIGHT = ("pending", "processing")
 
 
 async def ingest_document_async(document_id: UUID) -> None:
@@ -22,10 +26,16 @@ async def ingest_document_async(document_id: UUID) -> None:
     for PermanentIngestError, after retries exhaust otherwise), so the row stays
     'processing' while retries are pending.
 
-    Idempotent: the chunk write is delete-then-insert in one transaction, so a
-    Celery retry re-runs cleanly. (A broker redelivery never gets here —
-    tasks.py records it failed without parsing again.) Invariant:
-    status=ready => a complete, current chunk set.
+    Every status write is conditional on the row still being in flight:
+    'processing' is claimed only over pending/processing, and 'ready' is
+    written only over 'processing'. A row the API's deadline has failed is
+    therefore never resurrected — 'failed' is terminal — and a late attempt
+    raises instead of writing. A message redelivered after the work committed
+    finds 'ready' and returns.
+
+    Idempotent: chunks commit only together with the conditional 'ready'
+    write, whose row lock serializes two attempts — the loser finds 'ready'
+    and returns. Invariant: status=ready => one complete chunk set.
     """
     async with AsyncSessionLocal() as session:
         doc = await session.get(Document, document_id)
@@ -36,7 +46,26 @@ async def ingest_document_async(document_id: UUID) -> None:
         storage_key = doc.storage_key
         filename = doc.filename
         user_id = doc.user_id
-        doc.status = "processing"
+        # An explicit UPDATE, not an ORM assignment: a retry finds the row
+        # already 'processing', and only a statement restarts the deadline
+        # clock (updated_at) for the new attempt.
+        claimed = await session.execute(
+            update(Document)
+            .where(Document.id == document_id, Document.status.in_(IN_FLIGHT))
+            .values(status="processing", updated_at=func.now())
+            .returning(Document.id)
+            .execution_options(synchronize_session=False)
+        )
+        if claimed.first() is None:
+            # Only a terminal row misses the claim, so this read is stable.
+            status = await session.scalar(
+                select(Document.status).where(Document.id == document_id)
+            )
+            if status == "ready":
+                return
+            raise PermanentIngestError(
+                f"document {document_id} is not in flight (failed or deleted)"
+            )
         # Commit now rather than holding one transaction across the whole ingest:
         # frees the pooled connection during the multi-second embed and makes the
         # status visible to the polling UI.
@@ -56,9 +85,30 @@ async def ingest_document_async(document_id: UUID) -> None:
         if not chunks:
             raise PermanentIngestError("document produced no chunks after splitting")
         embeddings = await embed_documents(chunks)
-        # Delete-then-insert atomically with status=ready — a re-run can't
-        # duplicate chunks.
+        # Delete-then-insert atomically with the status write — a re-run can't
+        # duplicate chunks. The 'ready' write goes before the chunk inserts so
+        # a deleted parent is seen here, not as the inserts' FK violation; the
+        # row lock it takes holds a concurrent deadline or delete until commit.
         await session.execute(delete(Chunk).where(Chunk.document_id == document_id))
+        readied = await session.execute(
+            update(Document)
+            .where(Document.id == document_id, Document.status == "processing")
+            .values(status="ready", error=None, updated_at=func.now())
+            .returning(Document.id)
+            .execution_options(synchronize_session=False)
+        )
+        if readied.first() is None:
+            # Raising before the commit rolls the chunk delete back with it.
+            status = await session.scalar(
+                select(Document.status).where(Document.id == document_id)
+            )
+            if status is None:
+                raise PermanentIngestError("document deleted during ingestion")
+            if status == "ready":
+                # Another attempt finished first; its chunk set stands.
+                await session.rollback()
+                return
+            raise PermanentIngestError("document left processing during ingestion")
         session.add_all(
             Chunk(
                 document_id=document_id,
@@ -70,30 +120,29 @@ async def ingest_document_async(document_id: UUID) -> None:
             )
             for i, (content, embedding) in enumerate(zip(chunks, embeddings))
         )
-        doc.status = "ready"
-        doc.error = None
-        # Neither failure here is transient — fail permanent on attempt 1 instead
-        # of re-paying the embed on retries. A constraint violation is schema/
-        # code drift; a stale UPDATE means the document was deleted mid-ingest
-        # (the unit of work flushes the parent row before the chunk inserts).
+        # Not transient — fail permanent on attempt 1 instead of re-paying the
+        # embed on retries: a constraint violation is schema/code drift.
         try:
             await session.commit()
         except IntegrityError as exc:
             raise PermanentIngestError("chunk insert violated a constraint") from exc
-        except StaleDataError as exc:
-            raise PermanentIngestError("document deleted during ingestion") from exc
 
 
 async def mark_document_failed(document_id: UUID, error: str) -> None:
-    """Record a terminal 'failed' status + error — the one place it is written.
+    """Record a terminal 'failed' status + error — the worker's one place to
+    write it.
 
-    No-op if the row is gone (deleted mid-ingest). Receives already-sanitized
-    text — the calling task owns sanitization (_public_error); raw detail goes
-    to logs only.
+    First terminal write wins: a no-op if the row is gone (deleted mid-ingest),
+    already failed (the API deadline's message survives the late attempt it
+    stopped) or already ready (a late attempt cannot fail a finished document).
+    Receives already-sanitized text — the calling task owns sanitization
+    (_public_error); raw detail goes to logs only.
     """
     async with AsyncSessionLocal() as session:
-        doc = await session.get(Document, document_id)
-        if doc is not None:
-            doc.status = "failed"
-            doc.error = error[:1000]
-            await session.commit()
+        await session.execute(
+            update(Document)
+            .where(Document.id == document_id, Document.status.in_(IN_FLIGHT))
+            .values(status="failed", error=error[:1000])
+            .execution_options(synchronize_session=False)
+        )
+        await session.commit()
