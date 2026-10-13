@@ -124,10 +124,20 @@ function ChatSession({
       {demo ? (
         <p className="mx-auto w-full max-w-4xl px-4 pt-4 text-small text-ink-3">
           You&apos;re trying hax as a guest: a few turns, then{" "}
-          <Link href="/signup" className="text-accent hover:underline">
+          <Link
+            href="/signup"
+            className="text-accent underline underline-offset-2"
+          >
             sign up
           </Link>{" "}
-          to chat over your own documents.
+          to chat over your own documents. Already have an account?{" "}
+          <Link
+            href="/login"
+            className="text-accent underline underline-offset-2"
+          >
+            Log in
+          </Link>
+          .
         </p>
       ) : null}
 
