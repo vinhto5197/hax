@@ -62,7 +62,7 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
      the hardening items deferred from M3 (RDS CA verification, CSP nonce,
      limiter redesign, per-service env files, network split + Redis auth).
 
-4. **Milestone 4 — Structured outputs + polish** *(built against live infra, auto-deployed)*
+4. **Milestone 4 — Structured outputs + polish** *(shipped 2026-10-13; built against live infra, auto-deployed)*
    - Slice 0 *(2026-10-06)*: the work-queue split (ingestion on its own queue
      and worker; email, titles and the sweep on the fast one) and the
      per-user upload cap — closes the M3 review's one open medium. ADR 0010
@@ -86,6 +86,10 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
      tokens: open chat thread with prose replies, a growing composer, a
      collapsible documents panel, the sidebar as a drawer on a phone, focus
      ring and reduced motion. ADR 0014.
+   - Close-out *(2026-10-13)*: the milestone review's fix round — document
+     status writes are conditional (`failed` and `ready` are terminal for the
+     worker) with a second, long deadline for queued rows; the request's
+     model is an allowlist. ADR 0010 and 0011 addenda.
    - Table / structured view for results (not only free-form text) *(shipped)*
    - Citation/source display (what data the answer used) *(shipped)*
    - Cohesive UI — feels like a product, not a demo collection *(shipped)*
@@ -172,7 +176,7 @@ this repo. Write prod-level comments only:
 - `scripts/*` are standalone, read-mostly dev utilities (e.g. `corpus.py`); not imported by the app.
 - Redis is the Celery broker AND the auth cache — rate-limit buckets and revocation cutoffs (one service, two roles). Sessions themselves are stateless JWTs, not Redis rows.
 - Chat responses are streamed (SSE) directly from FastAPI — never queued through Celery.
-- Celery handles background work — four tasks today: `generate_title`, `ingest_document` (chunk → embed → store), `send_email`, and `sweep_anonymous_users` (daily, from the fast worker's embedded beat; deletes demo visitors older than `ANON_RETENTION_DAYS` (default 3) with everything they own). Two queues, routed by task name in `apps/worker/celery_app.py` and consumed by two worker processes that never share a queue: `ingest` (the `worker` service: one slot, 1 GiB fence) and the default `celery` for email/titles/sweep (`worker-fast`: carries beat). A new task must be given a route — a test fails otherwise. ADR 0010 addendum.
+- Celery handles background work — four tasks today: `generate_title`, `ingest_document` (chunk → embed → store; every status write is conditional, so `failed` and `ready` are terminal — the listing fails rows stuck `processing` past 10 minutes or `pending` past 6 hours), `send_email`, and `sweep_anonymous_users` (daily, from the fast worker's embedded beat; deletes demo visitors older than `ANON_RETENTION_DAYS` (default 3) with everything they own). Two queues, routed by task name in `apps/worker/celery_app.py` and consumed by two worker processes that never share a queue: `ingest` (the `worker` service: one slot, 1 GiB fence) and the default `celery` for email/titles/sweep (`worker-fast`: carries beat). A new task must be given a route — a test fails otherwise. ADR 0010 addendum.
 - Uploads are capped per user through the Redis limiter (`packages/core/auth/rate_limit.py`): 5 accepted files an hour, 15 a day, keyed on the user id, checked after validation and before the row exists; 429 with a string detail. Fail-open like every limiter.
 - Conversation titles: `generate_title` (worker) titles a conversation from its first user message only, with a conditional `UPDATE … WHERE title IS NULL` (first writer wins; nothing else is ever stored in `title`). The API enqueues at conversation creation and re-enqueues on each persisted assistant turn while untitled — that re-enqueue is the retry. The sidebar shows "Untitled" until then. See ADR 0010 addendum.
 - Every Celery publish from the API goes through `apps/api/enqueue.py` (off the event loop, after the DB commit, `retry=False`; `fire_and_forget` for work with its own recovery path — titles, email — and awaited `publish` where the caller must know, e.g. uploads marking a document failed). Tasks published from there declare `ignore_result=True`.
