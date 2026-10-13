@@ -34,7 +34,11 @@ export function ModelSelect({
         className="rounded-control bg-transparent px-2 py-1 text-small text-ink-2 hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {MODEL_OPTIONS.map((option) => (
-          <option key={option.value} value={option.value}>
+          <option
+            key={option.value}
+            value={option.value}
+            className="bg-surface-1 text-ink"
+          >
             {option.label}
           </option>
         ))}

@@ -8,6 +8,8 @@
    scrim and the code block, which are dark in both themes, and the Google
    button, which keeps Google's own colours. */
 :root {
+  /* Native control parts (select popups, scrollbars) follow the scheme. */
+  color-scheme: light;
   --ground: #fbfaf7;
   --surface-1: #ffffff;
   --surface-2: #f2f0eb;
@@ -27,6 +29,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
+    color-scheme: dark;
     --ground: #1b1b19;
     --surface-1: #262523;
     --surface-2: #2f2e2b;
