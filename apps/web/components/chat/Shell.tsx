@@ -9,7 +9,10 @@ import { Sidebar } from "@/components/chat/Sidebar";
 import { Wordmark } from "@/components/Wordmark";
 import { SHOW_DOCUMENT_EVENT, revealDocumentRow } from "@/lib/showInPanel";
 
-const DESKTOP = "(min-width: 768px)";
+// These must match Tailwind's `md` and the `short` custom variant in
+// globals.css, in the unit each is declared in there (rem and px); `SHORT`
+// is also declared in DocumentsPanel.tsx.
+const DESKTOP = "(min-width: 48rem)";
 const SHORT = "(max-height: 500px)";
 const REVEAL_POLL_MS = 100;
 const REVEAL_TIMEOUT_MS = 2000;
