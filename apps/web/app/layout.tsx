@@ -48,6 +48,14 @@ export default function RootLayout({
         {/* basePath must match auth.ts ("/auth") or the client helpers call
             the wrong endpoints. */}
         <SessionProvider basePath="/auth">{children}</SessionProvider>
+        {/* Chrome on Android can keep a stale, zoomed-out page scale when the
+            system theme changes with the tab open; one fixed-position element
+            in the page is enough to make it settle. Inert and invisible: do
+            not remove it as dead markup. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none fixed bottom-0 left-0 size-px"
+        />
       </body>
     </html>
   );
