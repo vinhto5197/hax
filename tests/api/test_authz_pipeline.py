@@ -143,8 +143,8 @@ async def test_constraint_violation_message_is_static(
     # [SQL: ...] [parameters: ...]) must never reach the PermanentIngestError
     # message — it becomes user-visible doc.error via _public_error.
     #
-    # Hermetic on purpose: the real delete-mid-ingest race raises
-    # StaleDataError on the parent UPDATE before the chunk insert, so the
+    # Hermetic on purpose: the real delete-mid-ingest race is caught by the
+    # conditional 'ready' write before the chunk insert, so the
     # IntegrityError handler is only reachable by injection. Patch
     # AsyncSession.commit to let ingest's first commit (status="processing")
     # through untouched, then raise a real IntegrityError carrying

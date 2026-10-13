@@ -42,11 +42,19 @@ TEXT_SUFFIXES = {".txt", ".md"}
 # Whole file is buffered in memory; streaming uploads are out of v0 scope.
 # Text is dense, so its cap is smaller; binary formats carry layout overhead.
 TEXT_MAX_BYTES = 256 * 1024
-# An ingest still processing this long has lost its worker: one
-# attempt is capped at 300 s and a deploy waits up to that for in-flight work.
-# A deadline that fires on a live attempt costs a flicker, not the document:
-# the attempt still writes 'ready' over it when it finishes.
+# An ingest still processing this long has lost its worker or is waiting on a
+# retry behind a backlog: one attempt is capped at 300 s and a deploy waits
+# up to that for in-flight work.
+# 'failed' is terminal: the worker's claim and its 'ready' write are both
+# conditional on the row still being in flight (ingest.py), so a deadline
+# that fires on a live attempt stops that attempt rather than being
+# overwritten by it.
 STUCK_AFTER = timedelta(minutes=10)
+# A row still queued this long has lost its message (a death between the
+# commit and the publish, a lost broker write). Sized past any plausible
+# backlog on the single ingest slot; if a real queue outlasts it the row is
+# failed and the worker later refuses it, which costs a re-upload.
+QUEUED_AFTER = timedelta(hours=6)
 STUCK_ERROR = "processing did not finish; upload the file again"
 BINARY_MAX_BYTES = 5 * 1024 * 1024
 # Per-user caps on accepted uploads (fixed windows in Redis); every upload
@@ -60,12 +68,13 @@ async def list_documents(
     session: AsyncSession = Depends(get_session),
     user: CurrentUser = Depends(current_user),
 ) -> list[DocumentOut]:
-    # The deadline on in-flight documents is applied here, on read, because
-    # the one case that strands a row — the worker killed mid-task — leaves
-    # no process to write the terminal status, and the panel reads this list
-    # whenever it shows the row.
+    # The deadlines on in-flight documents are applied here, on read, because
+    # the cases that strand a row — the worker killed mid-task, the ingest
+    # message lost — leave no process to write the terminal status, and the
+    # panel reads this list whenever it shows the row.
+    now = datetime.now(UTC)
     stale = await documents_repo.fail_stale(
-        session, user.id, datetime.now(UTC) - STUCK_AFTER, STUCK_ERROR
+        session, user.id, now - STUCK_AFTER, now - QUEUED_AFTER, STUCK_ERROR
     )
     if stale:
         await session.commit()
@@ -161,7 +170,7 @@ async def upload_document(
         except Exception:
             # The row is already committed, so a broker outage here would
             # strand the doc at 'pending' with no task enqueued. Mark it
-            # 'failed' so 'pending' always means a task is really queued.
+            # 'failed' so a publish that raised never leaves a 'pending' row.
             logger.exception("failed to enqueue ingestion for document %s", doc.id)
             doc.status = "failed"
             doc.error = "could not start ingestion (task queue unavailable)"

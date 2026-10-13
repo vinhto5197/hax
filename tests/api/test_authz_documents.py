@@ -185,6 +185,45 @@ async def test_listing_fails_documents_stuck_in_flight_past_the_deadline(
     assert status == "processing"
 
 
+async def test_listing_fails_documents_queued_past_the_long_deadline(
+    client, user_a, admin_engine
+):
+    # A 'pending' row has its own, long deadline: its message can be lost, and
+    # nothing but this listing would ever move it. A backlog on the single
+    # ingest slot is hours shorter than the deadline, so a queued row inside
+    # it is left alone.
+    from sqlalchemy import text
+
+    lost = await make_document(admin_engine, user_a.id, status="pending")
+    queued = await make_document(admin_engine, user_a.id, status="pending")
+    stuck = await make_document(admin_engine, user_a.id, status="processing")
+    async with admin_engine.begin() as conn:
+        await conn.execute(
+            text(
+                "UPDATE documents SET updated_at = now() - interval '7 hours'"
+                " WHERE id = :lost"
+            ),
+            {"lost": lost},
+        )
+        await conn.execute(
+            text(
+                "UPDATE documents SET updated_at = now() - interval '2 hours'"
+                " WHERE id IN (:queued, :stuck)"
+            ),
+            {"queued": queued, "stuck": stuck},
+        )
+
+    r = await client.get("/api/documents", headers=bearer(user_a))
+    assert r.status_code == 200
+    by_id = {d["id"]: d for d in r.json()}
+    assert by_id[str(lost)]["status"] == "failed"
+    assert "upload the file again" in by_id[str(lost)]["error"]
+    assert by_id[str(queued)]["status"] == "pending"
+    assert by_id[str(queued)]["error"] is None
+    # The short deadline on 'processing' is unchanged by the long one.
+    assert by_id[str(stuck)]["status"] == "failed"
+
+
 async def test_owner_download_returns_the_stored_bytes(
     client, user_a, admin_engine, monkeypatch
 ):
