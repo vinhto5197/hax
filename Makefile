@@ -185,7 +185,10 @@ lint:
 	ruff check . && ruff format --check .
 
 # ── Test ─────────────────────────────────────────────────────
-.PHONY: test
+.PHONY: test test-web
 
 test:
 	.venv/bin/pytest
+
+test-web:
+	cd apps/web && npm test

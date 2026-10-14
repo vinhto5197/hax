@@ -17,7 +17,7 @@ Install these before setup. Versions are minimums.
 | Tool           | Version | Notes                                           |
 | -------------- | ------- | ----------------------------------------------- |
 | Python         | 3.11+   | Via pyenv or Homebrew                           |
-| Node.js        | 20.9+   | Via nvm or Homebrew (CI and the image use 22)   |
+| Node.js        | 22.22+  | Via nvm or Homebrew (CI and the image use 22)   |
 | Docker         | 20+     | Docker Desktop, Colima, Rancher, etc.           |
 | docker-compose | 2+      | Usually bundled with Docker; Homebrew otherwise |
 | Make           | any     | Pre-installed on macOS / Linux                  |
@@ -171,6 +171,15 @@ make migrate-down              # roll back the most recent migration
 - **`make migrate` is idempotent.** Alembic records applied revisions in an `alembic_version` table and runs only what's pending, so re-running is safe.
 - **After changing a model:** run `make migration m="..."`, then **review the generated file** before committing — autogenerate misses some changes (e.g. constraint/type edits) and can emit an empty migration. Apply it with `make migrate`.
 - **`make migrate-down`** reverses the schema change and steps the version pointer back one; it does **not** delete the migration file (migrations are version-controlled history — to undo further, write a new migration forward).
+
+### Tests
+
+```bash
+make test       # Python: pytest (needs the dev Postgres from `make infra-up`)
+make test-web   # Web: Vitest + React Testing Library, no services needed
+```
+
+Web tests sit beside the code they cover as `*.test.ts` / `*.test.tsx`. Both suites run in CI, and the web suite also runs as a pre-commit hook when a source file under `apps/web` changes.
 
 ### Auth setup
 

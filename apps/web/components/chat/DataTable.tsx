@@ -80,7 +80,7 @@ function columnIsNumeric(rows: Row[], col: number): boolean {
 // starts with = + - @ or a control character is a formula, so an export must
 // not hand one over verbatim: a leading apostrophe makes it text. Signed
 // figures ("-5", "-$1,850") parse as numbers and are left alone.
-function inert(c: Cell): Cell {
+export function inert(c: Cell): Cell {
   return /^[=+\-@\t\r]/.test(c.trim()) && asNumber(c) === null ? `'${c}` : c;
 }
 

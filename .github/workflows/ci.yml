@@ -103,10 +103,13 @@ jobs:
       - name: ESLint
         run: npm run lint
         working-directory: apps/web
+      - name: Vitest
+        run: npm test
+        working-directory: apps/web
       - name: Prettier
         # Same version and file set as the pre-commit hook; run from the repo
         # root so .prettierignore (generated files) applies.
-        run: npx prettier@3.3.3 --check "apps/web/**/*.{ts,tsx,js,jsx,mjs,css,json,md}"
+        run: npx prettier@3.3.3 --check "apps/web/**/*.{ts,tsx,js,jsx,mjs,mts,css,json,md}"
 
   # Pull requests: prove both images build on the box's architecture. On main
   # the deploy job builds them (deploy.sh all), so nothing builds twice.
