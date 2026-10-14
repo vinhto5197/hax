@@ -14,8 +14,10 @@ export default defineConfig({
     // The dev shell exports the root .env (direnv); tests must not see its API
     // origin, so URLs are the same-origin ones production uses.
     env: { NEXT_PUBLIC_API_URL: "" },
-    // A spy or a stubbed global never outlives the test that made it.
+    // No spy, queued mock value or stubbed global outlives the test that made
+    // it (restoreMocks alone keeps a module mock's unconsumed *Once values).
     restoreMocks: true,
+    mockReset: true,
     unstubGlobals: true,
   },
 });
