@@ -197,8 +197,8 @@ type StreamEvent =
   | { type: "done" }
   | { type: "ignore" };
 
-// Runtime shape check for an untrusted network payload: one bad element
-// discards the whole event (the footer is optional; the answer is not).
+// Runtime shape check for an untrusted network payload: a bad element is
+// dropped and the rest still show; a list with none left is no event at all.
 function isSource(value: unknown): value is Source {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
@@ -238,8 +238,9 @@ function parseStreamEvent(rawEvent: string): StreamEvent {
       if (typeof parsed.status === "string" && parsed.status.length > 0) {
         return { type: "status", status: parsed.status };
       }
-      if (Array.isArray(parsed.sources) && parsed.sources.every(isSource)) {
-        return { type: "sources", sources: parsed.sources };
+      if (Array.isArray(parsed.sources)) {
+        const sources = parsed.sources.filter(isSource);
+        if (sources.length > 0) return { type: "sources", sources };
       }
     } catch {
       return { type: "ignore" };
