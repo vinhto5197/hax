@@ -11,6 +11,9 @@ export default defineConfig({
     include: ["**/*.test.{ts,tsx}"],
     exclude: [...configDefaults.exclude, ".next/**"],
     setupFiles: ["./vitest.setup.ts"],
+    // The dev shell exports the root .env (direnv); tests must not see its API
+    // origin, so URLs are the same-origin ones production uses.
+    env: { NEXT_PUBLIC_API_URL: "" },
     // A spy or a stubbed global never outlives the test that made it.
     restoreMocks: true,
     unstubGlobals: true,
