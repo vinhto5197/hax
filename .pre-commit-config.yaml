@@ -31,7 +31,7 @@ repos:
     rev: v3.3.3
     hooks:
       - id: prettier
-        files: ^apps/web/.*\.(ts|tsx|js|jsx|mjs|css|json|md)$
+        files: ^apps/web/.*\.(ts|tsx|js|jsx|mjs|mts|css|json|md)$
 
   # Frontend: ESLint runs via the project's own npm script,
   # so it picks up eslint-config-next and all its plugins correctly.
@@ -41,5 +41,11 @@ repos:
         name: eslint (apps/web)
         entry: bash -c 'cd apps/web && npm run lint'
         language: system
-        files: ^apps/web/.*\.(ts|tsx|js|jsx|mjs)$
+        files: ^apps/web/.*\.(ts|tsx|js|jsx|mjs|mts)$
+        pass_filenames: false
+      - id: vitest
+        name: vitest (apps/web)
+        entry: bash -c 'cd apps/web && npm test'
+        language: system
+        files: ^apps/web/.*\.(ts|tsx|js|jsx|mjs|mts|json)$
         pass_filenames: false

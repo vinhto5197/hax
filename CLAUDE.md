@@ -97,7 +97,9 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
 5. **Milestone 5 — Cleanup + hardening + eval** *(final pass before v0 is "done")*
    - Test infrastructure: extend the pytest suite (async DB/API fixtures and a
      real-Postgres authz suite exist since M2.5) to cover the chat + RAG paths
-     that were verified by hand during M1/M2
+     that were verified by hand during M1/M2.
+     The web has its own unit suite since M5: Vitest + React Testing Library,
+     tests beside the source, `make test-web`, gated in CI and pre-commit.
    - **Eval infrastructure**: a measurable harness for RAG/agent quality
      (Q/A dataset → run → score via exact-match or LLM-as-judge) so retrieval
      and agent changes are tuned and regression-checked by **number, not vibes**.
