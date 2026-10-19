@@ -185,10 +185,17 @@ lint:
 	ruff check . && ruff format --check .
 
 # ── Test ─────────────────────────────────────────────────────
-.PHONY: test test-web
+.PHONY: test test-web e2e
 
 test:
 	.venv/bin/pytest
 
 test-web:
 	cd apps/web && npm test
+
+# Browser journeys against an isolated stack (database hax_e2e, Redis db 15,
+# ports 3001/8001/8787) with a scripted model. Needs `make infra-up`.
+e2e:
+	@nc -z localhost 5432 >/dev/null 2>&1 && nc -z localhost 6379 >/dev/null 2>&1 || { echo "Postgres/Redis down: run make infra-up"; exit 1; }
+	.venv/bin/python apps/web/e2e/prepare.py
+	cd apps/web && npx playwright test $(ARGS)

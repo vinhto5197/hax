@@ -100,6 +100,8 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
      that were verified by hand during M1/M2.
      The web has its own unit suite since M5: Vitest + React Testing Library,
      tests beside the source, `make test-web`, gated in CI and pre-commit.
+     Browser journeys since M5: Playwright against an isolated stack with a
+     scripted model, `make e2e` (local, not in CI yet).
    - **Eval infrastructure**: a measurable harness for RAG/agent quality
      (Q/A dataset → run → score via exact-match or LLM-as-judge) so retrieval
      and agent changes are tuned and regression-checked by **number, not vibes**.

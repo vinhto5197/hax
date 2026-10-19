@@ -177,9 +177,12 @@ make migrate-down              # roll back the most recent migration
 ```bash
 make test       # Python: pytest (needs the dev Postgres from `make infra-up`)
 make test-web   # Web: Vitest + React Testing Library, no services needed
+make e2e        # Browser journeys: Playwright (Chromium) against an isolated stack
 ```
 
 Web tests sit beside the code they cover as `*.test.ts` / `*.test.tsx`. Both suites run in CI, and the web suite also runs as a pre-commit hook when a source file under `apps/web` changes.
+
+`make e2e` needs `make infra-up`. It resets its own database (`hax_e2e`) and Redis db 15, builds the web, and starts the web on :3001, the API on :8001 and a scripted stand-in for the model on :8787, so it runs alongside `make dev` without touching dev data. Its build replaces any local production build in `apps/web/.next` (one pointed at :8001); `next dev` is unaffected. First time: `cd apps/web && npx playwright install chromium`. Watch the browser with `make e2e ARGS="--headed"`, or step through with `make e2e ARGS="--ui"`. A failed journey prints the path of its trace; open it with `cd apps/web && npx playwright show-trace <path>`. Not in CI yet.
 
 ### Auth setup
 
