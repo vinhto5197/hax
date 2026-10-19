@@ -5,3 +5,5 @@ apps/web/openapi.json
 
 # Build output (local runs); a CI checkout never has it.
 apps/web/.next
+apps/web/playwright-report
+apps/web/test-results

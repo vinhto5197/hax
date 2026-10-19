@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
+    "e2e": "playwright test",
     "generate:types": "openapi-typescript openapi.json -o lib/openapi.ts"
   },
   "dependencies": {
@@ -23,6 +24,7 @@
     "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
+    "@playwright/test": "1.64.1",
     "@tailwindcss/postcss": "^4",
     "@testing-library/jest-dom": "7.0.1",
     "@testing-library/react": "16.3.3",
