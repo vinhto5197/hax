@@ -139,6 +139,17 @@ this repo. Write prod-level comments only:
   AI, can grasp a file's purpose without reading the rest of the repo.
 - **Never:** tutorials, language-feature explanations, milestone/session
   history, or narration of what the next line visibly does.
+## Verifying web changes
+- Logic: Vitest beside the source (`make test-web`).
+- Known behaviour ("after X, Y"): a Playwright journey in `apps/web/e2e/`
+  (`make e2e`, gated in CI). A bug found by hand becomes a journey before it
+  is fixed; runbooks do not repeat what a journey covers.
+- Looking: after a UI change, the assistant drives the changed screen with
+  Playwright MCP (`.mcp.json`) on the local dev or e2e stack — desktop and
+  phone width, console clean, screenshots in the hand-off. Never production:
+  the origin allowlist is a guard rail, not a boundary.
+- By hand: new screens' look and feel, real devices, a pass after significant
+  deploys.
 # Tech stack
 - Frontend: Next.js (SSR + routing) + React + TypeScript + Tailwind v4 (design tokens in `apps/web/app/globals.css`, ADR 0014)
 - Backend: FastAPI (LangChain only for text splitting — ADR 0009)
