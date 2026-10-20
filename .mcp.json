@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@playwright/mcp@0.0.83",
+        "--isolated",
+        "--headless",
+        "--allowed-origins",
+        "http://localhost:3000;http://localhost:8000;http://localhost:3001;http://localhost:8001",
+        "--blocked-origins",
+        "https://hax-ai.chat",
+        "--output-dir",
+        ".playwright-mcp"
+      ]
+    }
+  }
+}

@@ -107,3 +107,6 @@ crash.log
 
 # SDD workspaces and adversarial-review inputs (local working files)
 .superpowers/
+
+# Playwright MCP screenshots and snapshots (the assistant's browser)
+.playwright-mcp/

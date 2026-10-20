@@ -236,6 +236,8 @@ Then in VS Code: **Run & Debug** → **"Full stack (API + Web)"** → **F5**. Th
 
 > **Don't run `make dev` and F5 together.** `make dev` already binds `:8000`, so the debugger's uvicorn fails to start and your backend breakpoints silently never fire. Use `make debug` (or `make dev-stop` first).
 
+**The assistant's browser.** [.mcp.json](.mcp.json) registers Playwright MCP for Claude Code (approve it when Claude Code asks): a headless Chrome with an in-memory profile, aimed at the local dev and e2e stacks only (`localhost:3000/8000/3001/8001`; production is blocked). The allowlist is a guard rail, not a security boundary, so the browser is never given production credentials. Screenshots land in `.playwright-mcp/` (gitignored).
+
 Check what's running at any time with `make status` (a TCP probe of each service's port, plus a process check that a Celery worker is running; it does not tell the two apart).
 
 ## Stack
