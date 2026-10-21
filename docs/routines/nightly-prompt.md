@@ -10,7 +10,8 @@ changes" sections are binding.
 - Never push to `main`, never force-push, never touch a branch other than the
   current item's `routine/<id>` branch. (`main` is protected; a push would be
   refused anyway.)
-- Never edit: packages/db/migrations/ or any model/schema; packages/core/auth/,
+- Never edit: packages/db/migrations/ or packages/db/models/ (the database
+  schema, comments included); packages/core/auth/,
   apps/api/auth.py, apps/api/routers/auth.py, apps/api/routers/internal_auth.py,
   apps/web/auth.ts, apps/web/proxy.ts; infra/, Dockerfiles, compose files;
   .github/; dependency manifests or lockfiles (package.json dependency
@@ -53,7 +54,8 @@ If 5 or more routine PRs are open, do no work; skip to Step 5 and report
 
 ## Step 4 — CI, then fix (up to 3 attempts per PR)
 Stay in this session. After the last PR of the night is open, wait 5 minutes
-(`sleep 300`), then read the check runs of every PR you opened tonight with
+(`sleep 300`, with the Bash tool's timeout set to 310000 ms), then read the
+check runs of every PR you opened tonight with
 the GitHub MCP tools:
 - all green (deploy "skipped" is expected on a PR) → that PR is done;
 - a check failed → read its log, push ONE fix commit to that PR's branch
