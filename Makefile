@@ -159,6 +159,14 @@ prod-clean:
 prod-logs:
 	$(COMPOSE_PROD) logs -f --tail=100
 
+# ── Live production (not the local prod stack above) ─────────
+.PHONY: prod-psql
+
+# Read-only psql against production RDS, through an SSM session to the box
+# (hax_readonly; setup in infra/terraform/README.md, section 10). \q ends it.
+prod-psql:
+	@infra/deploy/prod-psql.sh
+
 # ── Status ────────────────────────────────────────────────────
 .PHONY: status
 

@@ -160,3 +160,19 @@ actions to commits for that reason. After apply, `terraform output deploy_role_a
 Actions secret `AWS_DEPLOY_ROLE_ARN`, and `instance_id` into the variable
 `HAX_INSTANCE_ID` (`infra/deploy/README.md`). No AWS key is ever stored in
 GitHub.
+
+## 10. Read-only database access
+
+`make prod-psql` opens psql on production from the laptop. An SSM session
+runs one script on the box: it connects as `hax_readonly` with the URL in
+`/opt/hax/ops.env` and, when that fails (the first run, or after a restore),
+first creates or repairs the role as the master user and writes `ops.env`
+with a password generated on the box. Nothing to set up by hand, and no
+credential leaves the box.
+
+`hax_readonly` can only `SELECT` (its grants refuse writes even in an
+explicit read-write transaction) and bypasses row-level security, so it sees
+every user's rows. `ops.env` (mode 600) is kept apart from `/opt/hax/.env`
+because every container loads `.env`, the web included. `\q` removes the
+container and ends the session. The data on screen is real user data: query
+what you need and paste results nowhere.
