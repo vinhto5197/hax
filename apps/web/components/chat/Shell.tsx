@@ -149,6 +149,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <button
             type="button"
             aria-label="Close menu"
+            tabIndex={-1}
             onClick={close}
             className="absolute inset-0 bg-black/40"
           />
