@@ -37,11 +37,12 @@ a screen canvas) and is recorded here only in the form the code consumes.
   page. The text styles (caption 11/16 … display 34/40) and two radii
   (control 8, card 14) are tokens with their own names; Tailwind's defaults
   are left intact so untouched components keep rendering as before.
-- **Three literals stay outside the tokens**, each for a reason the tokens
+- **Four literals stay outside the tokens**, each for a reason the tokens
   cannot express: the modal and drawer scrims and the code block are dark in both themes
-  (the highlight palette assumes a dark block), and the Google sign-in button
+  (the highlight palette assumes a dark block), the Google sign-in button
   keeps Google's own light and dark colours, which its brand guidelines
-  require.
+  require, and `app/icon.svg` copies the light `--accent` and `--accent-ink`
+  as hex, since a favicon cannot read CSS variables.
 - **Links**: a link inside a sentence is underlined, since colour alone does
   not separate it from the words around it; a link standing on its own (a
   footer row, a "back" line) is the accent with an underline on hover.
@@ -75,7 +76,8 @@ a screen canvas) and is recorded here only in the form the code consumes.
 
 ## Consequences
 
-- A colour or radius change is one line in `globals.css`; a new component
+- A colour or radius change is one line in `globals.css` (an accent change
+  also edits `app/icon.svg`); a new component
   has no colour decisions to make.
 - Builds depend on fonts.googleapis.com being reachable once. If that ever
   blocks a deploy, the upgrade is `next/font/local` with the OFL-licensed
