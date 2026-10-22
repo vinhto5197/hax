@@ -1,4 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  type Mock,
+  vi,
+} from "vitest";
 
 import { revealDocumentRow } from "@/lib/showInPanel";
 
@@ -31,7 +39,7 @@ describe("revealDocumentRow", () => {
     expect(scrollIntoView).not.toHaveBeenCalled();
   });
 
-  it("scrolls to the nearest edge and leaves the behaviour to CSS (reduced motion)", () => {
+  it("scrolls to the nearest edge, behaviour left to CSS", () => {
     mountRow();
     expect(revealDocumentRow("abc")).toBe(true);
     expect(scrollIntoView).toHaveBeenCalledTimes(1);
