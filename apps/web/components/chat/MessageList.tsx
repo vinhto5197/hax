@@ -167,7 +167,11 @@ export function MessageList({
         {/* Activity indicator: the live tool status (even mid-stream), else the
             generic line in the gap before the first chunk. */}
         {isLoading && (status || !streamingContent) ? (
-          <p className="animate-pulse text-small text-ink-3">
+          <p
+            role="status"
+            aria-live="polite"
+            className="animate-pulse text-small text-ink-3"
+          >
             {status ?? "Assistant is thinking..."}
           </p>
         ) : null}

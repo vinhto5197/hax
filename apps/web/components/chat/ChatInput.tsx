@@ -86,6 +86,7 @@ export function ChatInput({
         rows={1}
         className="block max-h-[40vh] w-full resize-none bg-transparent py-1.5 pr-1 pl-2 text-body text-ink outline-hidden"
         placeholder="Type your prompt..."
+        aria-label="Message"
         value={input}
         onChange={(event) => setInput(event.target.value)}
         onKeyDown={handleKeyDown}
