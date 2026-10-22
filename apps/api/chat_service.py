@@ -1,6 +1,7 @@
 import json
 import logging
 from collections.abc import AsyncIterator, Callable
+from datetime import datetime
 from uuid import UUID
 
 import anyio
@@ -16,6 +17,9 @@ logger = logging.getLogger(__name__)
 
 # no-cache: SSE must not be cached/buffered by intermediaries.
 SSE_HEADERS = {"Cache-Control": "no-cache", "Connection": "keep-alive"}
+
+# The 409 detail when a conversation already has a reply in progress.
+TURN_IN_PROGRESS = "A reply is already in progress in this conversation."
 
 
 def _enqueue_title(conversation_id: UUID, user_id: UUID) -> None:
@@ -40,13 +44,17 @@ def sse_event(data: dict) -> str:
 
 async def persist_user_turn(
     prompt: str, conversation_id: UUID | None, user_id: UUID
-) -> UUID:
-    """Resolve or lazily create the caller's conversation, persist the user
-    message, and return the conversation id.
+) -> tuple[UUID, datetime]:
+    """Resolve or lazily create the caller's conversation, claim its turn,
+    persist the user message, and return (conversation id, claimed_at).
 
     Runs before the LLM call so the user turn survives a model error. 404 if
     conversation_id isn't owned by user_id — the write-path ownership gate
-    (a foreign id and a nonexistent one are indistinguishable).
+    (a foreign id and a nonexistent one are indistinguishable); 409 if another
+    reply holds the conversation's claim. Claim, ownership check and message
+    commit or roll back together, so a refused turn leaves no trace. The
+    caller MUST hand claimed_at to persist_assistant_turn (via event_stream)
+    or release_claim; otherwise the claim holds until TURN_WINDOW lapses.
 
     A newly created conversation is queued for titling here, not after the
     reply: the title is generated from the first user message alone, so it can
@@ -57,18 +65,23 @@ async def persist_user_turn(
         if conversation_id is None:
             conversation = await conversations_repo.create(session, user_id)
             conversation_id = conversation.id
-        elif (
-            await conversations_repo.get_owned(session, user_id, conversation_id)
-            is None
-        ):
-            raise HTTPException(status_code=404, detail="conversation not found")
+        claimed_at = await conversations_repo.claim_turn(
+            session, user_id, conversation_id
+        )
+        if claimed_at is None:
+            if (
+                await conversations_repo.get_owned(session, user_id, conversation_id)
+                is None
+            ):
+                raise HTTPException(status_code=404, detail="conversation not found")
+            raise HTTPException(status_code=409, detail=TURN_IN_PROGRESS)
 
         await conversations_repo.add_message(session, conversation_id, "user", prompt)
         await session.commit()
 
     if created:
         _enqueue_title(conversation_id, user_id)
-    return conversation_id
+    return conversation_id, claimed_at
 
 
 async def load_history(conversation_id: UUID, user_id: UUID) -> list[MessageParam]:
@@ -89,34 +102,48 @@ async def persist_assistant_turn(
     user_id: UUID,
     content: str,
     sources: list[dict] | None = None,
+    *,
+    claimed_at: datetime,
 ) -> None:
-    """Persist the assistant message (text + sources) and bump updated_at.
+    """Release the turn's claim and persist the assistant message (text +
+    sources), bumping updated_at, in one transaction — "reply saved" and
+    "conversation free" cannot disagree.
 
     Runs from the stream's finally, so completion AND disconnect both save
-    whatever streamed. No-ops if nothing was streamed — sources alone are not
-    a turn. `sources` is the deduplicated provenance from the turn's searches;
-    it is stored for the client and never replayed to the model.
+    whatever streamed. The claim is always released; the message is written
+    only if something streamed — sources alone are not a turn. `sources` is
+    the deduplicated provenance from the turn's searches; it is stored for the
+    client and never replayed to the model.
 
     user_id is needed for the title task: the worker has no request to take an
     identity from, so the owner rides the Celery payload and the task announces
     it for RLS. A title that is still NULL here means the creation-time enqueue
     never produced one, so this turn queues it again.
     """
-    if not content:
-        return
+    untitled = False
     async with AsyncSessionLocal() as session:
-        await conversations_repo.add_message(
-            session, conversation_id, "assistant", content, sources=sources or None
-        )
-        await conversations_repo.touch(session, conversation_id)
-        conversation = await conversations_repo.get_owned(
-            session, user_id, conversation_id
-        )
-        untitled = conversation is not None and conversation.title is None
+        await conversations_repo.release_turn(session, conversation_id, claimed_at)
+        if content:
+            await conversations_repo.add_message(
+                session, conversation_id, "assistant", content, sources=sources or None
+            )
+            await conversations_repo.touch(session, conversation_id)
+            conversation = await conversations_repo.get_owned(
+                session, user_id, conversation_id
+            )
+            untitled = conversation is not None and conversation.title is None
         await session.commit()
 
     if untitled:
         _enqueue_title(conversation_id, user_id)
+
+
+async def release_claim(conversation_id: UUID, claimed_at: datetime) -> None:
+    """Release a claim whose reply never started streaming (the route's error
+    path between persist_user_turn and the StreamingResponse)."""
+    async with AsyncSessionLocal() as session:
+        await conversations_repo.release_turn(session, conversation_id, claimed_at)
+        await session.commit()
 
 
 async def event_stream(
@@ -124,6 +151,7 @@ async def event_stream(
     messages: list[MessageParam],
     conversation_id: UUID,
     user_id: UUID,
+    claimed_at: datetime,
 ) -> AsyncIterator[str]:
     """Wrap an LLM stream as SSE, persisting the assistant turn at the end.
 
@@ -136,13 +164,14 @@ async def event_stream(
     deduplicated by (document_id, chunk_idx), first hit wins, across every
     search of the turn; the forwarded events are unchanged.
     """
-    # Prelude: tells the client its conversation id (server-created on turn 1).
-    yield sse_event({"conversation_id": str(conversation_id)})
-
     buffer: list[str] = []
     # Insertion-ordered dedup: a turn may search twice and hit the same chunk.
     sources: dict[tuple[str, int], dict] = {}
     try:
+        # Prelude: tells the client its conversation id (server-created on
+        # turn 1). Inside the try: a disconnect while it is sent must still
+        # reach the finally, which releases the turn's claim.
+        yield sse_event({"conversation_id": str(conversation_id)})
         async for item in stream_fn(messages):
             event = {"content": item} if isinstance(item, str) else item
             if "content" in event:
@@ -159,5 +188,9 @@ async def event_stream(
         # propagates.
         with anyio.CancelScope(shield=True):
             await persist_assistant_turn(
-                conversation_id, user_id, "".join(buffer), list(sources.values())
+                conversation_id,
+                user_id,
+                "".join(buffer),
+                list(sources.values()),
+                claimed_at=claimed_at,
             )

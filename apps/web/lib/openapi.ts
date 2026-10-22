@@ -792,6 +792,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description a reply is already in progress in this conversation */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Validation Error */
             422: {
                 headers: {
