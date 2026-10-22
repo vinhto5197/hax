@@ -83,6 +83,19 @@ async def _messages(admin_engine, conv_id):
         return [(role, content) for role, content in rows]
 
 
+async def _claim(admin_engine, conv_id):
+    """Stand in for the user turn's claim on a seeded conversation; returns
+    the value persist_assistant_turn/event_stream must release."""
+    async with admin_engine.begin() as conn:
+        return await conn.scalar(
+            text(
+                "UPDATE conversations SET streaming_since = now() WHERE id = :i"
+                " RETURNING streaming_since"
+            ),
+            {"i": conv_id},
+        )
+
+
 async def _counts(admin_engine, conv_id):
     async with admin_engine.connect() as conn:
         conversations = await conn.scalar(
@@ -107,7 +120,9 @@ async def test_new_conversation_enqueues_once_with_the_committed_turn(
         seen.append((conversation_id, user_id, committed))
 
     _publisher(monkeypatch, record)
-    conv_id = await _as(user_a, chat_service.persist_user_turn(PROMPT, None, user_a.id))
+    conv_id, _ = await _as(
+        user_a, chat_service.persist_user_turn(PROMPT, None, user_a.id)
+    )
     assert seen == [(str(conv_id), str(user_a.id), (1, 1))]
 
 
@@ -124,9 +139,14 @@ async def test_enqueue_happens_after_the_commit(
         real(conversation_id, user_id)
 
     monkeypatch.setattr(chat_service, "_enqueue_title", spy)
-    conv_id = await _as(user_a, chat_service.persist_user_turn(PROMPT, None, user_a.id))
+    conv_id, claimed_at = await _as(
+        user_a, chat_service.persist_user_turn(PROMPT, None, user_a.id)
+    )
     await _as(
-        user_a, chat_service.persist_assistant_turn(conv_id, user_a.id, "the answer")
+        user_a,
+        chat_service.persist_assistant_turn(
+            conv_id, user_a.id, "the answer", claimed_at=claimed_at
+        ),
     )
     assert checked_out == [0, 0]
 
@@ -142,8 +162,12 @@ async def test_assistant_turn_re_enqueues_while_untitled(
     admin_engine, user_a, enqueued
 ):
     conv = await make_conversation(admin_engine, user_a.id)
+    claimed_at = await _claim(admin_engine, conv)
     await _as(
-        user_a, chat_service.persist_assistant_turn(conv, user_a.id, "the answer")
+        user_a,
+        chat_service.persist_assistant_turn(
+            conv, user_a.id, "the answer", claimed_at=claimed_at
+        ),
     )
     assert await _messages(admin_engine, conv) == [("assistant", "the answer")]
     assert enqueued == [(str(conv), str(user_a.id))]
@@ -153,8 +177,12 @@ async def test_assistant_turn_on_a_titled_conversation_does_not_enqueue(
     admin_engine, user_a, enqueued
 ):
     conv = await make_conversation(admin_engine, user_a.id, title="Trip Planning")
+    claimed_at = await _claim(admin_engine, conv)
     await _as(
-        user_a, chat_service.persist_assistant_turn(conv, user_a.id, "the answer")
+        user_a,
+        chat_service.persist_assistant_turn(
+            conv, user_a.id, "the answer", claimed_at=claimed_at
+        ),
     )
     assert await _messages(admin_engine, conv) == [("assistant", "the answer")]
     assert enqueued == []
@@ -164,7 +192,11 @@ async def test_assistant_turn_without_content_persists_nothing_and_enqueues_noth
     admin_engine, user_a, enqueued
 ):
     conv = await make_conversation(admin_engine, user_a.id)
-    await _as(user_a, chat_service.persist_assistant_turn(conv, user_a.id, ""))
+    claimed_at = await _claim(admin_engine, conv)
+    await _as(
+        user_a,
+        chat_service.persist_assistant_turn(conv, user_a.id, "", claimed_at=claimed_at),
+    )
     assert await _messages(admin_engine, conv) == []
     assert enqueued == []
 
@@ -178,7 +210,9 @@ async def test_enqueue_failure_on_the_user_turn_is_not_fatal(
     _publisher(monkeypatch, boom)
     caplog.set_level(logging.WARNING)
 
-    conv_id = await _as(user_a, chat_service.persist_user_turn(PROMPT, None, user_a.id))
+    conv_id, _ = await _as(
+        user_a, chat_service.persist_user_turn(PROMPT, None, user_a.id)
+    )
 
     assert await _messages(admin_engine, conv_id) == [("user", PROMPT)]
     assert "OSError" in caplog.text and str(conv_id) in caplog.text
@@ -195,8 +229,12 @@ async def test_enqueue_failure_on_the_assistant_turn_is_not_fatal(
     caplog.set_level(logging.WARNING)
     conv = await make_conversation(admin_engine, user_a.id)
 
+    claimed_at = await _claim(admin_engine, conv)
     await _as(
-        user_a, chat_service.persist_assistant_turn(conv, user_a.id, "the answer")
+        user_a,
+        chat_service.persist_assistant_turn(
+            conv, user_a.id, "the answer", claimed_at=claimed_at
+        ),
     )
 
     assert await _messages(admin_engine, conv) == [("assistant", "the answer")]
@@ -206,6 +244,7 @@ async def test_enqueue_failure_on_the_assistant_turn_is_not_fatal(
 
 async def test_event_stream_forwards_the_user_id(admin_engine, user_a, enqueued):
     conv = await make_conversation(admin_engine, user_a.id)
+    claimed_at = await _claim(admin_engine, conv)
 
     async def stream_fn(messages):
         yield "he"
@@ -215,7 +254,9 @@ async def test_event_stream_forwards_the_user_id(admin_engine, user_a, enqueued)
     try:
         chunks = [
             chunk
-            async for chunk in chat_service.event_stream(stream_fn, [], conv, user_a.id)
+            async for chunk in chat_service.event_stream(
+                stream_fn, [], conv, user_a.id, claimed_at
+            )
         ]
     finally:
         current_user_id.reset(token)
@@ -264,13 +305,16 @@ async def _sources(admin_engine, conv_id):
         ).scalar_one()
 
 
-async def _run_stream(user, conv, events):
+async def _run_stream(admin_engine, user, conv, events):
     async def stream_fn(messages):
         for e in events:
             yield e
 
+    claimed_at = await _claim(admin_engine, conv)
     frames = []
-    async for chunk in chat_service.event_stream(stream_fn, [], conv, user.id):
+    async for chunk in chat_service.event_stream(
+        stream_fn, [], conv, user.id, claimed_at
+    ):
         frames.append(chunk)
     return frames
 
@@ -280,7 +324,10 @@ async def test_event_stream_forwards_and_persists_sources(
 ):
     conv = await make_conversation(admin_engine, user_a.id)
     frames = await _as(
-        user_a, _run_stream(user_a, conv, [{"sources": [SRC_A]}, {"content": "Yes."}])
+        user_a,
+        _run_stream(
+            admin_engine, user_a, conv, [{"sources": [SRC_A]}, {"content": "Yes."}]
+        ),
     )
     assert any('"sources"' in f for f in frames)
     assert await _sources(admin_engine, conv) == [SRC_A]
@@ -293,6 +340,7 @@ async def test_event_stream_dedups_sources_across_searches(
     await _as(
         user_a,
         _run_stream(
+            admin_engine,
             user_a,
             conv,
             [
@@ -312,7 +360,7 @@ async def test_event_stream_persists_nothing_without_content(
     admin_engine, user_a, enqueued
 ):
     conv = await make_conversation(admin_engine, user_a.id)
-    await _as(user_a, _run_stream(user_a, conv, [{"sources": [SRC_A]}]))
+    await _as(user_a, _run_stream(admin_engine, user_a, conv, [{"sources": [SRC_A]}]))
     async with admin_engine.connect() as conn:
         n = (
             await conn.execute(
@@ -327,7 +375,7 @@ async def test_event_stream_without_sources_persists_null(
     admin_engine, user_a, enqueued
 ):
     conv = await make_conversation(admin_engine, user_a.id)
-    await _as(user_a, _run_stream(user_a, conv, [{"content": "Hi."}]))
+    await _as(user_a, _run_stream(admin_engine, user_a, conv, [{"content": "Hi."}]))
     async with admin_engine.connect() as conn:
         is_null = (
             await conn.execute(

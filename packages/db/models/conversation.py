@@ -31,6 +31,11 @@ class Conversation(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+    # When the reply now in progress started (DB clock); NULL when none is.
+    # Claimed and released only by repos.conversations.claim_turn/release_turn.
+    streaming_since: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # passive_deletes: let the DB's ON DELETE CASCADE remove messages instead of
     # the ORM loading every row just to emit per-row DELETEs.

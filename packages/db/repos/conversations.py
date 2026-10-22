@@ -9,12 +9,18 @@ same request, and RLS re-checks at the DB.
 
 import uuid
 from collections.abc import Sequence
+from datetime import datetime, timedelta
 
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from packages.db.models import Conversation, Message
+
+# A claim older than this counts as free: the claim is never refreshed, so the
+# window must outlast the longest normal reply, and it is all that unlocks a
+# conversation whose replying process died.
+TURN_WINDOW = timedelta(minutes=2)
 
 
 async def list_for_user(
@@ -141,3 +147,48 @@ async def set_title_if_unset(
         .execution_options(synchronize_session=False)
     )
     return result.first() is not None
+
+
+async def claim_turn(
+    session: AsyncSession, user_id: uuid.UUID, conversation_id: uuid.UUID
+) -> datetime | None:
+    """Mark a reply as in progress; the claimed timestamp, or None when the
+    conversation is not the caller's or another reply holds a live claim.
+
+    One conditional UPDATE, so two concurrent claims serialize on the row lock
+    and the loser sees the winner's value. The window is compared against the
+    database's now(), never the app clock. The caller owns the commit.
+
+    updated_at is pinned in every claim/release statement: its onupdate also
+    fires on Core UPDATEs, and it orders the sidebar (touch owns it).
+    """
+    result = await session.execute(
+        update(Conversation)
+        .where(
+            Conversation.id == conversation_id,
+            Conversation.user_id == user_id,
+            (Conversation.streaming_since.is_(None))
+            | (Conversation.streaming_since < func.now() - TURN_WINDOW),
+        )
+        .values(streaming_since=func.now(), updated_at=Conversation.updated_at)
+        .returning(Conversation.streaming_since)
+        .execution_options(synchronize_session=False)
+    )
+    return result.scalar_one_or_none()
+
+
+async def release_turn(
+    session: AsyncSession, conversation_id: uuid.UUID, claimed_at: datetime
+) -> None:
+    """Clear the claim only if it is still `claimed_at`: a turn whose claim
+    lapsed and was re-claimed must not free the newer turn. The caller owns
+    the commit."""
+    await session.execute(
+        update(Conversation)
+        .where(
+            Conversation.id == conversation_id,
+            Conversation.streaming_since == claimed_at,
+        )
+        .values(streaming_since=None, updated_at=Conversation.updated_at)
+        .execution_options(synchronize_session=False)
+    )

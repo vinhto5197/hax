@@ -1,5 +1,6 @@
 from functools import partial
 
+import anyio
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
@@ -9,6 +10,7 @@ from apps.api.chat_service import (
     event_stream,
     load_history,
     persist_user_turn,
+    release_claim,
 )
 from apps.api.demo import enforce_turn_cap, is_visitor
 from packages.core.agent.harness import DEFAULT_MODEL, stream_completion_agentic
@@ -40,7 +42,13 @@ AGENTIC_SYSTEM = (
 )
 
 
-@router.post("", responses={403: {"description": "demo_limit: sign up to continue"}})
+@router.post(
+    "",
+    responses={
+        403: {"description": "demo_limit: sign up to continue"},
+        409: {"description": "a reply is already in progress in this conversation"},
+    },
+)
 async def chat(
     payload: ChatRequest, user: CurrentUser = Depends(current_user)
 ) -> StreamingResponse:
@@ -48,27 +56,35 @@ async def chat(
     await enforce_turn_cap(user)
     # Persist the user turn before streaming, so it survives an LLM error and we
     # have a conversation id for the SSE prelude.
-    conversation_id = await persist_user_turn(
+    conversation_id, claimed_at = await persist_user_turn(
         payload.prompt, payload.conversation_id, user.id
     )
-    # Replay prior turns. Retrieval is NOT injected here — the model invokes the
-    # search_documents tool itself when the corpus looks relevant.
-    messages = await load_history(conversation_id, user.id)
-    # A visitor gets the guest prompt (the demo text rides in it), no tools,
-    # and the default model whatever the request asked for (spend control); a
-    # member gets the agentic prompt, the registry and their model choice, from
-    # ChatRequest's allowlist.
-    visitor = is_visitor(user)
-    model = DEFAULT_MODEL if visitor else (payload.model or DEFAULT_MODEL)
-    event_fn = partial(
-        stream_completion_agentic,
-        system=DEMO_SYSTEM_PROMPT if visitor else AGENTIC_SYSTEM,
-        model=model,
-        ctx=ToolContext(user_id=user.id),
-        tools=not visitor,
-    )
+    # Until the StreamingResponse exists, event_stream's finally cannot release
+    # the claim; any failure here releases it before propagating.
+    try:
+        # Replay prior turns. Retrieval is NOT injected here — the model invokes
+        # the search_documents tool itself when the corpus looks relevant.
+        messages = await load_history(conversation_id, user.id)
+        # A visitor gets the guest prompt (the demo text rides in it), no tools,
+        # and the default model whatever the request asked for (spend control);
+        # a member gets the agentic prompt, the registry and their model choice,
+        # from ChatRequest's allowlist.
+        visitor = is_visitor(user)
+        model = DEFAULT_MODEL if visitor else (payload.model or DEFAULT_MODEL)
+        event_fn = partial(
+            stream_completion_agentic,
+            system=DEMO_SYSTEM_PROMPT if visitor else AGENTIC_SYSTEM,
+            model=model,
+            ctx=ToolContext(user_id=user.id),
+            tools=not visitor,
+        )
+    except BaseException:
+        # Shielded: a cancelled request would otherwise abort the release.
+        with anyio.CancelScope(shield=True):
+            await release_claim(conversation_id, claimed_at)
+        raise
     return StreamingResponse(
-        event_stream(event_fn, messages, conversation_id, user.id),
+        event_stream(event_fn, messages, conversation_id, user.id, claimed_at),
         media_type="text/event-stream",
         headers=SSE_HEADERS,
     )
