@@ -110,6 +110,14 @@ body {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
   }
+
+  /* Placeholders are ink-3, not preflight's half-strength text colour (about
+     3:1): 5.33:1 light and 5.52:1 dark on surface-1, every field's ground.
+     Same layer as preflight and no less specific, so this later rule wins. */
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--ink-3);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
