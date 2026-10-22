@@ -150,7 +150,9 @@ function ChatSession({
 
       <div className="mx-auto w-full max-w-4xl px-4 pb-6 pt-2">
         {error ? (
-          <p className="mb-2 text-small text-status-failed">{error}</p>
+          <p role="alert" className="mb-2 text-small text-status-failed">
+            {error}
+          </p>
         ) : null}
         <ChatInput
           onSend={send}
