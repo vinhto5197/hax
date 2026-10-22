@@ -169,3 +169,33 @@ was searched and found, not which sentence rests on which passage.
 Contract: sources are persisted for the client and never replayed into the
 prompt (`load_history` selects text only); a snapshot, so deleting the
 document later does not erase the provenance of past answers.
+
+## Addendum (2026-10-22) — one reply at a time per conversation
+
+The assistant turn is persisted when its stream ends, so a second turn sent
+mid-reply (another tab, another device) would load a history ending in an
+unanswered question and save its reply in completion order, pairing answers
+with the wrong questions for every later turn. The chat route therefore
+refuses a turn while a reply is in progress in that conversation: 409, before
+anything is persisted.
+
+The guard is a column, `conversations.streaming_since`, claimed by one
+conditional UPDATE inside the transaction that already checks ownership and
+saves the user message, and cleared inside the transaction that saves the
+reply. The claim and the message commit or roll back together; two concurrent
+claims serialize on the row lock. On a normal finish the reply is saved and
+the claim released before `[DONE]` is sent, so a client that sees the reply
+end can send at once; errors and disconnects save and release in the stream's
+`finally`.
+
+The claim is never refreshed. A claim older than two minutes counts as free —
+the only thing that unlocks a conversation whose replying process died — so
+the window must outlast the longest normal reply. Retune it from real
+durations, not estimates.
+
+Rejected: a Redis lock (a second system for state that belongs to the row,
+with its own outage policy and a cross-user key problem, since the lock would
+be taken before the ownership check); Postgres advisory locks (held by a
+connection, so every streaming reply would pin a pooled connection for its
+whole length); live replies across tabs (a reply generated apart from its
+request, streamed to any subscriber) — other tabs see a reply after a reload.
