@@ -153,6 +153,38 @@ class _ModelDown(Exception):
     pass
 
 
+async def test_the_reply_is_saved_and_the_conversation_freed_before_done_is_sent(
+    admin_engine, user_a
+):
+    conv = await make_conversation(admin_engine, user_a.id)
+    _, claimed_at = await _turn(user_a, conv)
+    with _identity(user_a):
+        gen = chat_service.event_stream(
+            _stream_of({"content": "done"}),
+            [],
+            conv,
+            user_a.id,
+            claimed_at=claimed_at,
+        )
+        async for frame in gen:
+            if frame == "data: [DONE]\n\n":
+                break
+        else:
+            pytest.fail("the stream ended without a [DONE] frame")
+
+        assert await _streaming_since(admin_engine, conv) is None
+        assert await _messages(admin_engine, conv) == [
+            ("user", PROMPT),
+            ("assistant", "done"),
+        ]
+        _, newer_claim = await chat_service.persist_user_turn(PROMPT, conv, user_a.id)
+        await gen.aclose()
+
+    roles = [role for role, _ in await _messages(admin_engine, conv)]
+    assert roles.count("assistant") == 1
+    assert await _streaming_since(admin_engine, conv) == newer_claim
+
+
 async def test_a_new_turn_succeeds_after_the_reply_stream_fails(admin_engine, user_a):
     conv = await make_conversation(admin_engine, user_a.id)
     _, claimed_at = await _turn(user_a, conv)

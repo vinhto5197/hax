@@ -60,6 +60,36 @@ export class DemoLimitError extends Error {
   }
 }
 
+const TURN_IN_PROGRESS = "A reply is already in progress in this conversation.";
+
+// 409: the conversation already has a reply in progress (another tab, a
+// double submit). Thrown by streamChat; refused before anything was
+// persisted, so the caller drops its optimistic turn. `message` is the
+// server's detail.
+export class TurnInProgressError extends Error {
+  constructor(message: string = TURN_IN_PROGRESS) {
+    super(message);
+    this.name = "TurnInProgressError";
+  }
+}
+
+// FastAPI's string `detail`, else `fallback` (the status by default):
+// statusText is empty under HTTP/2 (any TLS-terminating proxy), so a bare
+// status is uninformative. `detail` is a string for HTTPException but an
+// array for 422 validation errors; the array case falls through to `fallback`.
+async function errorDetail(
+  response: Response,
+  fallback = `API ${response.status}: ${response.statusText}`,
+): Promise<string> {
+  try {
+    const body = (await response.json()) as { detail?: unknown };
+    if (typeof body.detail === "string") return body.detail;
+  } catch {
+    // non-JSON error body — keep the fallback
+  }
+  return fallback;
+}
+
 async function isDemoLimit(response: Response): Promise<boolean> {
   if (response.status !== 403) return false;
   try {
@@ -112,16 +142,7 @@ export async function uploadDocument(file: File): Promise<DocumentSummary> {
   });
   if (!response.ok) {
     // Surface FastAPI's `detail` — these errors are user-actionable.
-    let detail = `API ${response.status}: ${response.statusText}`;
-    try {
-      // `detail` is a string for HTTPException but an array for 422 validation
-      // errors; the array case falls through to the status message.
-      const body = (await response.json()) as { detail?: unknown };
-      if (typeof body.detail === "string") detail = body.detail;
-    } catch {
-      // non-JSON error body — keep the status-based message
-    }
-    throw new Error(detail);
+    throw new Error(await errorDetail(response));
   }
   return response.json();
 }
@@ -134,17 +155,7 @@ export async function deleteDocument(id: string): Promise<void> {
     method: "DELETE",
   });
   if (response.ok || response.status === 404) return;
-  // Surface FastAPI's `detail` when present — statusText is empty under HTTP/2
-  // (any TLS-terminating proxy), so a bare status is uninformative (mirrors
-  // uploadDocument).
-  let detail = `API ${response.status}: ${response.statusText}`;
-  try {
-    const body = (await response.json()) as { detail?: unknown };
-    if (typeof body.detail === "string") detail = body.detail;
-  } catch {
-    // non-JSON error body — keep the status-based message
-  }
-  throw new Error(detail);
+  throw new Error(await errorDetail(response));
 }
 
 // Through apiFetch so credentials and the 401 eviction apply; a blob rather
@@ -176,14 +187,7 @@ export async function deleteConversation(id: string): Promise<void> {
     method: "DELETE",
   });
   if (response.ok || response.status === 404) return;
-  let detail = `API ${response.status}: ${response.statusText}`;
-  try {
-    const body = (await response.json()) as { detail?: unknown };
-    if (typeof body.detail === "string") detail = body.detail;
-  } catch {
-    // non-JSON error body — keep the status-based message
-  }
-  throw new Error(detail);
+  throw new Error(await errorDetail(response));
 }
 
 // Parsed result of one SSE event — a discriminated union so callers switch on
@@ -274,9 +278,12 @@ export async function streamChat(
   });
 
   if (await isDemoLimit(response)) throw new DemoLimitError();
-  if (!response.ok) {
-    throw new Error(`API ${response.status}: ${response.statusText}`);
+  if (response.status === 409) {
+    throw new TurnInProgressError(
+      await errorDetail(response, TURN_IN_PROGRESS),
+    );
   }
+  if (!response.ok) throw new Error(await errorDetail(response));
   if (!response.body) {
     throw new Error("Streaming response body is missing.");
   }
