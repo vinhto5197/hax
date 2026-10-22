@@ -36,10 +36,10 @@ exists on origin (`git ls-remote --heads origin 'routine/*'`), is DONE for
 you: skip it. Count the OPEN routine PRs.
 
 ## Step 2 — cap
-If 5 or more routine PRs are open, do no work; skip to Step 5 and report
+If 10 or more routine PRs are open, do no work; skip to Step 5 and report
 "waiting on review".
 
-## Step 3 — work each remaining item, in queue order, while open PRs < 5
+## Step 3 — work each remaining item, in queue order, while open PRs < 10
 1. git switch -c <branch> origin/main   (branch name exactly as given)
 2. Implement the task. Keep the change minimal; match surrounding code.
 3. If behaviour changes, have a SUBAGENT write the tests: give it the item
