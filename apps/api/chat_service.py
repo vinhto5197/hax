@@ -167,6 +167,21 @@ async def event_stream(
     buffer: list[str] = []
     # Insertion-ordered dedup: a turn may search twice and hit the same chunk.
     sources: dict[tuple[str, int], dict] = {}
+    persisted = False
+
+    async def persist() -> None:
+        # Shielded: disconnect cancels the surrounding anyio scope, and that
+        # cancellation is level-triggered — the first await inside an
+        # unshielded persist would re-raise CancelledError and drop the write.
+        with anyio.CancelScope(shield=True):
+            await persist_assistant_turn(
+                conversation_id,
+                user_id,
+                "".join(buffer),
+                list(sources.values()),
+                claimed_at=claimed_at,
+            )
+
     try:
         # Prelude: tells the client its conversation id (server-created on
         # turn 1). Inside the try: a disconnect while it is sent must still
@@ -179,18 +194,12 @@ async def event_stream(
             for s in event.get("sources", ()):
                 sources.setdefault((s["document_id"], s["chunk_idx"]), s)
             yield sse_event(event)
+        # Saved and released BEFORE [DONE]: a client that sees the reply end
+        # may send the next turn at once, and must find the conversation free.
+        await persist()
+        persisted = True
         yield "data: [DONE]\n\n"
     finally:
-        # Persist even on client disconnect. Disconnect cancels the surrounding
-        # anyio scope, and that cancellation is level-triggered — the first await
-        # inside an unshielded persist would re-raise CancelledError and drop the
-        # write. The shield lets the DB write complete before cancellation
-        # propagates.
-        with anyio.CancelScope(shield=True):
-            await persist_assistant_turn(
-                conversation_id,
-                user_id,
-                "".join(buffer),
-                list(sources.values()),
-                claimed_at=claimed_at,
-            )
+        # Error and disconnect paths still save whatever streamed and release.
+        if not persisted:
+            await persist()

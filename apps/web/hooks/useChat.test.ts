@@ -8,6 +8,7 @@ import type {
   StreamHandlers,
   streamChat as StreamChatFn,
 } from "@/lib/chatApi";
+import { TurnInProgressError } from "@/lib/chatApi";
 import { useChat } from "@/hooks/useChat";
 
 const { getConversation, streamChat, DemoLimitError } = vi.hoisted(() => ({
@@ -20,11 +21,16 @@ const { getConversation, streamChat, DemoLimitError } = vi.hoisted(() => ({
     }
   },
 }));
-vi.mock("@/lib/chatApi", () => ({
-  getConversation,
-  streamChat,
-  DemoLimitError,
-}));
+vi.mock("@/lib/chatApi", async () => {
+  const actual =
+    await vi.importActual<typeof import("@/lib/chatApi")>("@/lib/chatApi");
+  return {
+    getConversation,
+    streamChat,
+    DemoLimitError,
+    TurnInProgressError: actual.TurnInProgressError,
+  };
+});
 
 type Turn = {
   handlers: StreamHandlers;
@@ -385,6 +391,75 @@ describe("useChat sending", () => {
     expect(result.current.error).toBeNull();
     expect(result.current.messages).toEqual([]);
   });
+
+  it("a reply already in progress removes the user message and shows the server's message, not the demo limit", async () => {
+    const message = "A reply is already in progress in this conversation.";
+    const onTurnComplete = vi.fn();
+    const result = await newChatTurn(
+      holdTurn(),
+      () => {},
+      (t) => t.fail(new TurnInProgressError(message)),
+      { onTurnComplete },
+    );
+    expect(onTurnComplete).not.toHaveBeenCalled();
+    expect(result.current.messages).toEqual([]);
+    expect(result.current.error).toBe(message);
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.limited).toBe(false);
+    expect(result.current.streamingContent).toBe("");
+  });
+
+  it.each([
+    [
+      "a reply in progress",
+      () =>
+        new TurnInProgressError(
+          "A reply is already in progress in this conversation.",
+        ),
+    ],
+    ["the demo limit", () => new DemoLimitError()],
+  ])(
+    "a history load landing mid-send keeps every loaded message when %s refuses the send",
+    async (_label, refusal) => {
+      let loaded!: (d: ConversationDetail) => void;
+      getConversation.mockImplementation(
+        () => new Promise((r) => (loaded = r)),
+      );
+      const turn = holdTurn();
+      const { result } = renderHook(() => useChat("c1", null));
+      await waitFor(() => expect(getConversation).toHaveBeenCalled());
+
+      const { settled } = await start(result, "refused text");
+      await act(async () =>
+        loaded(
+          detail("c1", [
+            {
+              id: "m1",
+              role: "user",
+              content: "question",
+              created_at: "2026-10-01T00:00:01Z",
+              sources: null,
+            },
+            {
+              id: "m2",
+              role: "assistant",
+              content: "answer",
+              created_at: "2026-10-01T00:00:02Z",
+              sources: null,
+            },
+          ]),
+        ),
+      );
+      await settle(settled, () => turn.fail(refusal()));
+
+      expect(
+        result.current.messages.map(({ role, content }) => ({ role, content })),
+      ).toEqual([
+        { role: "user", content: "question" },
+        { role: "assistant", content: "answer" },
+      ]);
+    },
+  );
 
   it("a non-Error rejection shows the generic error", async () => {
     const result = await newChatTurn(

@@ -8,6 +8,7 @@ import {
   getConversation,
   type Source,
   streamChat,
+  TurnInProgressError,
 } from "@/lib/chatApi";
 
 type UseChatResult = {
@@ -83,10 +84,14 @@ export function useChat(
       const prompt = text.trim();
       if (!prompt || isLoading) return;
 
-      setMessages((prev) => [
-        ...prev,
-        { role: "user", content: prompt, created_at: new Date().toISOString() },
-      ]);
+      // Kept by identity: a refusal removes exactly this turn, never "the last
+      // message" — a history load landing mid-send replaces the list.
+      const optimistic: ChatMessage = {
+        role: "user",
+        content: prompt,
+        created_at: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, optimistic]);
       setIsLoading(true);
       setStreamingContent("");
       setError(null);
@@ -134,8 +139,15 @@ export function useChat(
         if (err instanceof DemoLimitError) {
           // Refused before anything was persisted: drop the optimistic turn
           // so the view matches the server.
-          setMessages((prev) => prev.slice(0, -1));
+          setMessages((prev) => prev.filter((m) => m !== optimistic));
           setLimited(true);
+          return;
+        }
+        if (err instanceof TurnInProgressError) {
+          // Also refused before anything was persisted (another reply is
+          // running in this conversation): drop the optimistic turn.
+          setMessages((prev) => prev.filter((m) => m !== optimistic));
+          setError(err.message);
           return;
         }
         const errMessage =

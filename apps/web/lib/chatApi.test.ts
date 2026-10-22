@@ -542,22 +542,89 @@ describe("streamChat", () => {
   });
 
   it.each([
-    [403, { detail: "Forbidden" }],
-    [403, { detail: { code: "something_else" } }],
-    [500, { detail: "Internal Server Error" }],
+    [403, { detail: "Forbidden" }, "Forbidden"],
+    [403, { detail: { code: "something_else" } }, "API 403"],
+    [500, { detail: "Internal Server Error" }, "Internal Server Error"],
   ])(
-    "rejects a %i with an API status error that is not a demo limit (%j)",
-    async (status, body) => {
+    "rejects a %i that is not a demo limit with a plain error (%j)",
+    async (status, body, message) => {
       const api = await load();
       respondWith(() => jsonResponse(body, status));
       const err = await api
         .streamChat("hi", null, handlers())
         .catch((e: unknown) => e);
       expect(err).toBeInstanceOf(Error);
-      expect((err as Error).message).toContain(`API ${status}`);
+      expect((err as Error).message).toContain(message);
       expect(err).not.toBeInstanceOf(api.DemoLimitError);
     },
   );
+
+  it("rejects a 409 with TurnInProgressError carrying the server's detail", async () => {
+    const api = await load();
+    const detail = "A reply is already in progress in this conversation.";
+    respondWith(() => jsonResponse({ detail }, 409));
+    const h = handlers();
+    const err = await api.streamChat("hi", "c1", h).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(api.TurnInProgressError);
+    expect((err as Error).name).toBe("TurnInProgressError");
+    expect((err as Error).message).toBe(detail);
+    expect(err).not.toBeInstanceOf(api.DemoLimitError);
+    expect(h.log).toEqual([]);
+  });
+
+  it("rejects another non-ok status with its string detail as the message", async () => {
+    const api = await load();
+    respondWith(() =>
+      jsonResponse({ detail: "The model is busy, try again." }, 503),
+    );
+    const err = await api
+      .streamChat("hi", null, handlers())
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toBe("The model is busy, try again.");
+    expect(err).not.toBeInstanceOf(api.TurnInProgressError);
+    expect(err).not.toBeInstanceOf(api.DemoLimitError);
+  });
+
+  it("rejects a non-JSON error body with the status and status text", async () => {
+    const api = await load();
+    respondWith(
+      () =>
+        new Response("<html>Bad Gateway</html>", {
+          status: 502,
+          statusText: "Bad Gateway",
+        }),
+    );
+    const err = await api
+      .streamChat("hi", null, handlers())
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toBe("API 502: Bad Gateway");
+    expect(err).not.toBeInstanceOf(api.TurnInProgressError);
+  });
+
+  it("rejects a 422 validation array with the status and status text", async () => {
+    const api = await load();
+    respondWith(
+      () =>
+        new Response(
+          JSON.stringify({
+            detail: [{ loc: ["body", "prompt"], msg: "Field required" }],
+          }),
+          {
+            status: 422,
+            statusText: "Unprocessable Entity",
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+    );
+    const err = await api
+      .streamChat("hi", null, handlers())
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toBe("API 422: Unprocessable Entity");
+    expect(err).not.toBeInstanceOf(api.TurnInProgressError);
+  });
 
   it("delivers a final event that lacks the trailing blank line", async () => {
     const api = await load();
