@@ -19,6 +19,7 @@
   --ink-3: #6e6b62;
   --border: #e4e1da;
   --border-control: #89857b;
+  /* app/icon.svg copies these two as hex (a favicon cannot read variables). */
   --accent: #2a6cb0;
   --accent-ink: #ffffff;
   --status-ready: #2a7a4b;
