@@ -195,7 +195,7 @@ export function DocumentsPanel() {
           No documents yet. Upload a .txt, .md, .pdf or .docx to chat over it.
         </p>
       ) : (
-        <ul className="flex max-h-24 flex-col gap-1 overflow-y-auto short:max-h-20">
+        <ul className="flex max-h-24 scroll-smooth flex-col gap-1 overflow-y-auto short:max-h-20">
           {ordered.map((doc) => {
             const statusClass = STATUS_STYLES[doc.status] ?? "text-ink-3";
             return (

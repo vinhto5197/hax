@@ -18,7 +18,9 @@ export function revealDocumentRow(documentId: string): boolean {
   const row = document.getElementById(`doc-${documentId}`);
   if (!row) return false;
   row.closest("details")?.setAttribute("open", "");
-  row.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  // No `behavior`: an explicit one overrides the reduced-motion rule in
+  // globals.css; the list's own `scroll-smooth` decides instead.
+  row.scrollIntoView({ block: "nearest" });
   row.setAttribute("data-flash", "true");
   window.setTimeout(() => row.removeAttribute("data-flash"), FLASH_MS);
   return true;
