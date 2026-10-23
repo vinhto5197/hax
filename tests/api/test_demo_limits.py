@@ -1,9 +1,10 @@
 """A visitor (token with no email) gets the guest prompt with no tools, a
-lifetime turn cap checked before anything is persisted, and no uploads. The
-model choice is honoured for everyone, within the allowlist. Members are
-otherwise untouched."""
+lifetime turn cap checked before anything is persisted, and no uploads. A
+member's model choice is honoured within the allowlist; a visitor always gets
+the default model. Members are otherwise untouched."""
 
 import asyncio
+from typing import get_args
 
 import pytest
 from sqlalchemy import text
@@ -11,6 +12,7 @@ from sqlalchemy import text
 import apps.api.demo as demo
 import apps.api.routers.chat as chat_router
 from packages.core.demo.prompt import DEMO_SYSTEM_PROMPT
+from packages.core.schemas.chat import ModelId
 from tests.api.conftest import bearer
 from tests.api.factories import (
     make_conversation,
@@ -106,6 +108,16 @@ async def test_member_gets_the_agentic_prompt_and_tools(client, user_a, harness)
     assert r.status_code == 200
     assert harness[0]["system"] == chat_router.AGENTIC_SYSTEM
     assert harness[0]["tools"] is True
+
+
+async def test_member_model_choice_reaches_the_harness(client, user_a, harness):
+    # Not the default, or the assertion could not tell a choice from a fallback.
+    model = next(m for m in get_args(ModelId) if m != chat_router.DEFAULT_MODEL)
+    r = await client.post(
+        "/api/chat", json={"prompt": "hi", "model": model}, headers=bearer(user_a)
+    )
+    assert r.status_code == 200
+    assert harness[0]["model"] == model
 
 
 def _send(client, user, prompt="hi", **extra):
