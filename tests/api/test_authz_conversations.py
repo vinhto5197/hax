@@ -3,6 +3,7 @@ import uuid
 
 from sqlalchemy import text
 
+import apps.api.routers.chat as chat_router
 from tests.api.conftest import bearer
 from tests.api.factories import make_conversation, make_message
 
@@ -73,6 +74,32 @@ async def test_chat_append_to_foreign_conversation_404(
         headers=bearer(user_b),
     )
     assert r.status_code == 404
+
+
+async def test_chat_append_to_own_conversation_200(
+    client, user_a, admin_engine, monkeypatch
+):
+    async def fake_harness(messages, **kwargs):
+        if False:
+            yield {}
+
+    monkeypatch.setattr(chat_router, "stream_completion_agentic", fake_harness)
+    a_conv = await make_conversation(admin_engine, user_a.id)
+    r = await client.post(
+        "/api/chat",
+        json={"prompt": "follow-up", "conversation_id": str(a_conv)},
+        headers=bearer(user_a),
+    )
+    assert r.status_code == 200
+    async with admin_engine.connect() as conn:
+        rows = await conn.execute(
+            text(
+                "SELECT content FROM messages"
+                " WHERE conversation_id = :c AND role = 'user'"
+            ),
+            {"c": a_conv},
+        )
+        assert rows.scalars().all() == ["follow-up"]
 
 
 SRC = {
