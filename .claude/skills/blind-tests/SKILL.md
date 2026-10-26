@@ -7,6 +7,10 @@ description: Tests written by a fresh agent from an interface and a behaviour li
 
 The agent that wrote the code must not write its tests: tests written beside the implementation agree with it, so green proves nothing, and tests written against existing code pin today's bugs as intended behaviour. A fresh agent writes the tests from two inputs only, the public interface and a behaviour list, then the tests run against the real code.
 
+## Which suite
+
+The suite closest to the user that can observe the behaviour: a Playwright journey (`apps/web/e2e/`, against the e2e stack and its scripted model, `apps/web/e2e/fake-model/server.mjs`, whose prompt prefixes are the only way to script a reply) for anything a browser can observe; a Vitest or pytest unit test for what only a test can stage (a race, an ordering, a mocked boundary). The behaviour list names the suite per line.
+
 ## Inputs the controller prepares
 
 - **Interface:** signatures and types, routes with request and response shapes, component props, test selectors. In the feature lane this is the brief's Interface section, frozen; the implementer codes against the same list.

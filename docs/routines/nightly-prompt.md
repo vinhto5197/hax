@@ -46,8 +46,12 @@ If 10 or more routine PRs are open, do no work; skip to Step 5 and report
 2. Implement the task. Keep the change minimal; match surrounding code.
 3. If behaviour changes, have a SUBAGENT write the tests: give it the item
    text and the public interface of the code under test, NOT your diff or the
-   implementation, and tell it not to read the implementation file. Comment
-   or documentation-only items need no tests.
+   implementation, and tell it not to read the implementation file. A
+   behaviour a browser can observe (text, attributes, URL, scroll, geometry,
+   network, the fake model's scripted replies) gets a Playwright journey in
+   apps/web/e2e/; one only a test can stage (a race, an ordering, a mocked
+   boundary) gets a unit test. Say in the PR body which and why. Comment or
+   documentation-only items need no tests.
 4. Commit (message: "<type>(<area>): <summary>" + a blank line +
    "Routine item <id>."), push the branch, open a PR against `main`:
    title: "routine: <id> <short summary>"
