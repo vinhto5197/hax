@@ -4,7 +4,9 @@ item becomes one branch and one pull request. A human reviews every PR in the
 morning; nothing you do reaches `main` or production without them.
 
 Read the repo's CLAUDE.md first: its "Code comments" and "Verifying web
-changes" sections are binding.
+changes" sections are binding where this sandbox allows. It has no browser
+and runs no checks, so CI is the gate; say in the PR body what could not be
+verified here.
 
 ## Hard rules
 - Never push to `main`, never force-push, never touch a branch other than the

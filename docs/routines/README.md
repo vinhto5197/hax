@@ -16,3 +16,9 @@ CI, are not routine work in this repo: every branch of a public repo is
 public, so they are fixed by hand and pushed straight to `main`. (A cloud
 session's unpushed commits do not travel with `claude --teleport`, which
 moves the conversation only; a private lane would need a private remote.)
+
+The morning side is a Claude Code session on the maintainer's machine: on
+the first message after a date change it lists the routine's runs, reviews
+each PR with the diff and CI in front of it, and after the merges refills the
+queue (at most ten items, no new PR while ten are open) or pauses the routine
+when the queue is empty.

@@ -46,6 +46,8 @@ This creates the venv, installs deps, copies `.env.example` to `.env` (if missin
   direnv allow                 # approve .envrc (one time)
   ```
 
+- **Starting `next dev` by hand** (outside `make dev`, e.g. from an editor task) needs `NEXT_PUBLIC_API_URL=http://localhost:8000` in its environment: Next loads only `apps/web/.env`, not the root one, and without the variable the chat client posts to Next itself and gets a 404.
+
 - **Without direnv:** run this once per shell before `make dev`:
 
   ```bash

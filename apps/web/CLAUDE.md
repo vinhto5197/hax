@@ -18,16 +18,6 @@ Inside a function, prefer type inference unless it gets confusing.
 - Add return types for exported functions and hooks when it improves readability.
 - Prefer `as const` for literal objects/arrays used as enums.
 
-## JS → TS conversion (small steps)
-
-1. Rename `*.js` → `*.ts` (or `*.jsx` → `*.tsx`) only if the file is already stable.
-2. Fix minimum TS errors in order:
-   - Add parameter/prop types
-   - Type object shapes
-   - Add return types (especially exported funcs)
-   - Replace unsafe access with narrowing (`if (!x) return;`, `typeof`, `in`, etc.)
-3. If types are unclear, introduce a small helper type and move on — don't block the whole PR.
-
 ## Preferred patterns
 
 - Union types over enums: `type Status = "idle" | "loading" | "success" | "error"`

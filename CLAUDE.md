@@ -150,6 +150,17 @@ this repo. Write prod-level comments only:
   the origin allowlist is a guard rail, not a boundary.
 - By hand: new screens' look and feel, real devices, a pass after significant
   deploys.
+- Where no browser is available (a cloud sandbox), the hand-off says so;
+  CI's journeys are then the gate.
+## Working conventions
+- Working specs and plans live in `local/` (gitignored). The durable record
+  is an ADR in `docs/adr/`: a new decision with trade-offs gets a new ADR
+  linked from the ADR README; a reversal supersedes the old ADR's status
+  rather than editing it.
+- A plan's tasks end with "present"; the controller commits on the
+  maintainer's word, never on plan approval.
+- Prefer mechanisms in the harness or the tool layer over provider-specific
+  request parameters (ADR 0002 addenda).
 # Tech stack
 - Frontend: Next.js (SSR + routing) + React + TypeScript + Tailwind v4 (design tokens in `apps/web/app/globals.css`, ADR 0014)
 - Backend: FastAPI (LangChain only for text splitting — ADR 0009)
