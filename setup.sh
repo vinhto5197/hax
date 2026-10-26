@@ -41,6 +41,15 @@ echo "  Python: $("$PYTHON" --version)"
 
 # Node.js + npm (for apps/web)
 command -v node &>/dev/null || die "Node.js not found. Install via nvm or Homebrew."
+# The minimum lives in apps/web/package.json's engines field, as ">=X.Y".
+NODE_MIN="$(node -p 'require("./apps/web/package.json").engines.node.replace(/^>=/, "")')"
+node -e '
+  const want = process.argv[1].split(".").map(Number);
+  const have = process.versions.node.split(".").map(Number);
+  for (let i = 0; i < want.length; i++) {
+    if ((have[i] ?? 0) !== want[i]) process.exit((have[i] ?? 0) > want[i] ? 0 : 1);
+  }
+' "$NODE_MIN" || die "Node.js $NODE_MIN+ required (found $(node --version)). Install via nvm or Homebrew."
 echo "  Node:   $(node --version)"
 command -v npm &>/dev/null || die "npm not found."
 echo "  npm:    $(npm --version)"
