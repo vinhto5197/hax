@@ -45,12 +45,21 @@ async def test_hour_cap_refuses_the_next_upload_per_user(
     assert (await _upload(client, user_b, "b0.txt")).status_code == 200
 
 
+@pytest.mark.parametrize(
+    ("name", "content", "status"),
+    [
+        ("tool.exe", b"MZ", 400),
+        ("blank.txt", b"", 400),
+        ("big.txt", b"x" * (documents_router.TEXT_MAX_BYTES + 1), 413),
+    ],
+    ids=["suffix", "blank", "oversize"],
+)
 async def test_rejected_upload_does_not_spend_a_slot(
-    client, user_a, stub_publish, monkeypatch
+    client, user_a, stub_publish, monkeypatch, name, content, status
 ):
     monkeypatch.setattr(documents_router, "UPLOADS_PER_HOUR", 1)
-    r = await _upload(client, user_a, "tool.exe", b"MZ")
-    assert r.status_code == 400
+    r = await _upload(client, user_a, name, content)
+    assert r.status_code == status
     assert (await _upload(client, user_a, "ok.txt")).status_code == 200
 
 
