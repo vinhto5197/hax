@@ -5,8 +5,8 @@
 
 /* Design tokens, both themes; the theme follows the system (no toggle, no
    `.dark` class). Every colour in the app comes from these, except the modal
-   scrim and the code block, which are dark in both themes, and the Google
-   button, which keeps Google's own colours. */
+   and drawer scrims and the code block, which are dark in both themes, and
+   the Google button, which keeps Google's own colours. */
 :root {
   /* Native control parts (select popups, scrollbars) follow the scheme. */
   color-scheme: light;
@@ -162,8 +162,9 @@ body {
   --tw-prose-th-borders: var(--border);
   --tw-prose-td-borders: var(--border);
 }
-/* Transient highlight on a documents-panel row, set from SourcesFooter's
-   "Show in panel" through the DOM. */
+/* Transient highlight on a documents-panel row, set through the DOM by
+   revealDocumentRow (lib/showInPanel.ts, called from Shell) on "Show in
+   panel". */
 [data-flash="true"] {
   background-color: color-mix(in srgb, currentColor 12%, transparent);
 }
