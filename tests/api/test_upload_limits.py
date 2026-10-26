@@ -2,8 +2,6 @@
 counted per user in Redis. Only an accepted upload spends a slot; a refused
 one is a 429 with a string detail and leaves no document row."""
 
-from types import SimpleNamespace
-
 import pytest
 
 import apps.api.routers.documents as documents_router
@@ -13,15 +11,10 @@ LIMIT_DETAIL = "upload limit reached; try again later"
 
 
 @pytest.fixture
-def stub_publish(monkeypatch):
+def stub_storage(monkeypatch):
     from packages.core import storage
 
     monkeypatch.setattr(storage, "put", lambda key, content, mime: None)
-    monkeypatch.setattr(
-        documents_router,
-        "ingest_document",
-        SimpleNamespace(name="ingest_document", apply_async=lambda args, retry: None),
-    )
 
 
 def _upload(client, user, name="mine.txt", content=b"hello world"):
@@ -33,7 +26,7 @@ def _upload(client, user, name="mine.txt", content=b"hello world"):
 
 
 async def test_hour_cap_refuses_the_next_upload_per_user(
-    client, user_a, user_b, stub_publish, monkeypatch
+    client, user_a, user_b, stub_storage, monkeypatch
 ):
     monkeypatch.setattr(documents_router, "UPLOADS_PER_HOUR", 2)
     for i in range(2):
@@ -55,7 +48,7 @@ async def test_hour_cap_refuses_the_next_upload_per_user(
     ids=["suffix", "blank", "oversize"],
 )
 async def test_rejected_upload_does_not_spend_a_slot(
-    client, user_a, stub_publish, monkeypatch, name, content, status
+    client, user_a, stub_storage, monkeypatch, name, content, status
 ):
     monkeypatch.setattr(documents_router, "UPLOADS_PER_HOUR", 1)
     r = await _upload(client, user_a, name, content)
@@ -64,7 +57,7 @@ async def test_rejected_upload_does_not_spend_a_slot(
 
 
 async def test_day_cap_is_independent_of_the_hour_cap(
-    client, user_a, stub_publish, monkeypatch
+    client, user_a, stub_storage, monkeypatch
 ):
     monkeypatch.setattr(documents_router, "UPLOADS_PER_HOUR", 10)
     monkeypatch.setattr(documents_router, "UPLOADS_PER_DAY", 1)
@@ -75,7 +68,7 @@ async def test_day_cap_is_independent_of_the_hour_cap(
 
 
 async def test_refused_upload_creates_no_document_row(
-    client, user_a, stub_publish, monkeypatch
+    client, user_a, stub_storage, monkeypatch
 ):
     monkeypatch.setattr(documents_router, "UPLOADS_PER_HOUR", 1)
     accepted = await _upload(client, user_a, "a0.txt")

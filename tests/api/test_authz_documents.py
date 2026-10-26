@@ -40,15 +40,9 @@ async def test_owner_delete_204(client, user_a, admin_engine, monkeypatch):
 async def test_upload_stamps_owner(client, user_a, admin_engine, monkeypatch):
     from sqlalchemy import text
 
-    import apps.api.routers.documents as documents_router
     from packages.core import storage
 
     monkeypatch.setattr(storage, "put", lambda key, content, mime: None)
-    monkeypatch.setattr(
-        documents_router,
-        "ingest_document",
-        SimpleNamespace(name="ingest_document", apply_async=lambda args, retry: None),
-    )
     r = await client.post(
         "/api/documents",
         files={"file": ("mine.txt", b"hello world", "text/plain")},
@@ -93,19 +87,13 @@ async def test_upload_marks_failed_when_the_broker_is_down(
 
 
 @pytest.fixture
-def stub_publish(monkeypatch):
-    import apps.api.routers.documents as documents_router
+def stub_storage(monkeypatch):
     from packages.core import storage
 
     monkeypatch.setattr(storage, "put", lambda key, content, mime: None)
-    monkeypatch.setattr(
-        documents_router,
-        "ingest_document",
-        SimpleNamespace(name="ingest_document", apply_async=lambda args, retry: None),
-    )
 
 
-async def test_upload_accepts_pdf_without_parsing_it(client, user_a, stub_publish):
+async def test_upload_accepts_pdf_without_parsing_it(client, user_a, stub_storage):
     # Binary formats are parsed only in the worker: the route stores whatever
     # bytes carry the suffix and lets ingestion report an unreadable file.
     r = await client.post(
@@ -117,7 +105,7 @@ async def test_upload_accepts_pdf_without_parsing_it(client, user_a, stub_publis
     assert r.json()["status"] == "pending"
 
 
-async def test_upload_rejects_unknown_suffix(client, user_a, stub_publish):
+async def test_upload_rejects_unknown_suffix(client, user_a, stub_storage):
     r = await client.post(
         "/api/documents",
         files={"file": ("tool.exe", b"MZ", "application/octet-stream")},
@@ -128,7 +116,7 @@ async def test_upload_rejects_unknown_suffix(client, user_a, stub_publish):
 
 
 async def test_upload_rejects_pdf_over_5mb_on_declared_length(
-    client, user_a, stub_publish
+    client, user_a, stub_storage
 ):
     # httpx keeps a caller-set Content-Length, so the route sees a declared
     # 5 MB + 1 and refuses before reading the (tiny) body.
@@ -141,7 +129,7 @@ async def test_upload_rejects_pdf_over_5mb_on_declared_length(
     assert r.json()["detail"] == "file exceeds 5120 KB"
 
 
-async def test_upload_rejects_text_over_256kb(client, user_a, stub_publish):
+async def test_upload_rejects_text_over_256kb(client, user_a, stub_storage):
     r = await client.post(
         "/api/documents",
         files={"file": ("big.txt", b"a" * (256 * 1024 + 1), "text/plain")},

@@ -4,7 +4,7 @@ before the commit and never fatal.
 
 Drives the service functions directly with identity announced exactly as a
 request announces it (RLS is on for the app engine); seeds and asserts go
-through admin_engine. `generate_title.apply_async` is always replaced by a
+through admin_engine. Every publish lands in conftest's `published`
 recorder — no broker, no network. The publisher's own behaviour (pool,
 backlog cap, retry flag) lives in tests/api/test_enqueue.py.
 """
@@ -12,7 +12,6 @@ backlog cap, retry flag) lives in tests/api/test_enqueue.py.
 import asyncio
 import logging
 import uuid
-from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
@@ -27,19 +26,6 @@ from tests.api.factories import make_conversation, make_message
 PROMPT = "plan a trip to hanoi"
 
 
-def _publisher(monkeypatch, fn):
-    """Replace the task with a recorder taking the payload tuple."""
-
-    def apply_async(args, retry):
-        fn(*args)
-
-    monkeypatch.setattr(
-        chat_service,
-        "generate_title",
-        SimpleNamespace(name="generate_title", apply_async=apply_async),
-    )
-
-
 @pytest.fixture(autouse=True)
 async def no_enqueue_outlives_its_test():
     # A leaked publish would run after monkeypatch is undone, i.e. against the
@@ -50,13 +36,6 @@ async def no_enqueue_outlives_its_test():
     # them is scheduled via call_soon and needs one more loop iteration.
     await asyncio.sleep(0)
     assert enqueue._pending == set()
-
-
-@pytest.fixture
-def enqueued(monkeypatch):
-    calls: list[tuple[str, str]] = []
-    _publisher(monkeypatch, lambda *payload: calls.append(payload))
-    return calls
 
 
 async def _as(user, coro):
@@ -109,7 +88,7 @@ async def _counts(admin_engine, conv_id):
 
 
 async def test_new_conversation_enqueues_once_with_the_committed_turn(
-    admin_engine, user_a, monkeypatch
+    admin_engine, user_a, published
 ):
     # The recorder runs on the publisher thread, so it opens its own connection
     # on the NullPool admin engine and sees only committed rows.
@@ -119,7 +98,7 @@ async def test_new_conversation_enqueues_once_with_the_committed_turn(
         committed = asyncio.run(_counts(admin_engine, uuid.UUID(conversation_id)))
         seen.append((conversation_id, user_id, committed))
 
-    _publisher(monkeypatch, record)
+    published.on_publish = record
     conv_id, _ = await _as(
         user_a, chat_service.persist_user_turn(PROMPT, None, user_a.id)
     )
@@ -127,7 +106,7 @@ async def test_new_conversation_enqueues_once_with_the_committed_turn(
 
 
 async def test_enqueue_happens_after_the_commit(
-    admin_engine, user_a, enqueued, monkeypatch
+    admin_engine, user_a, published, monkeypatch
 ):
     # The publish is fire-and-forget, so ordering is asserted at the call:
     # until the commit the session still has a pooled connection checked out.
@@ -151,15 +130,15 @@ async def test_enqueue_happens_after_the_commit(
     assert checked_out == [0, 0]
 
 
-async def test_existing_conversation_does_not_enqueue(admin_engine, user_a, enqueued):
+async def test_existing_conversation_does_not_enqueue(admin_engine, user_a, published):
     conv = await make_conversation(admin_engine, user_a.id)
     await _as(user_a, chat_service.persist_user_turn(PROMPT, conv, user_a.id))
-    assert enqueued == []
+    assert published == []
     assert await _messages(admin_engine, conv) == [("user", PROMPT)]
 
 
 async def test_assistant_turn_re_enqueues_while_untitled(
-    admin_engine, user_a, enqueued
+    admin_engine, user_a, published
 ):
     conv = await make_conversation(admin_engine, user_a.id)
     claimed_at = await _claim(admin_engine, conv)
@@ -170,11 +149,11 @@ async def test_assistant_turn_re_enqueues_while_untitled(
         ),
     )
     assert await _messages(admin_engine, conv) == [("assistant", "the answer")]
-    assert enqueued == [(str(conv), str(user_a.id))]
+    assert published == [("generate_title", (str(conv), str(user_a.id)))]
 
 
 async def test_assistant_turn_on_a_titled_conversation_does_not_enqueue(
-    admin_engine, user_a, enqueued
+    admin_engine, user_a, published
 ):
     conv = await make_conversation(admin_engine, user_a.id, title="Trip Planning")
     claimed_at = await _claim(admin_engine, conv)
@@ -185,11 +164,11 @@ async def test_assistant_turn_on_a_titled_conversation_does_not_enqueue(
         ),
     )
     assert await _messages(admin_engine, conv) == [("assistant", "the answer")]
-    assert enqueued == []
+    assert published == []
 
 
 async def test_assistant_turn_without_content_persists_nothing_and_enqueues_nothing(
-    admin_engine, user_a, enqueued
+    admin_engine, user_a, published
 ):
     conv = await make_conversation(admin_engine, user_a.id)
     claimed_at = await _claim(admin_engine, conv)
@@ -198,16 +177,16 @@ async def test_assistant_turn_without_content_persists_nothing_and_enqueues_noth
         chat_service.persist_assistant_turn(conv, user_a.id, "", claimed_at=claimed_at),
     )
     assert await _messages(admin_engine, conv) == []
-    assert enqueued == []
+    assert published == []
 
 
 async def test_enqueue_failure_on_the_user_turn_is_not_fatal(
-    admin_engine, user_a, monkeypatch, caplog
+    admin_engine, user_a, published, caplog
 ):
     def boom(conversation_id: str, user_id: str) -> None:
         raise OSError(PROMPT)
 
-    _publisher(monkeypatch, boom)
+    published.on_publish = boom
     caplog.set_level(logging.WARNING)
 
     conv_id, _ = await _as(
@@ -220,12 +199,12 @@ async def test_enqueue_failure_on_the_user_turn_is_not_fatal(
 
 
 async def test_enqueue_failure_on_the_assistant_turn_is_not_fatal(
-    admin_engine, user_a, monkeypatch, caplog
+    admin_engine, user_a, published, caplog
 ):
     def boom(conversation_id: str, user_id: str) -> None:
         raise OSError("the answer")
 
-    _publisher(monkeypatch, boom)
+    published.on_publish = boom
     caplog.set_level(logging.WARNING)
     conv = await make_conversation(admin_engine, user_a.id)
 
@@ -242,7 +221,7 @@ async def test_enqueue_failure_on_the_assistant_turn_is_not_fatal(
     assert "the answer" not in caplog.text
 
 
-async def test_event_stream_forwards_the_user_id(admin_engine, user_a, enqueued):
+async def test_event_stream_forwards_the_user_id(admin_engine, user_a, published):
     conv = await make_conversation(admin_engine, user_a.id)
     claimed_at = await _claim(admin_engine, conv)
 
@@ -264,11 +243,11 @@ async def test_event_stream_forwards_the_user_id(admin_engine, user_a, enqueued)
 
     assert "[DONE]" in chunks[-1]
     assert await _messages(admin_engine, conv) == [("assistant", "hello")]
-    assert enqueued == [(str(conv), str(user_a.id))]
+    assert published == [("generate_title", (str(conv), str(user_a.id)))]
 
 
 async def test_foreign_conversation_404s_and_enqueues_nothing(
-    admin_engine, user_a, user_b, enqueued
+    admin_engine, user_a, user_b, published
 ):
     conv = await make_conversation(admin_engine, user_a.id)
     await make_message(admin_engine, conv, "user", "a's question")
@@ -277,7 +256,7 @@ async def test_foreign_conversation_404s_and_enqueues_nothing(
         await _as(user_b, chat_service.persist_user_turn(PROMPT, conv, user_b.id))
 
     assert excinfo.value.status_code == 404
-    assert enqueued == []
+    assert published == []
     assert await _messages(admin_engine, conv) == [("user", "a's question")]
 
 
@@ -320,7 +299,7 @@ async def _run_stream(admin_engine, user, conv, events):
 
 
 async def test_event_stream_forwards_and_persists_sources(
-    admin_engine, user_a, enqueued
+    admin_engine, user_a, published
 ):
     conv = await make_conversation(admin_engine, user_a.id)
     frames = await _as(
@@ -334,7 +313,7 @@ async def test_event_stream_forwards_and_persists_sources(
 
 
 async def test_event_stream_dedups_sources_across_searches(
-    admin_engine, user_a, enqueued
+    admin_engine, user_a, published
 ):
     conv = await make_conversation(admin_engine, user_a.id)
     await _as(
@@ -357,7 +336,7 @@ async def test_event_stream_dedups_sources_across_searches(
 
 
 async def test_event_stream_persists_nothing_without_content(
-    admin_engine, user_a, enqueued
+    admin_engine, user_a, published
 ):
     conv = await make_conversation(admin_engine, user_a.id)
     await _as(user_a, _run_stream(admin_engine, user_a, conv, [{"sources": [SRC_A]}]))
@@ -372,7 +351,7 @@ async def test_event_stream_persists_nothing_without_content(
 
 
 async def test_event_stream_without_sources_persists_null(
-    admin_engine, user_a, enqueued
+    admin_engine, user_a, published
 ):
     conv = await make_conversation(admin_engine, user_a.id)
     await _as(user_a, _run_stream(admin_engine, user_a, conv, [{"content": "Hi."}]))
