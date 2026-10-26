@@ -48,10 +48,16 @@ export function ConversationsProvider({
   const [newChatNonce, setNewChatNonce] = useState(0);
   // Ref, not state: read imperatively at click time; nothing renders it.
   const routedIdRef = useRef<string | null>(null);
+  // Refreshes can resolve out of order; only the latest call's list may land,
+  // or a staler response overwrites a newer one.
+  const refreshSeqRef = useRef(0);
 
   const refresh = useCallback(() => {
+    const seq = ++refreshSeqRef.current;
     listConversations()
-      .then(setConversations)
+      .then((list) => {
+        if (seq === refreshSeqRef.current) setConversations(list);
+      })
       .catch(() => {
         // A failed sidebar fetch shouldn't break the chat; leave the last list.
       });
