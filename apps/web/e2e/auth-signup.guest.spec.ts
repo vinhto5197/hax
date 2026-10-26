@@ -167,3 +167,8 @@ test.fixme(
   "reset form validation and success → /chat: needs a real reset token, which never reaches a journey",
   async () => {},
 );
+
+test.fixme(
+  "verify Confirm with a live token → /login?verified=1: needs a real verify token, which never reaches a journey",
+  async () => {},
+);
