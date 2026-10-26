@@ -56,7 +56,9 @@ export function pickGreeting(
   const weekday = new Intl.DateTimeFormat(undefined, {
     weekday: "long",
   }).format(now);
+  // Replacer functions, so `$&`-style patterns in a name are shown literally;
+  // {weekday} goes first so a name containing "{weekday}" is never expanded.
   return line
-    .replace("{, name}", first ? `, ${first}` : "")
-    .replace("{weekday}", weekday);
+    .replace("{weekday}", () => weekday)
+    .replace("{, name}", () => (first ? `, ${first}` : ""));
 }
