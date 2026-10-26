@@ -6,13 +6,12 @@ foreign conversation is a 404 and leaves the owner's claim alone.
 
 Service calls run with identity announced as a request announces it (RLS is
 on for the app engine); seeds, clock moves and asserts go through
-admin_engine. The title task is always a recorder — no broker.
+admin_engine. Publishes land in conftest's `published` recorder — no broker.
 """
 
 import asyncio
 import contextlib
 from datetime import UTC, datetime, timedelta
-from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
@@ -29,21 +28,6 @@ from tests.api.factories import make_conversation
 
 PROMPT = "what did I upload?"
 BUSY = 409
-
-
-@pytest.fixture(autouse=True)
-def enqueued(monkeypatch):
-    calls: list[tuple] = []
-
-    def apply_async(args, retry):
-        calls.append(tuple(args))
-
-    monkeypatch.setattr(
-        chat_service,
-        "generate_title",
-        SimpleNamespace(name="generate_title", apply_async=apply_async),
-    )
-    return calls
 
 
 @pytest.fixture(autouse=True)

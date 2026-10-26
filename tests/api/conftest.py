@@ -17,6 +17,7 @@ import fakeredis.aioredis
 import httpx
 import jwt
 import pytest
+from celery import Task
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
@@ -130,6 +131,32 @@ def fake_redis(monkeypatch):
     client = fakeredis.aioredis.FakeRedis(decode_responses=True)
     monkeypatch.setattr(redis_client, "_client", client)
     return client
+
+
+class Published(list):
+    """(task name, args) per publish. `on_publish`, when set, is called with
+    the args first, on the publisher thread; raising from it fails the
+    publish as a dead broker would."""
+
+    on_publish = None
+
+
+@pytest.fixture(autouse=True)
+def published(monkeypatch):
+    # The broker hand-off itself is replaced, below apps/api/enqueue.py, so
+    # its thread pool, backlog and error handling still run; a test that
+    # forgets a stub can no longer reach the unroutable test broker. A test
+    # that swaps a task for its own stand-in bypasses this recorder.
+    calls = Published()
+
+    def apply_async(self, args=None, kwargs=None, **options):
+        args = tuple(args or ())
+        if calls.on_publish is not None:
+            calls.on_publish(*args)
+        calls.append((self.name, args))
+
+    monkeypatch.setattr(Task, "apply_async", apply_async)
+    return calls
 
 
 @pytest.fixture(autouse=True)
