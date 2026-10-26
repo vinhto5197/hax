@@ -23,9 +23,9 @@ What the e2e stack can stage today, and what it cannot:
 | 8 | Source chips grouped by file, expand to passages, deduplicated | useChat.test | J\* |
 | 9 | "Show in panel" reveals and flashes the document row (desktop) | showInPanel.test | J\* |
 | 10 | Table sort (numbers; placeholders last), Copy table, Download CSV | DataTable.test (formula escaping only) | J\* |
-| 11 | Copy message; timestamp on hover | none | J (hover: L) |
+| 11 | Copy message; timestamp on hover | `chat-thread.member` | – (the hover look: L) |
 | 12 | Remote image src removed; code highlighted | none | J (highlighting: L) |
-| 13 | View follows the bottom while streaming; scrolling up stops it | MessageList.test (re-pin on resize only) | J |
+| 13 | View follows the bottom while streaming; scrolling up stops it | `chat-thread.member`, MessageList.test (re-pin on resize) | – |
 | 14 | New chat clears the screen and starts a separate conversation | newchat | – |
 | 15 | New chat during a reply keeps that reply out of the new chat | switch | – |
 | 16 | Switch via the sidebar; reload, back and forward | hist | – |
