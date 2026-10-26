@@ -12,3 +12,13 @@ available (`packages`/`apps.api` resolve via the editable install).
 
 Add new utilities here as needed. Keep them read-only unless clearly named
 otherwise (a destructive script should make that obvious).
+
+## Dev-process helpers
+
+Not utilities for poking at the stack: scripts the Makefile and the feature
+chain call.
+
+| Script | What it does |
+|---|---|
+| `with-lock.sh` | Runs one command under a directory lock (`mkdir` is the atomic primitive); `make test HAX_LOCK=1` and `make e2e HAX_LOCK=1` use it so gate runs that share `hax_test` or the e2e stack queue instead of colliding. Exit 75 on timeout. |
+| `feature-worktree.sh` | One git worktree per feature-lane build under `.claude/worktrees/<id>` on `feat/<id>`, with `.venv`, `.env` and `local/` symlinked and `node_modules` cloned; `--remove <id>` tears it down. |
