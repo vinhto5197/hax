@@ -27,6 +27,10 @@ jobs:
         run: pip install "ruff==0.15.0"
       - name: Ruff
         run: ruff check . && ruff format --check .
+      # The lane tooling's own tests: the gate lock and the worktree helper
+      # guard a shared test database and an rm -rf, so they run here too.
+      - name: Shell tests
+        run: for t in tests/scripts/*.sh; do bash "$t"; done
       # The box fetches these two files at the deployed sha; a syntax error in
       # either would be found by the roll, after the images were built.
       - name: Validate the production compose file and Caddyfile
