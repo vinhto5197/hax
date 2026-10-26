@@ -24,11 +24,13 @@ function sendButton(page: Page) {
   return page.getByRole("button", { name: "Send", exact: true });
 }
 
+// The row is the div holding the conversation's link; a `has` locator is
+// resolved inside that div, so it cannot be rooted at the navigation.
 function deleteButton(page: Page, path: string) {
   return page
     .getByRole("navigation")
     .locator("div")
-    .filter({ has: sidebarLink(page, path) })
+    .filter({ has: page.locator(`a[href="${path}"]`) })
     .getByRole("button", { name: /^Delete / });
 }
 
