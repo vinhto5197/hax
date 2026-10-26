@@ -195,8 +195,9 @@ lint:
 # ── Test ─────────────────────────────────────────────────────
 .PHONY: test test-web e2e
 
+# -W error matches CI: a warning fails the run here as it does there.
 test:
-	.venv/bin/pytest
+	.venv/bin/pytest -W error
 
 test-web:
 	cd apps/web && npm test
