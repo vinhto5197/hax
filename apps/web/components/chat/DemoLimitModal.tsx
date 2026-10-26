@@ -27,7 +27,10 @@ export function DemoLimitModal() {
           Sign up
         </Link>
         <p className="text-small text-ink-2">
-          <Link href="/login" className="text-accent hover:underline">
+          <Link
+            href="/login"
+            className="text-accent underline underline-offset-2"
+          >
             Log in
           </Link>{" "}
           if you already have an account.
