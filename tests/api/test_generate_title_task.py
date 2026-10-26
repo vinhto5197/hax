@@ -120,11 +120,18 @@ async def test_a_second_run_leaves_the_first_title(admin_engine, user_a, titler)
 async def _apply_for_real(conv, user):
     """The real task, real _run_async. Off-thread because the task drives its
     own event loop; the app pool is emptied first so that loop never inherits
-    a connection bound to the test's loop."""
+    a connection bound to the test's loop.
+
+    Returns the result and the identity left announced afterwards, read in the
+    worker thread: to_thread runs in a copy of the context, so a set/reset
+    inside the task is invisible from the test's own context."""
     await app_engine.dispose()
-    return await asyncio.to_thread(
-        lambda: tasks.generate_title.apply(args=(str(conv), str(user.id)))
-    )
+
+    def run():
+        result = tasks.generate_title.apply(args=(str(conv), str(user.id)))
+        return result, current_user_id.get()
+
+    return await asyncio.to_thread(run)
 
 
 async def test_the_task_announces_the_payload_identity_and_writes(
@@ -132,12 +139,12 @@ async def test_the_task_announces_the_payload_identity_and_writes(
 ):
     caplog.set_level(logging.INFO)
     conv = await _seed(admin_engine, user_a)
-    result = await _apply_for_real(conv, user_a)
+    result, identity_after = await _apply_for_real(conv, user_a)
     assert result.successful()
     # Nothing announced here: the identity that satisfied RLS came from the
     # payload, and the ids reached the coroutine in the right order.
     assert await _title(admin_engine, conv) == "Trip Planning Notes"
-    assert current_user_id.get() is None
+    assert identity_after is None
     assert str(conv) in caplog.text
     assert "hanoi" not in caplog.text and "Trip Planning" not in caplog.text
 
@@ -147,7 +154,7 @@ async def test_a_permanent_failure_logs_no_content(
 ):
     titler.side_effect = ValueError("plan a trip to hanoi")
     conv = await _seed(admin_engine, user_a)
-    result = await _apply_for_real(conv, user_a)
+    result, _ = await _apply_for_real(conv, user_a)
     assert result.successful()
     assert "ValueError" in caplog.text and str(conv) in caplog.text
     assert "hanoi" not in caplog.text
