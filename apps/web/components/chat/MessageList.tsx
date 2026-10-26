@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { Markdown } from "@/components/chat/Markdown";
 import { SourcesFooter } from "@/components/chat/SourcesFooter";
@@ -89,6 +89,20 @@ export function MessageList({
     // user scrolling up.
     lastTopRef.current = el.scrollTop;
   }, [messages, streamingContent, status]);
+
+  // The scroller shrinking (viewport resize, the composer growing) leaves a
+  // stuck reader scrolled up from the bottom with no content change to re-pin.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => {
+      if (!stuckRef.current) return;
+      el.scrollTop = el.scrollHeight;
+      lastTopRef.current = el.scrollTop;
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   // An upward scroll that leaves the bottom releases the follow at once (one
   // wheel notch is less than the re-engage distance, so a threshold alone
