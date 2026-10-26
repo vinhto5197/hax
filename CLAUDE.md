@@ -161,6 +161,16 @@ this repo. Write prod-level comments only:
   maintainer's word, never on plan approval.
 - Prefer mechanisms in the harness or the tool layer over provider-specific
   request parameters (ADR 0002 addenda).
+## Working lanes
+- Main: one item at a time with the maintainer; specs and plans in `local/`;
+  one gate block per slice (skill `gate-block`).
+- Feature: a brief (skill `feature-brief`, approved on an artifact) built by
+  the `feature-chain` workflow in its own worktree, with blind tests (skill
+  `blind-tests`), embedded reviews, evidence and a PR; the approval covers
+  that branch's commits and PR, the merge waits for the maintainer.
+- Unattended: the nightly routine (`docs/routines/`) and bounded explorer
+  runs (skill `product-explorer`); no decisions, CI as the gate.
+- Each day opens with the digest (skill `morning-digest`).
 # Tech stack
 - Frontend: Next.js (SSR + routing) + React + TypeScript + Tailwind v4 (design tokens in `apps/web/app/globals.css`, ADR 0014)
 - Backend: FastAPI (LangChain only for text splitting — ADR 0009)
