@@ -70,10 +70,10 @@ What the e2e stack can stage today, and what it cannot:
 
 | # | Behaviour | Pinned by | Gap |
 |---|---|---|---|
-| 43 | Phone (<48 rem wide or ≤500 px tall): top bar with menu, logo, +; no fixed sidebar | none | J |
+| 43 | Phone (<48 rem wide or ≤500 px tall): top bar with menu, logo, +; no fixed sidebar | `drawer.member` (narrow) | – (short landscape: J) |
 | 44 | Drawer backdrop out of the Tab order; tapping it closes the drawer | Shell.test | – |
-| 45 | Drawer: Escape closes; focus moves in and back; page behind inert and unscrollable; closes on navigation | none | J |
-| 46 | Drawer closes when the window becomes desktop width | none | J |
+| 45 | Drawer: Escape closes; focus moves in and back; page behind inert and unscrollable; closes on navigation | `drawer.member` | – |
+| 46 | Drawer closes when the window becomes desktop width | `drawer.member` | – |
 | 47 | "Show in panel" on a phone opens the drawer and reveals the row | none | J\* |
 | 48 | Account name and email; Sign out goes to `/` | none | J |
 | 49 | Active row highlight | none | L |
