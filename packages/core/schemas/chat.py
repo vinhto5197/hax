@@ -24,7 +24,8 @@ class ChatRequest(BaseModel):
     # conversation and returns its id in the SSE prelude.
     conversation_id: UUID | None = None
     # Optional per-request model override. The allowed ids are exactly the
-    # choices the UI offers (ChatWindow's MODEL_OPTIONS); anything else is a
-    # 422 before any model is called. None -> the server's DEFAULT_MODEL
-    # (env LLM_MODEL); the web sends null, never "", for Default.
+    # choices the UI offers (MODEL_OPTIONS in
+    # apps/web/components/chat/ModelSelect.tsx); anything else is a 422 before
+    # any model is called. None -> the server's DEFAULT_MODEL (env LLM_MODEL);
+    # the web sends null, never "", for Default.
     model: ModelId | None = None

@@ -5,8 +5,9 @@ import type { components } from "@/lib/openapi";
 // The one place the offered models are listed; "" is the server default (env
 // LLM_MODEL). The Default label deliberately names no model — that's
 // server-owned config and a name here would go stale. The ids are typed
-// against the API's allowlist, so a change on either side fails `tsc` rather
-// than a request.
+// against the API's allowlist, so an id removed or renamed in the API fails
+// `tsc` rather than a request; an id added to the API still type-checks and
+// is simply not offered until it is listed here.
 type ModelId = NonNullable<components["schemas"]["ChatRequest"]["model"]>;
 const MODEL_OPTIONS = [
   { value: "", label: "Default" },
