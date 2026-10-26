@@ -3,6 +3,7 @@
 import {
   type KeyboardEvent,
   type SubmitEvent,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -42,7 +43,7 @@ export function ChatInput({
   // The composer grows with its content up to the CSS max-height, after which
   // it scrolls; measured from scrollHeight because a textarea cannot size to
   // its content in every browser yet.
-  useLayoutEffect(() => {
+  const measure = useCallback(() => {
     const el = inputRef.current;
     if (!el) return;
     el.style.height = "auto";
@@ -52,7 +53,18 @@ export function ChatInput({
     // The bar appears only once the cap is hit; before that a textarea would
     // still draw one for the rounding between scrollHeight and height.
     el.style.overflowY = wanted > max ? "auto" : "hidden";
-  }, [input]);
+  }, []);
+
+  useLayoutEffect(() => {
+    measure();
+  }, [input, measure]);
+
+  // A resize or rotation re-wraps the text and moves the 40vh cap, so the
+  // height measured at the last keystroke goes stale.
+  useEffect(() => {
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [measure]);
 
   // Enter sends, Shift+Enter breaks the line; an IME composition's Enter is
   // left to the IME.
