@@ -196,15 +196,17 @@ lint:
 .PHONY: test test-web e2e
 
 # -W error matches CI: a warning fails the run here as it does there.
+# HAX_LOCK=1 runs the targets that share hax_test or the e2e stack under
+# scripts/with-lock.sh, so concurrent gate runs queue instead of colliding.
 test:
-	.venv/bin/pytest -W error
+	$(if $(HAX_LOCK),scripts/with-lock.sh local/.gate.lock 1800 --,) .venv/bin/pytest -W error
 
 test-web:
 	cd apps/web && npm test
 
 # Browser journeys against an isolated stack (database hax_e2e, Redis db 15,
-# ports 3001/8001/8787) with a scripted model. Needs `make infra-up`.
+# ports 3001/8001/8787) with a scripted model. Needs `make infra-up`. The
+# prepare step empties hax_e2e, so under HAX_LOCK it runs inside the lock too.
 e2e:
 	@nc -z localhost 5432 >/dev/null 2>&1 && nc -z localhost 6379 >/dev/null 2>&1 || { echo "Postgres/Redis down: run make infra-up"; exit 1; }
-	.venv/bin/python apps/web/e2e/prepare.py
-	cd apps/web && npx playwright test $(ARGS)
+	$(if $(HAX_LOCK),scripts/with-lock.sh local/.gate.lock 1800 --,) sh -c '.venv/bin/python apps/web/e2e/prepare.py && cd apps/web && npx playwright test $(ARGS)'
