@@ -15,7 +15,7 @@ The problem in plain words, as a user or developer meets it, with jargon defined
 
 Every PR and every bite is classed, and the class decides who merges:
 - **Ship** — tests, docs, comments, copy, dev tooling, small logic with a unit test and no user-visible change: the controller merges after its own review, and the digest lists it as merged.
-- **Show** — user-visible behaviour with tests or evidence, touching no schema, auth, infra or deploy path: the controller merges, then points the maintainer at the hunks that matter, with the browser look when it is UI.
+- **Show** — user-visible behaviour, touching no schema, auth, infra or deploy path: it carries a journey for everything a browser can observe (a unit test only for what a test alone can stage); the controller checks the branch out, looks at desktop and phone width, and only then merges, pointing the maintainer at the hunks that matter and the screenshots.
 - **Ask** — schema, auth, isolation, infra, deploy, data deletion, anything irreversible, any design decision: nothing merges until the maintainer has read it; the main lane's bite review.
 A merge to main deploys, so Ship still means CI green and the post-deploy health check watched.
 

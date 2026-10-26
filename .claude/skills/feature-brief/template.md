@@ -26,7 +26,7 @@ The smallest design that meets the Goal, in a few lines, beside the recommended 
 Decisions only the maintainer can make, each with its options and a recommendation. Ideally empty.
 
 ## Verification plan
-Journeys by name; screenshots to capture (which screens, desktop and phone); tests by name; the CI checks; what counts as evidence of done.
+Journeys by name for every behaviour a browser can observe; unit tests by name for what only a test can stage (a race, an ordering, a mocked boundary); screenshots to capture (which screens, desktop and phone); the CI checks; what counts as evidence of done. A behaviour with neither is named here with the reason.
 
 ## Size and cost
 Estimated changed lines; tokens by phase (build, tests, reviews, fixes); wall time; the adversarial-review ceiling that approval pre-authorizes.

@@ -140,6 +140,13 @@ this repo. Write prod-level comments only:
 - **Never:** tutorials, language-feature explanations, milestone/session
   history, or narration of what the next line visibly does.
 ## Verifying web changes
+- Every behaviour change ships with a test in the suite closest to the user
+  that can observe it: a Playwright journey in `apps/web/e2e/` when a
+  browser can observe the behaviour (text, attributes, URL, scroll,
+  geometry, network, the scripted model's replies); a Vitest or pytest unit
+  test when only a test can stage it (a race, an ordering, a mocked
+  boundary). A change with neither says why in its PR. The map of
+  behaviours to tests is `docs/testing-map.md`.
 - Logic: Vitest beside the source (`make test-web`).
 - Known behaviour ("after X, Y"): a Playwright journey in `apps/web/e2e/`
   (`make e2e`, gated in CI). A bug found by hand becomes a journey before it
