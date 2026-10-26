@@ -20,8 +20,8 @@ export default function Privacy() {
         <ul className="list-disc space-y-1 pl-5">
           <li>
             Your account: email address, a hash of your password (never the
-            password), or the identity Google reports if you sign in with
-            Google.
+            password), or, if you sign in with Google, the identity and name
+            Google reports.
           </li>
           <li>Your conversations: the messages you send and the replies.</li>
           <li>
@@ -29,8 +29,9 @@ export default function Privacy() {
             embeddings derived from them for search.
           </li>
           <li>
-            A session cookie so you stay signed in. There are no advertising or
-            analytics cookies.
+            A session cookie so you stay signed in; it carries your account id,
+            email address and name. There are no advertising or analytics
+            cookies.
           </li>
           <li>
             If you try hax without an account, a guest session cookie and the
