@@ -45,11 +45,11 @@ What the e2e stack can stage today, and what it cannot:
 
 | # | Behaviour | Pinned by | Gap |
 |---|---|---|---|
-| 28 | Landing: greeting, blurb, 3 chips, Log in / Sign up, Privacy | none | J |
-| 29 | Demo runs in place; URL unchanged | demo (reply only) | J |
-| 30 | Clicking a chip sends it | none | J |
-| 31 | Guest banner with links; no model picker | none | J |
-| 32 | Cap: "End of the demo" modal after 3 turns, turn removed, composer disabled | useChat.test, chatApi.test, py:test_demo_limits | J |
+| 28 | Landing: greeting, blurb, 3 chips, Log in / Sign up, Privacy | `demo-landing.guest` | – |
+| 29 | Demo runs in place; URL unchanged | demo, `demo-landing.guest` | – |
+| 30 | Clicking a chip sends it | `demo-landing.guest` | – |
+| 31 | Guest banner with links; no model picker | `demo-landing.guest` | – |
+| 32 | Cap: "End of the demo" modal after 3 turns, turn removed, composer disabled | `demo-landing.guest`, useChat.test, chatApi.test, py:test_demo_limits | – |
 | 33 | Demo can't start / rate-limited message | py:test_anonymous_create | J |
 | 34 | Redirects: member at `/`, `/login`, `/signup` → `/chat`; guest at `/chat` → `/`; logged out → `/login` | none | J |
 
