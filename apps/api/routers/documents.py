@@ -243,8 +243,12 @@ async def download_document(
     # bytes exist from the moment the put succeeded, pending or failed alike.
     if doc is None or doc.storage_key is None:
         raise HTTPException(status_code=404, detail="document not found")
+    storage_key, filename, mime_type = doc.storage_key, doc.filename, doc.mime_type
+    # Hand the pooled connection back before the fetch: an S3 read can take
+    # seconds, and the session would otherwise pin a connection throughout.
+    await session.close()
     try:
-        data = await asyncio.to_thread(storage.get, doc.storage_key)
+        data = await asyncio.to_thread(storage.get, storage_key)
     except storage.StorageKeyNotFound:
         # The row outlived its object (a failed delete's second half, or a
         # sweep): to the caller that is a missing document, not a server fault.
@@ -254,7 +258,7 @@ async def download_document(
     return Response(
         content=data,
         headers={
-            "Content-Type": doc.mime_type,
-            "Content-Disposition": _content_disposition(doc.filename),
+            "Content-Type": mime_type,
+            "Content-Disposition": _content_disposition(filename),
         },
     )
