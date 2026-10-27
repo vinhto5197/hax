@@ -146,6 +146,33 @@ test("deleting the open conversation lands on a fresh /chat", async ({
   await expect(composer(page)).toBeVisible();
 });
 
+// The list request is held open until the assertion has run, so "while
+// loading" is a state the test controls, not a race it hopes to win.
+test("the sidebar never says No conversations yet while its list is loading", async ({
+  page,
+}) => {
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route("**/api/conversations", async (route) => {
+    if (route.request().method() === "GET") await held;
+    await route.fallback();
+  });
+  const listRequested = page.waitForRequest(
+    (r) => r.method() === "GET" && r.url().endsWith("/api/conversations"),
+  );
+
+  await page.goto("/chat");
+  await listRequested;
+  await expect(composer(page)).toBeVisible();
+  const nav = page.getByRole("navigation");
+  await expect(nav.getByText(NO_CONVERSATIONS)).toHaveCount(0);
+
+  release();
+  await expect(
+    nav.getByRole("link").first().or(nav.getByText(NO_CONVERSATIONS)),
+  ).toBeVisible();
+});
+
 // Last in the file: it empties the member's sidebar, rows other files left
 // behind included.
 test("with every conversation deleted the sidebar says No conversations yet", async ({
