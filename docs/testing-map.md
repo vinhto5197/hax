@@ -32,7 +32,7 @@ What the e2e stack can stage today, and what it cannot:
 | 15 | New chat during a reply keeps that reply out of the new chat | switch | – |
 | 16 | Switch via the sidebar; reload, back and forward | hist | – |
 | 17 | Delete conversation: confirm or cancel; deleting the open one goes to `/chat`; error line | `chat-basics.member`, py:test_authz_conversations | – (error line: no journey can fail a delete) |
-| 18 | Empty sidebar shows "No conversations yet" | `chat-basics.member` | – |
+| 18 | Empty sidebar shows "No conversations yet", only once the list has loaded (never while it loads) | `chat-basics.member` | – |
 | 19 | "Couldn't load this conversation." | useChat.test | – |
 | 20 | 409 "reply in progress": message, refused turn removed, retry works | guard, useChat.test, chatApi.test, py:test_turn_guard | – |
 | 21a | Model error mid-reply: "The reply was interrupted.", no partial, nothing stored, conversation free | `failed-reply.member`, useChat.test, chatApi.test, py:test_failed_reply, py:test_turn_guard | – |
