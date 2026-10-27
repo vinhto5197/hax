@@ -27,6 +27,11 @@ _client = None
 _bucket_ready = False
 
 
+# What create_bucket answers when the bucket already exists: the loser of a
+# head-then-create race between two processes gets one of these.
+_ALREADY_EXISTS = ("BucketAlreadyOwnedByYou", "BucketAlreadyExists")
+
+
 class StorageKeyNotFound(Exception):
     """Object key absent (S3 NoSuchKey) — deterministic, unlike transient
     storage failures, so callers can treat it as permanent."""
@@ -62,7 +67,14 @@ def _ensure_bucket() -> None:
         # No CreateBucketConfiguration -> only valid for us-east-1/MinIO (other
         # regions 400 without a LocationConstraint). Fine: prod buckets are
         # Terraform-provisioned, so this create never runs there.
-        client.create_bucket(Bucket=S3_BUCKET)
+        try:
+            client.create_bucket(Bucket=S3_BUCKET)
+        except ClientError as create_error:
+            # Another process (a second worker, the API) created it between
+            # our head and create; any other refusal still propagates.
+            code = create_error.response.get("Error", {}).get("Code")
+            if code not in _ALREADY_EXISTS:
+                raise
     _bucket_ready = True
 
 
