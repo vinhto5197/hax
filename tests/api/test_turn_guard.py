@@ -28,6 +28,7 @@ from tests.api.factories import make_conversation
 
 PROMPT = "what did I upload?"
 BUSY = 409
+REPLY_FAILED = 'data: {"error": "reply_failed"}\n\n'
 
 
 @pytest.fixture(autouse=True)
@@ -169,17 +170,43 @@ async def test_the_reply_is_saved_and_the_conversation_freed_before_done_is_sent
     assert await _streaming_since(admin_engine, conv) == newer_claim
 
 
+async def test_a_failed_reply_frees_the_conversation_and_stores_nothing_before_reply_failed_is_sent(  # noqa: E501 — the name is the behaviour line
+    admin_engine, user_a
+):
+    conv = await make_conversation(admin_engine, user_a.id)
+    _, claimed_at = await _turn(user_a, conv)
+    with _identity(user_a):
+        gen = chat_service.event_stream(
+            _stream_of({"content": "partial"}, error=_ModelDown()),
+            [],
+            conv,
+            user_a.id,
+            claimed_at=claimed_at,
+        )
+        async for frame in gen:
+            if frame == REPLY_FAILED:
+                break
+        else:
+            pytest.fail("the stream ended without a reply_failed frame")
+
+        assert await _streaming_since(admin_engine, conv) is None
+        assert await _messages(admin_engine, conv) == [("user", PROMPT)]
+        await gen.aclose()
+
+
 async def test_a_new_turn_succeeds_after_the_reply_stream_fails(admin_engine, user_a):
     conv = await make_conversation(admin_engine, user_a.id)
     _, claimed_at = await _turn(user_a, conv)
-    with contextlib.suppress(_ModelDown):
-        await _reply(
-            user_a,
-            conv,
-            claimed_at,
-            _stream_of({"content": "partial"}, error=_ModelDown()),
-        )
+    frames = await _reply(
+        user_a,
+        conv,
+        claimed_at,
+        _stream_of({"content": "partial"}, error=_ModelDown()),
+    )
 
+    assert frames[-1] == REPLY_FAILED
+    assert "data: [DONE]\n\n" not in frames
+    assert await _messages(admin_engine, conv) == [("user", PROMPT)]
     assert await _streaming_since(admin_engine, conv) is None
     await _turn(user_a, conv)
 

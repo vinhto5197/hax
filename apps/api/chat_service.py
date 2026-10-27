@@ -88,13 +88,20 @@ async def load_history(conversation_id: UUID, user_id: UUID) -> list[MessagePara
     """Replay the conversation's persisted turns as Anthropic `messages`.
 
     Called after persist_user_turn (which owns the ownership check), so the
-    just-sent user message lands last. Consecutive same-role turns can occur
-    (an errored turn saves no assistant reply); the API merges them. Full
-    history every turn — no windowing in v0.
+    just-sent user message lands last. Consecutive same-role turns (a failed
+    reply stores no assistant turn, so a resend follows its own question) are
+    merged here, joined by a blank line, so the history alternates for any
+    provider. Full history every turn — no windowing in v0.
     """
     async with AsyncSessionLocal() as session:
         rows = await conversations_repo.load_history(session, user_id, conversation_id)
-    return [{"role": role, "content": content} for role, content in rows]
+    history: list[MessageParam] = []
+    for role, content in rows:
+        if history and history[-1]["role"] == role:
+            history[-1]["content"] = f"{history[-1]['content']}\n\n{content}"
+        else:
+            history.append({"role": role, "content": content})
+    return history
 
 
 async def persist_assistant_turn(
@@ -163,6 +170,10 @@ async def event_stream(
     harness's tool_use/tool_result blocks) never reach Postgres. Sources are
     deduplicated by (document_id, chunk_idx), first hit wins, across every
     search of the turn; the forwarded events are unchanged.
+
+    If `stream_fn` raises, nothing is stored, the claim is released, and the
+    stream ends with {"error": "reply_failed"} instead of [DONE] — a fixed
+    code, never the exception's text. A disconnect still saves what streamed.
     """
     buffer: list[str] = []
     # Insertion-ordered dedup: a turn may search twice and hit the same chunk.
@@ -187,19 +198,44 @@ async def event_stream(
         # turn 1). Inside the try: a disconnect while it is sent must still
         # reach the finally, which releases the turn's claim.
         yield sse_event({"conversation_id": str(conversation_id)})
-        async for item in stream_fn(messages):
-            event = {"content": item} if isinstance(item, str) else item
-            if "content" in event:
-                buffer.append(event["content"])
-            for s in event.get("sources", ()):
-                sources.setdefault((s["document_id"], s["chunk_idx"]), s)
-            yield sse_event(event)
+        model_failed = False
+        try:
+            async for item in stream_fn(messages):
+                event = {"content": item} if isinstance(item, str) else item
+                if "content" in event:
+                    buffer.append(event["content"])
+                for s in event.get("sources", ()):
+                    sources.setdefault((s["document_id"], s["chunk_idx"]), s)
+                yield sse_event(event)
+        except Exception as exc:
+            # Model failure only: disconnect and cancellation are BaseException
+            # and fall through to the finally. Type name only — provider errors
+            # can echo prompt content.
+            logger.warning(
+                "reply failed for conversation %s: %s",
+                conversation_id,
+                type(exc).__name__,
+            )
+            model_failed = True
+        # Outside the except: a release that raises there would chain the
+        # provider exception, text included, into the logged traceback.
+        if model_failed:
+            # A partial reply is never stored: history replays it as whole.
+            buffer.clear()
+            sources.clear()
+            # Released before the frame, as before [DONE]. If the release
+            # raises, no frame is sent and the finally retries it.
+            await persist()
+            persisted = True
+            yield sse_event({"error": "reply_failed"})
+            return
         # Saved and released BEFORE [DONE]: a client that sees the reply end
         # may send the next turn at once, and must find the conversation free.
         await persist()
         persisted = True
         yield "data: [DONE]\n\n"
     finally:
-        # Error and disconnect paths still save whatever streamed and release.
+        # Disconnect, or a fault before the release: save whatever is
+        # buffered (nothing after a model failure) and release.
         if not persisted:
             await persist()

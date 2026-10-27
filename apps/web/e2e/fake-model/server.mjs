@@ -9,11 +9,18 @@
 // Test contract (the journeys assert on these strings):
 // - default reply: "Hello from the fake model." in three deltas;
 // - a prompt starting with "slow:" streams ten "Slowly streaming reply, part
-//   N. " deltas, 300 ms apart.
+//   N. " deltas, 300 ms apart;
+// - a prompt starting with "fail:" streams "Failing reply, part N. " for N =
+//   1..3, 500 ms apart, then destroys the connection without message_stop,
+//   which the SDK raises on (the API's model-failure path).
+// The prompt is the last paragraph of the last user turn: the API merges
+// consecutive user turns with a blank line, so a resend after a failure
+// arrives appended to the failed question.
 import http from "node:http";
 
 const PORT = Number(process.env.FAKE_MODEL_PORT ?? 8787);
 const SLOW_DELAY_MS = 300;
+const FAIL_DELAY_MS = 500;
 
 let messageCount = 0;
 
@@ -24,11 +31,14 @@ function log(line) {
 function lastUserText(messages) {
   const last = [...(messages ?? [])].reverse().find((m) => m.role === "user");
   if (!last) return "";
-  if (typeof last.content === "string") return last.content;
-  return (last.content ?? [])
-    .filter((block) => block.type === "text")
-    .map((block) => block.text)
-    .join("");
+  const text =
+    typeof last.content === "string"
+      ? last.content
+      : (last.content ?? [])
+          .filter((block) => block.type === "text")
+          .map((block) => block.text)
+          .join("");
+  return text.split("\n\n").at(-1);
 }
 
 function replyPieces(prompt) {
@@ -39,6 +49,16 @@ function replyPieces(prompt) {
         (_, i) => `Slowly streaming reply, part ${i + 1}. `,
       ),
       delayMs: SLOW_DELAY_MS,
+    };
+  }
+  if (prompt.startsWith("fail:")) {
+    return {
+      pieces: Array.from(
+        { length: 3 },
+        (_, i) => `Failing reply, part ${i + 1}. `,
+      ),
+      delayMs: FAIL_DELAY_MS,
+      fail: true,
     };
   }
   return { pieces: ["Hello ", "from the ", "fake model."], delayMs: 0 };
@@ -52,7 +72,7 @@ function sendJson(res, status, body) {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function streamReply(req, res, body) {
-  const { pieces, delayMs } = replyPieces(lastUserText(body.messages));
+  const { pieces, delayMs, fail } = replyPieces(lastUserText(body.messages));
   let closed = false;
   res.on("close", () => {
     closed = true;
@@ -98,6 +118,13 @@ async function streamReply(req, res, body) {
       index: 0,
       delta: { type: "text_delta", text: piece },
     });
+  }
+  if (fail) {
+    // The wait lets the last delta flush before the cut discards the buffer.
+    await sleep(delayMs);
+    log("cutting the stream before message_stop");
+    res.destroy();
+    return;
   }
   send("content_block_stop", { index: 0 });
   send("message_delta", {

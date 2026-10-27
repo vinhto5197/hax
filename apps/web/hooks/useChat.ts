@@ -6,10 +6,15 @@ import {
   type ChatMessage,
   DemoLimitError,
   getConversation,
+  ReplyFailedError,
   type Source,
   streamChat,
   TurnInProgressError,
 } from "@/lib/chatApi";
+
+// No resend advice: a failure that repeats (a conversation past the model's
+// context) would fail again.
+const REPLY_FAILED = "The reply was interrupted.";
 
 type UseChatResult = {
   messages: ChatMessage[];
@@ -150,13 +155,21 @@ export function useChat(
           setError(err.message);
           return;
         }
+        if (err instanceof ReplyFailedError) {
+          // The server stored no reply: drop the partial so the view matches
+          // it. The user's turn was saved and stays.
+          fullContent = "";
+          setError(REPLY_FAILED);
+          return;
+        }
         const errMessage =
           err instanceof Error ? err.message : "Unable to get response.";
         setError(errMessage);
       } finally {
-        // Commit whatever streamed — on success AND error — so the client view
-        // matches the server, which persists partial turns too. Then clear the
-        // streaming buffer or the text would render twice.
+        // Commit whatever streamed — on success AND any error but a model
+        // failure — so the client view matches the server, which persists
+        // partial turns on disconnect. Then clear the streaming buffer or the
+        // text would render twice.
         if (fullContent) {
           setMessages((prev) => [
             ...prev,
