@@ -44,8 +44,11 @@ celery_app.conf.update(
     task_acks_late=True,
     task_reject_on_worker_lost=False,
     # Ingestion is long-ish: don't let one worker hoard queued messages, and hard-
-    # cap a single task so a hung embed call can't pin a slot forever.
+    # cap a single task so a hung embed call can't pin a slot forever. The soft
+    # limit fires first, leaving the ingest task time to record 'failed'
+    # (tasks.py) before the hard kill.
     worker_prefetch_multiplier=1,
+    task_soft_time_limit=270,
     task_time_limit=300,
     task_track_started=True,
     # Producers (the API) must fail fast when the broker is unreachable: with
