@@ -27,6 +27,7 @@ Every hand-off that waits for the maintainer (Show, Ask, a feature PR) ends with
 3. Code worth raising, only when there is some: `file:line` and why a human should read it (a security boundary, a choice the maintainer might make differently, a surprising pattern); otherwise "no code to read".
 4. The word that ends the review ("merge", "commit", "approved").
 Ship needs none: it is merged by the controller and listed in the digest.
+Enforced, not remembered: a Stop hook (`.claude/hooks/review_gate.sh`) refuses to end a turn whose final message asks for a review word without this section.
 
 ## Provenance, per bite
 
