@@ -177,7 +177,9 @@ this repo. Write prod-level comments only:
   that branch's commits and PR, the merge waits for the maintainer.
 - Unattended: the nightly routine (`docs/routines/`) and bounded explorer
   runs (skill `product-explorer`); no decisions, CI as the gate.
-- Each day opens with the digest (skill `morning-digest`).
+- Each day opens with the digest (skill `morning-digest`); the `due` hook
+  (`.claude/hooks/due.sh`) names it, and Friday's retro, until each is marked
+  done. "BAU" means: do what the hook lists.
 # Tech stack
 - Frontend: Next.js (SSR + routing) + React + TypeScript + Tailwind v4 (design tokens in `apps/web/app/globals.css`, ADR 0014)
 - Backend: FastAPI (LangChain only for text splitting — ADR 0009)

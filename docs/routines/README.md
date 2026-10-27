@@ -10,7 +10,7 @@ before it is fixed.
 - `nightly-prompt.md` — one branch and pull request per eligible item, CI as
   the only gate (up to 3 fix attempts per PR), one notification, no
   connectors. `main` is protected; the routine's GitHub app cannot push to it.
-- `journeys-prompt.md` — fired by hand, not on a schedule: each item is a
+- `journeys-prompt.md` — ad hoc, parked (`enabled: false`) between runs and fired by hand: each item is a
   batch of `docs/testing-map.md` rows that becomes one Playwright spec file
   under `apps/web/e2e/` on a `journey/<id>` branch. The sandbox never runs a
   journey, so the prompt carries what the e2e stack can and cannot stage;

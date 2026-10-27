@@ -5,7 +5,7 @@ description: The one message that opens a day: nightly PRs reviewed, feature-lan
 
 # Morning digest
 
-**Trigger:** the first message after the harness notes a date change. The maintainer reuses long sessions and works past midnight, so the trigger is news, not the clock. If the night's run has not happened yet, set `"pending": true` in `local/routine-marker.json` and check again on later messages.
+**Trigger:** the `due` hook (`.claude/hooks/due.sh`, on every prompt) prints `[due] DIGEST DUE` while the marker's `last_digest_date` is not today, and `[due] RETRO DUE` from Friday until the week's retro is marked. A `[due]` line is answered before anything else in the message. "BAU" from the maintainer means: do what the hook lists. Finish each with `.claude/hooks/due.sh mark digest` or `mark retro`; until then the reminder repeats on every message, which is the intended failure mode. If the night's run has not happened yet, set `"pending": true` in `local/routine-marker.json` and check again on later messages.
 
 ## Sources
 
@@ -34,8 +34,12 @@ Cross off merged items in `local/DEV_BACKLOG.local.md` (PR number beside each), 
 
 ## The week file
 
-`local/retro/<ISO week>.md` is the retro's memory across sessions and compactions: whenever something recurs during the week (a mistake made twice, a tool quirk, a reviewer finding that a rule should have prevented, a decision the maintainer made about process), the controller appends one line to it on the spot — date, what happened, the structure that would absorb it if one is obvious. The Friday retro is written from that file plus the hard sources above, never from recollection.
+`local/retro/<ISO week>.md` is the retro's memory across sessions and compactions. One line per occurrence: `- YYYY-MM-DD [category] what happened → the structure that would absorb it`, categories from: forgot, yes-man, wrong-design, overclaim, scope-creep, tool-quirk, routine-abandon, ci-red, flake, review-miss, process. The hook counts them on Friday; two or more in a category is recurring. Three sources write to it, so no single one has to be reliable:
+
+1. **On the spot**, by the controller: a correction from the maintainer, a refused tool call, a mistake repeated, a process decision.
+2. **Each digest**, from the hard sources: an abandoned routine item, a PR red after three attempts, a `fixme` journey, a reviewer's HOLD, an explorer run that stopped on a failure.
+3. **Friday, from the transcripts**: `.venv/bin/python scripts/week_transcript.py` prints the week's typed messages from the maintainer and every refused or failed tool call from the never-compacted transcripts; a fresh agent (Sonnet) reads that output beside the week file and returns the occurrences the file is missing, which are appended before the tally is read.
 
 ## Friday
 
-The digest gains a retro, at most fifteen lines: the week's recurring mistakes and the structure that absorbs each (a lint rule, a CI check, a test, a skill edit; a memory note only when nothing structural fits); cost by lane for the week against the previous one; changes to the brief template or the chain the week's gate blocks argue for.
+After the digest, the retro: read the hook's tally, run source 3, then write at most fifteen lines: the week's recurring mistakes and the structure that absorbs each (a lint rule, a CI check, a test, a skill edit; a memory note only when nothing structural fits); cost by lane for the week against the previous one; changes to the brief template or the chain the week's gate blocks argue for.
