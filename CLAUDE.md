@@ -175,8 +175,9 @@ this repo. Write prod-level comments only:
   the `feature-chain` workflow in its own worktree, with blind tests (skill
   `blind-tests`), embedded reviews, evidence and a PR; the approval covers
   that branch's commits and PR, the merge waits for the maintainer.
-- Unattended: the nightly routine (`docs/routines/`) and bounded explorer
-  runs (skill `product-explorer`); no decisions, CI as the gate.
+- Unattended: the nightly routine and the weekly journeys sweep
+  (`docs/routines/`), and the weekly explorer run (skill `product-explorer`,
+  started by the due hook on Fridays); no decisions, CI as the gate.
 - Each day opens with the digest (skill `morning-digest`); the `due` hook
   (`.claude/hooks/due.sh`) names it, and Friday's retro, until each is marked
   done. "BAU" means: do what the hook lists.

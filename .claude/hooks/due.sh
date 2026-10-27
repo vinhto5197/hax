@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
 # UserPromptSubmit hook: before the controller answers, say what the day owes
-# (the morning digest, the Friday retro), read from local/routine-marker.json
-# and the clock, so the rhythm rests on a file instead of the model's memory of
-# it. Prints nothing when nothing is due; never blocks the prompt; exits 0 on
-# any failure. `due.sh mark digest|retro` records one as done — the skill
-# morning-digest calls it, and until it does the reminder repeats.
+# (the morning digest, the Friday retro, the weekly explorer's findings), read
+# from local/routine-marker.json and the clock, so the rhythm rests on a file
+# instead of the model's memory of it. From Friday on it also starts the
+# week's explorer run (scripts/explorer.sh) in the background, once per ISO
+# week. Prints nothing when nothing is due; never blocks the prompt; exits 0 on
+# any failure. `due.sh mark digest|retro|explorer` records one as done — the
+# skill morning-digest calls it, and until it does the reminder repeats.
 # DUE_TODAY (YYYY-MM-DD) overrides the clock for tests.
 set -u
+# The explorer's own headless session runs in this repo too: it gets no
+# reminders and must never start another explorer.
+[ -n "${HAX_EXPLORER_RUN:-}" ] && exit 0
 root=${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}
 marker="$root/local/routine-marker.json"
 # No local/ at all is a fresh clone: nothing to run, stay silent. local/ without
@@ -29,7 +34,8 @@ if [ "${1:-}" = mark ]; then
   case "${2:-}" in
     digest) key=last_digest_date val=$today ;;
     retro) key=last_retro_week val=$week ;;
-    *) echo "usage: due.sh mark digest|retro" >&2; exit 64 ;;
+    explorer) key=explorer_reported_week val=$week ;;
+    *) echo "usage: due.sh mark digest|retro|explorer" >&2; exit 64 ;;
   esac
   tmp=$(mktemp) && jq --arg k "$key" --arg v "$val" '.[$k] = $v' "$marker" > "$tmp" && mv "$tmp" "$marker"
   exit 0
@@ -57,6 +63,30 @@ if [ "$dow" -ge 5 ] && [ "$last_retro" != "$week" ]; then
     | sed -E 's/.*\[([a-z-]+)\]/\1/' | sort | uniq -c | sort -rn \
     | awk '{printf "%s%s %d%s", (NR>1?", ":""), $2, $1, ($1>=2?" (recurring)":"")}')
   lines+=("RETRO DUE for $week (skill morning-digest, Friday). Week file $wf tally: ${tally:-empty}. Run scripts/week_transcript.py first so the tally includes what the context forgot; finish with \`.claude/hooks/due.sh mark retro\`.")
+fi
+
+# The explorer: launched on the first prompt from Friday on, so it explores
+# while the morning's reviews happen; reported until its findings are triaged.
+runner="$root/scripts/explorer.sh"
+if [ "$dow" -ge 5 ] && [ -x "$runner" ]; then
+  if [ "$(jq -r '.last_explorer_week // ""' "$marker")" != "$week" ]; then
+    if verdict=$(cd "$root" && DUE_TODAY=$today perl -e 'alarm 10; exec @ARGV' "$runner" --check 2>&1); then
+      mkdir -p "$root/local/explorer"
+      (cd "$root" && DUE_TODAY=$today nohup "$runner" </dev/null >>"$root/local/explorer/runner.log" 2>&1 &)
+      tmp=$(mktemp) && jq --arg v "$week" '.last_explorer_week = $v' "$marker" > "$tmp" && mv "$tmp" "$marker"
+      lines+=("EXPLORER LAUNCHED for $week: persona ${verdict#ok }, main on :3002/:8002 with the real model, about an hour. Notes land in local/explorer/; the hook reports when it ends.")
+    else
+      lines+=("EXPLORER WAITING for $week: ${verdict:-the check failed}. The first prompt after that is fixed launches it.")
+    fi
+  elif [ "$(jq -r '.explorer_reported_week // ""' "$marker")" != "$week" ]; then
+    st="$root/local/explorer/.status.json"
+    if [ "$(jq -r '.week // ""' "$st" 2>/dev/null)" = "$week" ]; then
+      case "$(jq -r '.state' "$st")" in
+        done) lines+=("EXPLORER DONE for $week: $(jq -r '"persona \(.persona), notes \(.notes)"' "$st"). Triage per skill product-explorer (After the run); finish with \`.claude/hooks/due.sh mark explorer\`.") ;;
+        failed) lines+=("EXPLORER FAILED for $week: $(jq -r '"\(.reason). Logs: \(.logs)"' "$st"). A week-file line [routine-abandon]; rerun by hand or let it go; finish with \`.claude/hooks/due.sh mark explorer\`.") ;;
+      esac
+    fi
+  fi
 fi
 
 if [ ${#lines[@]} -eq 0 ]; then
