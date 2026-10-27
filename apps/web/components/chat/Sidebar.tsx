@@ -12,7 +12,7 @@ import { type ConversationSummary, deleteConversation } from "@/lib/chatApi";
 import { formatRelative } from "@/lib/time";
 
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
-  const { conversations, startNewChat, refresh } = useConversations();
+  const { conversations, loaded, startNewChat, refresh } = useConversations();
   const { data: session } = useSession();
   const pathname = usePathname();
   const router = useRouter();
@@ -87,62 +87,62 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       {error && <p className="px-1 text-small text-status-failed">{error}</p>}
 
       <nav className="flex flex-1 flex-col gap-1 overflow-y-auto">
-        {conversations.length === 0 ? (
-          <p className="px-1 py-2 text-body text-ink-3">
-            No conversations yet. Start one above.
-          </p>
-        ) : (
-          conversations.map((conversation) => {
-            const active = pathname === `/chat/${conversation.id}`;
-            return (
-              // A row is a div, not a Link: the delete button can't nest inside
-              // an anchor (invalid HTML; nested interactive elements).
-              // ink-3 holds contrast on ground and surface-2 only, so the active
-              // row (surface-3) steps its secondary text up to ink-2.
-              <div
-                key={conversation.id}
-                className={`flex items-center rounded-control ${
-                  active ? "bg-surface-3" : "hover:bg-surface-2"
-                }`}
-              >
-                <Link
-                  href={`/chat/${conversation.id}`}
-                  onClick={onNavigate}
-                  className="min-w-0 flex-1 px-3 py-2 text-body"
+        {conversations.length === 0
+          ? loaded && (
+              <p className="px-1 py-2 text-body text-ink-3">
+                No conversations yet. Start one above.
+              </p>
+            )
+          : conversations.map((conversation) => {
+              const active = pathname === `/chat/${conversation.id}`;
+              return (
+                // A row is a div, not a Link: the delete button can't nest inside
+                // an anchor (invalid HTML; nested interactive elements).
+                // ink-3 holds contrast on ground and surface-2 only, so the active
+                // row (surface-3) steps its secondary text up to ink-2.
+                <div
+                  key={conversation.id}
+                  className={`flex items-center rounded-control ${
+                    active ? "bg-surface-3" : "hover:bg-surface-2"
+                  }`}
                 >
-                  {/* Titling runs in the worker off the first user message and
+                  <Link
+                    href={`/chat/${conversation.id}`}
+                    onClick={onNavigate}
+                    className="min-w-0 flex-1 px-3 py-2 text-body"
+                  >
+                    {/* Titling runs in the worker off the first user message and
                       can land mid-stream; until it does, the entry must read as
                       state, not as a name. */}
-                  <span
-                    className={`block truncate ${
-                      conversation.title
-                        ? active
-                          ? "text-ink"
-                          : "text-ink-2"
-                        : `italic ${active ? "text-ink-2" : "text-ink-3"}`
-                    }`}
+                    <span
+                      className={`block truncate ${
+                        conversation.title
+                          ? active
+                            ? "text-ink"
+                            : "text-ink-2"
+                          : `italic ${active ? "text-ink-2" : "text-ink-3"}`
+                      }`}
+                    >
+                      {conversation.title ?? "Untitled"}
+                    </span>
+                    <span
+                      className={`block text-small ${active ? "text-ink-2" : "text-ink-3"}`}
+                    >
+                      {formatRelative(conversation.updated_at)}
+                    </span>
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(conversation)}
+                    disabled={deletingId === conversation.id}
+                    aria-label={`Delete ${conversation.title ?? "conversation"}`}
+                    className={`shrink-0 px-2 py-2 text-sm leading-none hover:text-status-failed disabled:opacity-50 ${active ? "text-ink-2" : "text-ink-3"}`}
                   >
-                    {conversation.title ?? "Untitled"}
-                  </span>
-                  <span
-                    className={`block text-small ${active ? "text-ink-2" : "text-ink-3"}`}
-                  >
-                    {formatRelative(conversation.updated_at)}
-                  </span>
-                </Link>
-                <button
-                  type="button"
-                  onClick={() => handleDelete(conversation)}
-                  disabled={deletingId === conversation.id}
-                  aria-label={`Delete ${conversation.title ?? "conversation"}`}
-                  className={`shrink-0 px-2 py-2 text-sm leading-none hover:text-status-failed disabled:opacity-50 ${active ? "text-ink-2" : "text-ink-3"}`}
-                >
-                  ×
-                </button>
-              </div>
-            );
-          })
-        )}
+                    ×
+                  </button>
+                </div>
+              );
+            })}
       </nav>
 
       <DocumentsPanel />
