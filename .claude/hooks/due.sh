@@ -89,9 +89,21 @@ if [ "$dow" -ge 5 ] && [ -x "$runner" ]; then
   fi
 fi
 
+# The day's state, independent of how a question about it is worded: every
+# prompt carries a pointer to its source, and the day's first prompt carries the
+# state itself (scripts/state.sh, which also prints the ordered next list), so
+# an answer about what is open or what comes next starts from the files, not
+# from recall.
+full=""
+if [ -x "$root/scripts/state.sh" ] && [ "$(jq -r '.last_state_date // ""' "$marker")" != "$today" ]; then
+  full=$(cd "$root" && DUE_TODAY=$today perl -e 'alarm 12; exec @ARGV' "$root/scripts/state.sh" 2>/dev/null) || full=""
+  tmp=$(mktemp) && jq --arg v "$today" '.last_state_date = $v' "$marker" > "$tmp" && mv "$tmp" "$marker"
+fi
+
 if [ ${#lines[@]} -eq 0 ]; then
   case "$prompt" in BAU|bau|BAU*) echo "[due] BAU: nothing is due (digest done $last_digest)." ;; esac
-  exit 0
 fi
-for l in "${lines[@]}"; do echo "[due] $l"; done
+for l in ${lines[@]+"${lines[@]}"}; do echo "[due] $l"; done
+echo "[state] For the day's state, what is open or what comes next: \`scripts/state.sh\` prints it live, with the ordered next list from the backlog's START HERE. Read it before answering; never answer from recall."
+[ -n "$full" ] && printf '%s\n' "$full"
 exit 0

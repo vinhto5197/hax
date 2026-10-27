@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Stop hook: a final message that asks the maintainer for a review word
 # ("merge", "commit", "approved", "push", "go <id>", in straight or curly
-# quotes) must carry a "Your review" section (skill gate-block, "Your review,
+# quotes, after an ask cue) must carry a "Your review" section (skill gate-block, "Your review,
 # on every Show and Ask"); without one the stop is refused and the reason sent
 # back, so the hand-off is fixed before anyone reads it. The rule rested on
 # recall and was missed; this makes it a check.
@@ -24,7 +24,11 @@ if [ -z "$message" ]; then
       else . end)' "$transcript" 2>/dev/null) || exit 0
 fi
 
-asks=$(printf '%s' "$message" | grep -Eio '["“](merge|commit|approved|push|go [a-z0-9][a-z0-9._-]*)["”]' | head -1)
+# An ask, not a mention: the quoted word follows an ask cue within a few
+# characters ("Reply "merge"", "waits for your "commit"", "To end the review:
+# "commit""). A word only quoted as an example does not fire.
+asks=$(printf '%s' "$message" | grep -Eio '(say|reply|type|answer|respond|your|waits? for|waiting on|end(s)? the review)[^"\n]{0,24}["“](merge|commit|approved|push|go [a-z0-9][a-z0-9._-]*)["”]' \
+  | grep -Eio '["“](merge|commit|approved|push|go [a-z0-9][a-z0-9._-]*)["”]' | head -1)
 [ -n "$asks" ] || exit 0
 printf '%s' "$message" | grep -q 'Your review' && exit 0
 

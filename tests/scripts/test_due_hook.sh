@@ -20,6 +20,9 @@ report() {
   echo "$1: $2"
   [ "$1" = PASS ] || fails=$((fails + 1))
 }
+# Every prompt on a configured machine carries the [state] pointer, so "nothing
+# due" means no [due] line, not empty output.
+no_due() { ! printf '%s' "$1" | grep -q '\[due\]'; }
 
 mkdir -p "$work/bin" "$work/proj"
 printf '#!/bin/sh\necho "3 routine, 1 journey, 0 feature"\n' > "$work/bin/gh"
@@ -37,13 +40,17 @@ out=$(run 2026-10-27 hello)
 
 # (a2) local/ present but the marker gone: a configured machine that lost its
 # state is named, never mistaken for "nothing due".
-mkdir -p "$work/proj/local/retro"
+mkdir -p "$work/proj/local/retro" "$work/proj/scripts"
+printf '#!/bin/sh\necho "STATE-STUB for $DUE_TODAY"\n' > "$work/proj/scripts/state.sh"
+chmod +x "$work/proj/scripts/state.sh"
 out=$(run 2026-10-27 hello)
 case "$out" in *"MARKER MISSING"*) report PASS "lost marker is named" ;; *) report FAIL "lost marker: got '$out'" ;; esac
 
-# (b) Last digest yesterday, a Tuesday: the digest is due, with the PR counts.
+# (b) Last digest yesterday, a Tuesday: the digest is due, with the PR counts;
+# the day's first prompt also carries the full state.
 echo '{"last_digest_date": "2026-10-26"}' > "$marker"
 out=$(run 2026-10-27 hello)
+case "$out" in *"STATE-STUB for 2026-10-27"*) report PASS "the day's first prompt carries the full state" ;; *) report FAIL "no full state on the first prompt: '$out'" ;; esac
 case "$out" in
   *"DIGEST DUE"*"3 routine, 1 journey"*) report PASS "digest due names the open PRs" ;;
   *) report FAIL "digest due: got '$out'" ;;
@@ -55,7 +62,9 @@ CLAUDE_PROJECT_DIR="$work/proj" DUE_TODAY=2026-10-27 "$hook" mark digest
 got=$(jq -r .last_digest_date "$marker")
 [ "$got" = 2026-10-27 ] && report PASS "mark digest records the date" || report FAIL "mark digest: got '$got'"
 out=$(run 2026-10-27 hello)
-[ -z "$out" ] && report PASS "digest done today: silent" || report FAIL "digest done: got '$out'"
+no_due "$out" && report PASS "digest done today: no [due] line" || report FAIL "digest done: got '$out'"
+case "$out" in *"[state]"*"scripts/state.sh"*) report PASS "every prompt carries the state pointer" ;; *) report FAIL "no state pointer: '$out'" ;; esac
+case "$out" in *"STATE-STUB"*) report FAIL "the full state was repeated within the day" ;; *) report PASS "the full state comes once a day" ;; esac
 
 # (d) BAU with nothing due answers in one line.
 out=$(run 2026-10-27 BAU)
@@ -80,7 +89,7 @@ case "$out" in *"DIGEST DUE"*) report FAIL "digest named after it was done" ;; *
 CLAUDE_PROJECT_DIR="$work/proj" DUE_TODAY=2026-10-30 "$hook" mark retro
 jq '.last_digest_date = "2026-10-31"' "$marker" > "$marker.tmp" && mv "$marker.tmp" "$marker"
 out=$(run 2026-10-31 hello)
-[ -z "$out" ] && report PASS "retro done this week: silent" || report FAIL "after mark retro: got '$out'"
+no_due "$out" && report PASS "retro done this week: no [due] line" || report FAIL "after mark retro: got '$out'"
 
 # The explorer. The stub runner answers --check from files and records each
 # launch; the hook starts it in the background, so a launch is polled for.
@@ -100,7 +109,7 @@ explorer_status() { echo "$1" > "$work/proj/local/explorer/.status.json"; }
 set_marker '.last_digest_date = "2026-11-05"'
 printf 'ok busy' > "$work/check"; echo 0 > "$work/check-exit"
 out=$(run 2026-11-05 hello)
-[ -z "$out" ] && [ "$(launches)" = 0 ] && report PASS "no explorer before Friday" || report FAIL "Thursday: got '$out', launches $(launches)"
+no_due "$out" && [ "$(launches)" = 0 ] && report PASS "no explorer before Friday" || report FAIL "Thursday: got '$out', launches $(launches)"
 
 # (h) Friday 2026-11-06 (W45) with the infra down: the reason, no launch, and
 # the week stays open so the next prompt tries again.
@@ -125,7 +134,7 @@ run 2026-11-06 hello >/dev/null
 set_marker '.last_digest_date = "2026-11-07"'
 out=$(run 2026-11-07 hello)
 sleep 0.5
-[ -z "$out" ] && [ "$(launches)" = 1 ] && report PASS "one launch a week, silent while it runs" || report FAIL "relaunch: got '$out', launches $(launches)"
+no_due "$out" && [ "$(launches)" = 1 ] && report PASS "one launch a week, silent while it runs" || report FAIL "relaunch: got '$out', launches $(launches)"
 
 # (k) A failed run names its reason and its logs.
 explorer_status '{"week": "2026-W45", "state": "failed", "reason": "the API did not answer in 60s", "logs": "local/explorer/2026-11-06-busy/"}'
@@ -138,13 +147,13 @@ out=$(run 2026-11-07 hello)
 case "$out" in *"EXPLORER DONE for 2026-W45: persona busy, notes local/explorer/2026-11-06-busy.md"*) report PASS "a finished run is reported" ;; *) report FAIL "done: got '$out'" ;; esac
 CLAUDE_PROJECT_DIR="$work/proj" DUE_TODAY=2026-11-07 "$hook" mark explorer
 out=$(run 2026-11-07 hello)
-[ -z "$out" ] && report PASS "mark explorer silences it" || report FAIL "after mark explorer: got '$out'"
+no_due "$out" && report PASS "mark explorer silences it" || report FAIL "after mark explorer: got '$out'"
 
 # (l2) Next week, launched but not yet written its status: last week's
 # finished run is not reported as this week's.
 set_marker '.last_digest_date = "2026-11-13" | .last_retro_week = "2026-W46" | .last_explorer_week = "2026-W46"'
 out=$(run 2026-11-13 hello)
-[ -z "$out" ] && report PASS "last week's run is not this week's" || report FAIL "stale status: got '$out'"
+no_due "$out" && report PASS "last week's run is not this week's" || report FAIL "stale status: got '$out'"
 
 # (m) The explorer's own session: no reminders, never a second explorer.
 set_marker '.last_digest_date = "2026-11-12" | del(.last_explorer_week)'
