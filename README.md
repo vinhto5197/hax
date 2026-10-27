@@ -130,8 +130,8 @@ Postgres, MinIO and Mailpit for RDS, S3 and the SMTP relay.
 It publishes only 80/443 and 8026, so it runs alongside `make dev`.
 The ingest worker runs inside a 1 GiB memory fence (`mem_limit` in
 `compose.prod.yml`); on Docker Desktop, raise its memory allowance if the
-whole stack does not fit: below about 2 GiB the Docker VM can run out of
-memory before the fence ever applies.
+whole stack does not fit: the Docker VM can run out of memory before the
+fence ever applies.
 
 ### Deploy
 
