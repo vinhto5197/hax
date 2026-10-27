@@ -83,17 +83,17 @@ What the e2e stack can stage today, and what it cannot:
 | # | Behaviour | Pinned by | Gap |
 |---|---|---|---|
 | 50 | Login success goes to `/chat` | setup (not a spec) | – |
-| 51 | Wrong-credentials message with Google hint; rate-limit message | py:test_login_gate (API side) | J |
-| 52 | Unverified-email message and Resend button | py:test_login_gate, useResend.test | J |
-| 53 | `?error=` messages; `?verified` / `?reset` banners; email prefilled | none | J |
+| 51 | Wrong-credentials message with Google hint; rate-limit message | `auth-login.guest` (rate limit: py:test_login_gate, API side) | – |
+| 52 | Unverified-email message and Resend button | `auth-login.guest`, py:test_login_gate, useResend.test | – |
+| 53 | `?error=` messages; `?verified` / `?reset` banners; email prefilled | `auth-login.guest` | – |
 | 54 | Signup: check-your-inbox panel, resend, validation, rate limit | py:test_signup_flow | J |
 | 55 | Verify: no token → invalid view; verifies only on Confirm, then `/login?verified=1`; invalid link → resend form | py:test_verify_email | J |
 | 56 | Forgot password: same panel whatever the email; error messages | py:test_password_reset | J |
 | 57 | Reset: "Checking your link…", invalid view, validation, success → `/chat` | py:test_password_reset | J |
 | 58 | Reset succeeds but sign-in fails → `/login?reset=1` | none | U |
 | 59 | Google button shows "Redirecting…" | none | J (logo: L) |
-| 60 | Password Show/Hide | none | J |
-| 61 | Resend status messages | useResend.test, authApi.test | – |
+| 60 | Password Show/Hide | `auth-login.guest` | – |
+| 61 | Resend status messages | `auth-login.guest` (sent), useResend.test, authApi.test | – |
 
 ## Other
 
