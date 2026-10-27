@@ -10,6 +10,7 @@ from uuid import UUID
 
 import anthropic
 import redis.asyncio
+from celery.exceptions import SoftTimeLimitExceeded
 from redis.exceptions import RedisError
 from sqlalchemy.exc import InterfaceError, OperationalError
 
@@ -68,6 +69,9 @@ def _retry_transient(task, exc: BaseException, *, max_retries: int, label: str) 
 GENERIC_INGEST_ERROR = (
     "ingestion failed after retries (temporary service error); re-upload to retry"
 )
+TIME_LIMIT_INGEST_ERROR = (
+    "processing took too long; split the document and upload the parts"
+)
 
 
 def _public_error(exc: BaseException) -> str:
@@ -122,6 +126,8 @@ def ingest_document(self, document_id: str, user_id: str) -> None:
     - ``PermanentIngestError`` (missing doc/key, unreadable or over-budget
       content — see extract.py — no chunks) -> record 'failed' and stop;
       retrying can't help.
+    - ``SoftTimeLimitExceeded`` (celery_app's soft limit) -> record 'failed'
+      and stop; a document that slow would be as slow on a retry.
     - anything else (Voyage / S3 / DB I/O) -> transient: retry with exponential
       backoff, leaving status='processing' so the polling UI keeps waiting; on the
       final attempt, record 'failed'.
@@ -148,6 +154,13 @@ def ingest_document(self, document_id: str, user_id: str) -> None:
         logger.debug("permanent ingest failure detail for %s", doc_id, exc_info=exc)
         _record_failed(doc_id, _public_error(exc))
         raise PermanentIngestError(str(exc)) from None
+    except SoftTimeLimitExceeded as exc:
+        # A document too slow to finish once is as slow on every retry, and a
+        # retry would take the one ingest slot again: fail it now, while the
+        # hard limit still leaves time for the write.
+        logger.error("ingest time limit for %s: %s", doc_id, type(exc).__name__)
+        _record_failed(doc_id, TIME_LIMIT_INGEST_ERROR)
+        raise RuntimeError(type(exc).__name__) from None
     except Exception as exc:
         logger.debug("transient ingest failure detail for %s", doc_id, exc_info=exc)
         if self.request.retries >= MAX_RETRIES:
