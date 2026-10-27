@@ -51,7 +51,7 @@ What the e2e stack can stage today, and what it cannot:
 | 31 | Guest banner with links; no model picker | `demo-landing.guest` | – |
 | 32 | Cap: "End of the demo" modal after 3 turns, turn removed, composer disabled | `demo-landing.guest`, useChat.test, chatApi.test, py:test_demo_limits | – |
 | 33 | Demo can't start / rate-limited message | py:test_anonymous_create | J |
-| 34 | Redirects: member at `/`, `/login`, `/signup` → `/chat`; guest at `/chat` → `/`; logged out → `/login` | none | J |
+| 34 | Redirects: member at `/`, `/login`, `/signup` → `/chat`; guest at `/chat` → `/`; logged out → `/login` | `routing.member`, `routing.guest` | – |
 
 ## Documents
 
@@ -75,7 +75,7 @@ What the e2e stack can stage today, and what it cannot:
 | 45 | Drawer: Escape closes; focus moves in and back; page behind inert and unscrollable; closes on navigation | none | J |
 | 46 | Drawer closes when the window becomes desktop width | none | J |
 | 47 | "Show in panel" on a phone opens the drawer and reveals the row | none | J\* |
-| 48 | Account name and email; Sign out goes to `/` | none | J |
+| 48 | Account name and email; Sign out goes to `/` | `routing.member` | – |
 | 49 | Active row highlight | none | L |
 
 ## Auth
@@ -99,7 +99,7 @@ What the e2e stack can stage today, and what it cannot:
 
 | # | Behaviour | Pinned by | Gap |
 |---|---|---|---|
-| 62 | Privacy page public; mailto link | none | J |
+| 62 | Privacy page public; mailto link | `routing.guest` | – |
 | 63 | Greeting by time of day and name; weekday; names shown as typed | greeting.test | – |
 | 64 | Greeting blank until hydrated | none | U |
 | 65 | Wordmark accessible name | Wordmark.test | – |
