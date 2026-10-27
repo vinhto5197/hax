@@ -4,12 +4,18 @@
 // skip a review or ship over a red gate.
 //
 // Launch contract: args = { id, brief, worktree, repoRoot, branch, date,
-// briefSha256, ship (default true), plan: "max-5x" }, with the turn's token
+// briefSha256, ship (default true), plan: "max-5x", rulings? }, with the turn's token
 // ceiling passed as the "+Nk" directive (the budget below). The controller
 // creates the worktree (scripts/feature-worktree.sh) and is the only writer
 // of local/features.json; this script writes only under local/briefs/<id>/.
 // A chain never commits unless `ship` is true, and then only its shipper, on
 // branch feat/<id> inside the worktree.
+// `rulings` carries the maintainer's decisions on review findings after a stop
+// at Fix: [{ match, ruling: "fix" | "defer", note }], `match` a substring of
+// the finding's title. They enter through the Fix stage only, never through
+// the brief, so a resumed run (resumeFromRunId, same args otherwise) replays
+// Build, the blind tests and the reviews from cache: changing the brief would
+// change its hash, which every prompt carries, and rerun the whole chain.
 export const meta = {
   name: 'feature-chain',
   description: 'Build one feature-lane item from its approved brief: implement + blind tests, gate, review, fix, evidence, ship, gate block',
@@ -39,7 +45,7 @@ const out = `${args.repoRoot}/local/briefs/${args.id}`
 // cached prefix instead of replaying a stale result.
 const BASE = `You are one stage of the feature chain for feature "${args.id}".
 The approved brief is ${args.brief} (sha256 ${args.briefSha256}): read it first; it is the spec, and its Interface section is frozen.
-Work ONLY inside the worktree ${args.worktree} (cd there for every command; it is a git worktree on branch ${args.branch}). Never touch ${args.repoRoot}'s own working tree. Never read any .env* file except the committed templates. Never run git commit, push, stash, reset or checkout unless your stage says you are the shipper.
+Work ONLY inside the worktree ${args.worktree} (cd there for every command; it is a git worktree on branch ${args.branch}). Never touch ${args.repoRoot}'s own working tree. Never read any .env* file except the committed templates. Never run git commit, push, stash, reset or checkout unless your stage says you are the shipper. Never kill a process by pattern (pkill -f, killall): other worktrees and the maintainer run the same servers; stop only a process you started, by its pid. \`make test\` and \`make e2e\` take a shared lock and may make you wait; wait.
 Outputs for the maintainer go under ${out}/ only (it is reachable from the worktree as local/briefs/${args.id}/).
 Your final message is data for the chain, not prose for a human: answer the schema exactly.`
 
@@ -98,7 +104,7 @@ async function tryAgent(prompt, opts) {
 
 const GATE_PROMPT = `${BASE}
 ## Stage: gate
-Run, in this order, and read every output: \`.venv/bin/ruff check .\`; \`.venv/bin/ruff format --check .\`; \`cd apps/web && npx tsc --noEmit && npx eslint . && npx vitest run\`; \`make test HAX_LOCK=1\`; \`make e2e HAX_LOCK=1\`. The last two take a shared lock (local/.gate.lock) and may wait for another chain; wait, do not skip. A check you did not run is reported as not passed. Report each check with its last five lines.`
+Run, in this order, and read every output: \`.venv/bin/ruff check .\`; \`.venv/bin/ruff format --check .\`; \`cd apps/web && npx tsc --noEmit && npx eslint . && npx vitest run\`; \`make test\`; \`make e2e\`. The last two take a shared lock (local/.gate.lock) and may wait for another chain; wait, do not skip. A check you did not run is reported as not passed. Report each check with its last five lines.`
 
 async function gate(label) {
   const r = await tryAgent(GATE_PROMPT, { label, phase: 'Gate', schema: GATE_SCHEMA, agentType: 'general-purpose', effort: 'low' })
@@ -186,9 +192,11 @@ if (!state.stoppedAt && !stop('Review')) {
 // only above low severity; a low one is left for the maintainer as "Consider".
 if (!state.stoppedAt && review && review.confirmed.length && !stop('Fix')) {
   phase('Fix')
-  const blocking = review.confirmed.filter(f => f.needsDecision && f.severity !== 'low')
-  review.deferred = review.confirmed.filter(f => f.needsDecision && f.severity === 'low')
-  const fixable = review.confirmed.filter(f => !f.needsDecision)
+  const rulingFor = f => (args.rulings || []).find(r => r.match && f.title.includes(r.match))
+  const ruled = review.confirmed.map(f => ({ ...f, ruling: rulingFor(f) }))
+  const blocking = ruled.filter(f => f.needsDecision && f.severity !== 'low' && !f.ruling)
+  review.deferred = ruled.filter(f => f.ruling ? f.ruling.ruling === 'defer' : (f.needsDecision && f.severity === 'low'))
+  const fixable = ruled.filter(f => f.ruling ? f.ruling.ruling === 'fix' : !f.needsDecision)
   if (blocking.length) {
     state.stoppedAt = 'Fix'; state.blockedOn = `review findings need a decision: ${blocking.map(d => d.title).join('; ')}`
     record('Fix', 'blocked')
@@ -197,7 +205,7 @@ if (!state.stoppedAt && review && review.confirmed.length && !stop('Fix')) {
   } else {
     fix = await tryAgent(`${BASE}
 ## Stage: fix (review findings)
-Apply these confirmed findings, each with the smallest change that removes the defect; add or adjust a test only where the brief's Verification plan already names one:\n${JSON.stringify(fixable.map(f => ({ title: f.title, file: f.file, line: f.line, claim: f.claim, scenario: f.scenario })), null, 1)}\nSame roadblock line as the implementer. Return status, files, calls.`,
+Apply these confirmed findings, each with the smallest change that removes the defect; add or adjust a test where the brief's Verification plan names one, or where the test pins behaviour the brief's Backend, UX or Interface sections already specify (a missing test for specified behaviour is a gap to close, not a decision), or where the finding carries a maintainer's ruling (its \`ruling.note\` says what is allowed, and it outranks the brief's test list for that finding only):\n${JSON.stringify(fixable.map(f => ({ title: f.title, file: f.file, line: f.line, claim: f.claim, scenario: f.scenario, ruling: f.ruling || undefined })), null, 1)}\nSame roadblock line as the implementer. Return status, files, calls.`,
       { label: 'fix:review', phase: 'Fix', schema: BUILD_SCHEMA, agentType: 'implementer' })
     if (!fix || fix.status === 'blocked') { state.stoppedAt = 'Fix'; state.blockedOn = fix ? fix.blockedOn : 'fixer returned nothing'; record('Fix', 'blocked') }
     else {
@@ -212,7 +220,7 @@ if (!state.stoppedAt && !stop('Evidence')) {
   phase('Evidence')
   evidence = await tryAgent(`${BASE}
 ## Stage: evidence
-Run the journeys the brief's Verification plan names (\`make e2e HAX_LOCK=1 ARGS="<spec file names>"\`; the lock may make you wait). Then capture the screens the plan names at 1280×800 and 390×844 with a throwaway Playwright spec (as apps/web/e2e/*.member.spec.ts, deleted afterwards) that writes PNGs to local/briefs/${args.id}/evidence/ (create it). Return each journey's name and result and every screenshot path; passed is true only if every named journey passed.`,
+Run the journeys the brief's Verification plan names (\`make e2e ARGS="<spec file names>"\`; the lock may make you wait). Then capture the screens the plan names at 1280×800 and 390×844 with a throwaway Playwright spec (as apps/web/e2e/*.member.spec.ts, deleted afterwards) that writes PNGs to local/briefs/${args.id}/evidence/ (create it). Return each journey's name and result and every screenshot path; passed is true only if every named journey passed.`,
     { label: 'evidence', phase: 'Evidence', schema: EVIDENCE_SCHEMA, agentType: 'general-purpose' })
   if (!evidence || !evidence.passed) { state.stoppedAt = 'Evidence'; record('Evidence', 'failed') } else record('Evidence', `${evidence.journeys.length} journeys, ${evidence.screenshots.length} screenshots`)
 }

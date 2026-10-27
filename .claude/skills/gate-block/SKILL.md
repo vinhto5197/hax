@@ -19,6 +19,15 @@ Every PR and every bite is classed, and the class decides who merges:
 - **Ask** — schema, auth, isolation, infra, deploy, data deletion, anything irreversible, any design decision: nothing merges until the maintainer has read it; the main lane's bite review.
 A merge to main deploys, so Ship still means CI green and the post-deploy health check watched.
 
+## Your review, on every Show and Ask
+
+Every hand-off that waits for the maintainer (Show, Ask, a feature PR) ends with **Your review**: what only a human can judge here, as a short checklist the maintainer can finish in minutes. What the machines already proved (CI, the gates, the reviews, the controller's own look at the screens) is stated in one line so the maintainer does not redo it. Then, numbered:
+1. What to look at (a screenshot, a screen to try, a copy line), with the path or the steps.
+2. The judgment calls to accept or refuse, each one sentence: copy, a behaviour choice, a deferral, a trade-off.
+3. Code worth raising, only when there is some: `file:line` and why a human should read it (a security boundary, a choice the maintainer might make differently, a surprising pattern); otherwise "no code to read".
+4. The word that ends the review ("merge", "commit", "approved").
+Ship needs none: it is merged by the controller and listed in the digest.
+
 ## Provenance, per bite
 
 One line each: who wrote it (the controller, an implementer agent, a chain stage), who reviewed it (fresh-eyes, adversarial lenses, the final reviewer), which tests cover it and who wrote those, and whether the mutation check ran. A "no" is stated, never omitted: the maintainer decides what to read from this line.

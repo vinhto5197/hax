@@ -24,8 +24,8 @@ The chain is `.claude/workflows/feature-chain.js`: a deterministic sequence of a
 
 ## After
 
-- `stoppedAt` null and `shipped` true → ledger `state: pr`, `pr` URL; read `local/briefs/<id>/gate.md`, append **New to you** (against `local/FRONTLOADED.local.md`) and **Cost** (from `chain.json`'s phases; output tokens per phase, wall time from the run), record cost in the ledger, deliver the block (skill `gate-block`). The maintainer says merge or what to change.
-- `stoppedAt` set → ledger `state: blocked` with `blockedOn`; put the decision in front of the maintainer (now, or in the digest). After the decision, amend the brief if it changed, re-approve, and relaunch with `resumeFromRunId` so finished phases are not paid for twice.
+- `stoppedAt` null and `shipped` true → ledger `state: pr`, `pr` URL; read `local/briefs/<id>/gate.md`, append **New to you** (against `local/FRONTLOADED.local.md`) and **Cost** (`.venv/bin/python scripts/chain_cost.py <runId>` gives tokens per phase from the agents' own transcripts; wall time from the run's completion notices, summed across a resume), record cost in the ledger, deliver the block (skill `gate-block`). The maintainer says merge or what to change.
+- `stoppedAt` set → ledger `state: blocked` with `blockedOn`; put the decision in front of the maintainer (now, or in the digest). After the decision, relaunch with `resumeFromRunId`, the same args, and the decision as `rulings` (`[{ match, ruling: "fix" | "defer", note }]`, `match` a substring of the finding's title): the finished stages replay from cache and only Fix onward runs. Never amend the brief to carry a decision: every prompt carries the brief's hash, so a changed brief reruns the whole chain (about 1.3M tokens for pilot-76). Only a decision that changes the design itself goes back through the brief, a re-approval and a fresh run.
 - Merged → ledger `state: merged`; `scripts/feature-worktree.sh --remove <id>`.
 
 ## Cost bounds

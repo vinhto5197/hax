@@ -20,7 +20,8 @@ chain call.
 
 | Script | What it does |
 |---|---|
-| `with-lock.sh` | Runs one command under a directory lock (`mkdir` is the atomic primitive); `make test HAX_LOCK=1` and `make e2e HAX_LOCK=1` use it so gate runs that share `hax_test` or the e2e stack queue instead of colliding. Exit 75 on timeout. |
+| `with-lock.sh` | Runs one command under a directory lock (`mkdir` is the atomic primitive); `make test` and `make e2e` always use it where `local/` exists, so runs that share `hax_test` or the e2e stack queue instead of colliding. Exit 75 on timeout. |
 | `feature-worktree.sh` | One git worktree per feature-lane build under `.claude/worktrees/<id>` on `feat/<id>`, with `.venv`, `.env` and `local/` symlinked and `node_modules` cloned; `--remove <id>` tears it down. |
 | `explorer.sh` | The weekly product explorer: a persona from `.claude/skills/product-explorer/` uses main's build on an isolated stack (web :3002, API :8002, `hax_explorer`, Redis db 14) with the real model and writes its notes to `local/explorer/`. The due hook starts it on Fridays; `--check` says whether a run can start now. Spends real model money (bounded). |
+| `chain_cost.py` | Tokens per phase of one feature-chain run (`chain_cost.py <runId>`), from its agents' own transcripts; the gate block's Cost section comes from it. Read-only. |
 | `week_transcript.py` | Prints one ISO week of this project's Claude Code transcripts reduced to the maintainer's typed messages and every refused or failed tool call; the Friday retro reads it, because transcripts are never compacted. Read-only. |
