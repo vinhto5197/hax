@@ -65,6 +65,55 @@ describe("useResend", () => {
     act(() => result.current.reset());
     expect(result.current.state).toBe("idle");
   });
+
+  it("ignores a result that lands after reset", async () => {
+    let settle!: (value: Awaited<ReturnType<typeof ResendFn>>) => void;
+    resendVerification.mockReturnValue(new Promise((r) => (settle = r)));
+    const { result } = renderHook(() => useResend());
+    let pending!: Promise<void>;
+    act(() => {
+      pending = result.current.resend("a@b.co");
+    });
+    expect(result.current.state).toBe("sending");
+    act(() => result.current.reset());
+    expect(result.current.state).toBe("idle");
+    await act(async () => {
+      settle({ ok: true, data: { status: "check_inbox" } });
+      await pending;
+    });
+    expect(result.current.state).toBe("idle");
+  });
+
+  it("applies only the latest resend's result", async () => {
+    let settleFirst!: (value: Awaited<ReturnType<typeof ResendFn>>) => void;
+    let settleSecond!: (value: Awaited<ReturnType<typeof ResendFn>>) => void;
+    resendVerification
+      .mockReturnValueOnce(new Promise((r) => (settleFirst = r)))
+      .mockReturnValueOnce(new Promise((r) => (settleSecond = r)));
+    const { result } = renderHook(() => useResend());
+    let first!: Promise<void>;
+    let second!: Promise<void>;
+    act(() => {
+      first = result.current.resend("a@b.co");
+    });
+    act(() => {
+      second = result.current.resend("c@d.co");
+    });
+    expect(resendVerification).toHaveBeenNthCalledWith(1, "a@b.co");
+    expect(resendVerification).toHaveBeenNthCalledWith(2, "c@d.co");
+
+    await act(async () => {
+      settleFirst({ ok: true, data: { status: "check_inbox" } });
+      await first;
+    });
+    expect(result.current.state).toBe("sending");
+
+    await act(async () => {
+      settleSecond({ ok: false, code: "rate_limited" });
+      await second;
+    });
+    expect(result.current.state).toBe("rate_limited");
+  });
 });
 
 describe("ResendStatus", () => {
