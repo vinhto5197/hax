@@ -128,6 +128,10 @@ Postgres, MinIO and Mailpit for RDS, S3 and the SMTP relay.
    uploads); log in for the full product.
 
 It publishes only 80/443 and 8026, so it runs alongside `make dev`.
+The ingest worker runs inside a 1 GiB memory fence (`mem_limit` in
+`compose.prod.yml`); on Docker Desktop, raise its memory allowance if the
+whole stack does not fit: below about 2 GiB the Docker VM can run out of
+memory before the fence ever applies.
 
 ### Deploy
 
@@ -153,7 +157,7 @@ After a fresh clone, a Docker version bump, or anything else that touches the da
 3. `make infra-ps` — postgres, redis and minio should report `(healthy)` (~20s on cold start); mailpit declares no healthcheck.
 4. `make infra-psql`, then `SELECT * FROM pg_extension WHERE extname='vector';` — expect one row (confirms the `vector` extension is loaded). Exit with `\q`.
 5. `make infra-redis-cli`, then `PING` — expect `PONG`. Exit with `exit`.
-6. Confirm host-side connectivity (this is the URL `apps/api` uses). With `psql` on the host: `psql postgresql://hax:hax@localhost:5432/hax -c '\dx'`. Without `psql`, via the venv: `.venv/bin/python -c "from sqlalchemy import create_engine, text; print(create_engine('postgresql://hax:hax@localhost:5432/hax').connect().execute(text('SELECT 1')).scalar())"` (expect `1`).
+6. Confirm host-side connectivity as the owner role `hax` (the URL migrations use, `MIGRATIONS_DATABASE_URL`; the app itself connects as the least-privilege `hax_app`, see `DATABASE_URL` in `.env.example`). With `psql` on the host: `psql postgresql://hax:hax@localhost:5432/hax -c '\dx'`. Without `psql`, via the venv: `.venv/bin/python -c "from sqlalchemy import create_engine, text; print(create_engine('postgresql://hax:hax@localhost:5432/hax').connect().execute(text('SELECT 1')).scalar())"` (expect `1`).
 7. Volume-persistence check: in `make infra-psql`, run `CREATE TABLE _probe (x int); INSERT INTO _probe VALUES (1);`. Then `make infra-down`, `make infra-up`, `make infra-psql`, `SELECT * FROM _probe;` — expect the row. Clean up with `DROP TABLE _probe;`.
 8. `make infra-down` — leave the machine in containers-down, volumes-kept state.
 
@@ -170,6 +174,12 @@ make migrate-down              # roll back the most recent migration
 ```
 
 - **Fresh database:** after `make infra-up`, run `make migrate` once to create the schema. `make dev` does **not** auto-migrate — run `make migrate` yourself after pulling new migrations or starting from an empty volume.
+- **Existing Postgres volume:** [infra/compose/postgres/init.sql](infra/compose/postgres/init.sql) (the `vector` extension and the `hax_app` role with its grants) runs only when the volume is first created. A volume from before a change to it never sees the change; apply it by hand (it is idempotent), or reset with `make infra-clean`:
+
+  ```bash
+  docker exec -i hax-postgres psql -U hax -d hax < infra/compose/postgres/init.sql
+  ```
+
 - **`make migrate` is idempotent.** Alembic records applied revisions in an `alembic_version` table and runs only what's pending, so re-running is safe.
 - **After changing a model:** run `make migration m="..."`, then **review the generated file** before committing — autogenerate misses some changes (e.g. constraint/type edits) and can emit an empty migration. Apply it with `make migrate`.
 - **`make migrate-down`** reverses the schema change and steps the version pointer back one; it does **not** delete the migration file (migrations are version-controlled history — to undo further, write a new migration forward).
