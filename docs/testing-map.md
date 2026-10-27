@@ -14,8 +14,8 @@ What the e2e stack can stage today, and what it cannot:
 | # | Behaviour | Pinned by | Gap |
 |---|---|---|---|
 | 1 | Enter sends; the question shows above the reply | demo, every member journey | – |
-| 2 | Shift+Enter adds a line; Enter during IME composition is ignored | none | J (IME: U) |
-| 3 | Send disabled when empty; composer and picker disabled while streaming; focus returns after | useChat.test (whitespace only) | J |
+| 2 | Shift+Enter adds a line; Enter during IME composition is ignored | `chat-basics.member` (Shift+Enter) | – (IME: U) |
+| 3 | Send disabled when empty; composer and picker disabled while streaming; focus returns after | `chat-basics.member`, useChat.test (whitespace only) | – |
 | 4 | Reply streams piece by piece | switch, guard | – |
 | 5 | "Assistant is thinking…" and the tool status line | MessageList.test, useChat.test | – |
 | 6 | URL becomes `/chat/<id>`; a sidebar row appears | newchat, hist | – |
@@ -29,13 +29,13 @@ What the e2e stack can stage today, and what it cannot:
 | 14 | New chat clears the screen and starts a separate conversation | newchat | – |
 | 15 | New chat during a reply keeps that reply out of the new chat | switch | – |
 | 16 | Switch via the sidebar; reload, back and forward | hist | – |
-| 17 | Delete conversation: confirm or cancel; deleting the open one goes to `/chat`; error line | py:test_authz_conversations | J |
-| 18 | Empty sidebar shows "No conversations yet" | none | J |
+| 17 | Delete conversation: confirm or cancel; deleting the open one goes to `/chat`; error line | `chat-basics.member`, py:test_authz_conversations | – (error line: no journey can fail a delete) |
+| 18 | Empty sidebar shows "No conversations yet" | `chat-basics.member` | – |
 | 19 | "Couldn't load this conversation." | useChat.test | – |
 | 20 | 409 "reply in progress": message, refused turn removed, retry works | guard, useChat.test, chatApi.test, py:test_turn_guard | – |
 | 21 | Stream error shown; partial reply kept | useChat.test | J\* |
 | 22 | Stream ends without `[DONE]`: no error shown, partial reply looks complete (undecided behaviour) | chatApi.test (delivery), py:test_turn_guard (partial saved) | J\* |
-| 23 | Model picker has 4 options; the choice travels with the first turn | chatApi.test, py:test_demo_limits | J |
+| 23 | Model picker has 4 options; the choice travels with the first turn | `chat-basics.member`, chatApi.test, py:test_demo_limits | – |
 | 24 | A 401 signs out to `/login` (or `/` on the landing page) | chatApi.test | – |
 | 25 | 20 000-character cap; composer grows on resize | ChatInput.test | – |
 | 26 | Sidebar refresh keeps the latest list | ConversationsProvider.test | – |
