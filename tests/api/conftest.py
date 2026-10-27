@@ -9,6 +9,7 @@ Never seed through the app engine: RLS rejects un-announced writes.
 """
 
 import asyncio
+import copy
 import os
 import time
 from pathlib import Path
@@ -23,6 +24,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 
 import apps.api.redis_client as redis_client
+import apps.api.routers.chat as chat_router
 from packages.db import engine
 from packages.db.session import to_async_url
 from packages.db.user_context import current_user_id
@@ -168,6 +170,31 @@ def reset_identity():
     token = current_user_id.set(None)
     yield
     current_user_id.reset(token)
+
+
+@pytest.fixture
+def model_stream(monkeypatch):
+    """Scripts the model behind POST /api/chat: `model_stream(*events,
+    error=None)` makes the next turns yield `events` (harness events such as
+    {"content": "..."}) and then raise `error`, if given. Returns the
+    messages the model was given, one deep-copied list per call.
+
+    The one place that knows where the route's model stream is patched: when
+    generation moves, this fixture changes and the tests using it do not."""
+    calls: list[list] = []
+
+    def script(*events, error: BaseException | None = None) -> list[list]:
+        async def fake(messages, **kwargs):
+            calls.append(copy.deepcopy(list(messages)))
+            for event in events:
+                yield event
+            if error is not None:
+                raise error
+
+        monkeypatch.setattr(chat_router, "stream_completion_agentic", fake)
+        return calls
+
+    return script
 
 
 @pytest.fixture

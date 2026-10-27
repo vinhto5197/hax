@@ -190,11 +190,23 @@ export async function deleteConversation(id: string): Promise<void> {
   throw new Error(await errorDetail(response));
 }
 
+// {"error": <code>}: the model failed mid-reply. The server stored no reply,
+// released the conversation, and ends the stream after the frame. `message`
+// is the frame's code, never user copy.
+export class ReplyFailedError extends Error {
+  constructor(code: string) {
+    super(code);
+    this.name = "ReplyFailedError";
+  }
+}
+
 // Parsed result of one SSE event — a discriminated union so callers switch on
 // `type`: prelude (conversation), token (chunk), tool-activity note (status),
-// provenance (sources), terminator (done), or unparseable/empty (ignore).
+// provenance (sources), terminator (done), model failure (error), or
+// unparseable/empty (ignore).
 type StreamEvent =
   | { type: "conversation"; conversationId: string }
+  | { type: "error"; code: string }
   | { type: "chunk"; content: string }
   | { type: "status"; status: string }
   | { type: "sources"; sources: Source[] }
@@ -228,11 +240,16 @@ function parseStreamEvent(rawEvent: string): StreamEvent {
       // runtime typeof checks below — a malformed event then falls through to
       // `ignore` rather than being trusted as a string.
       const parsed = JSON.parse(data) as {
+        error?: unknown;
         content?: unknown;
         conversation_id?: unknown;
         status?: unknown;
         sources?: unknown;
       };
+      // First: a failure frame is a failure whatever else it carries.
+      if (typeof parsed.error === "string") {
+        return { type: "error", code: parsed.error };
+      }
       if (typeof parsed.conversation_id === "string") {
         return { type: "conversation", conversationId: parsed.conversation_id };
       }
@@ -308,6 +325,8 @@ export async function streamChat(
     for (const event of events) {
       const parsed = parseStreamEvent(event);
       if (parsed.type === "done") return;
+      // No reader.cancel(): the server ends the stream right after the frame.
+      if (parsed.type === "error") throw new ReplyFailedError(parsed.code);
       if (parsed.type === "conversation")
         handlers.onConversationId(parsed.conversationId);
       if (parsed.type === "chunk") handlers.onChunk(parsed.content);
@@ -319,6 +338,7 @@ export async function streamChat(
   // Salvage a trailing event if the server closed without a final "\n\n".
   if (buffer.trim()) {
     const parsed = parseStreamEvent(buffer);
+    if (parsed.type === "error") throw new ReplyFailedError(parsed.code);
     if (parsed.type === "chunk") handlers.onChunk(parsed.content);
   }
 }
