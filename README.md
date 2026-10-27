@@ -192,7 +192,7 @@ make test-web   # Web: Vitest + React Testing Library, no services needed
 make e2e        # Browser journeys: Playwright (Chromium) against an isolated stack
 ```
 
-`HAX_LOCK=1` on `make test` or `make e2e` runs it under `scripts/with-lock.sh`, so two runs that share the test database or the e2e ports queue instead of colliding (the feature chain uses it; by hand it is optional).
+`make test` and `make e2e` always run under `scripts/with-lock.sh` when `local/` exists, so two runs that share the test database or the e2e ports queue instead of colliding; a second run waits for the first.
 
 Web tests sit beside the code they cover as `*.test.ts` / `*.test.tsx`. All three suites run in CI, and the web unit suite also runs as a pre-commit hook when a source file under `apps/web` changes.
 

@@ -202,18 +202,24 @@ lint:
 # ── Test ─────────────────────────────────────────────────────
 .PHONY: test test-web e2e
 
+# The targets that share hax_test or the e2e stack always run under
+# scripts/with-lock.sh where local/ exists, so two runs (two agents, a chain
+# and the explorer) queue instead of emptying each other's database; an opt-in
+# lock protected only the runs that remembered it. Without local/ (CI, a fresh
+# clone) there is nothing to share and nowhere for the lock, so no lock.
+# HAX_LOCK is no longer read.
+GATE_LOCK := $(if $(wildcard local),scripts/with-lock.sh local/.gate.lock 1800 --,)
+
 # -W error matches CI: a warning fails the run here as it does there.
-# HAX_LOCK=1 runs the targets that share hax_test or the e2e stack under
-# scripts/with-lock.sh, so concurrent gate runs queue instead of colliding.
 test:
-	$(if $(HAX_LOCK),scripts/with-lock.sh local/.gate.lock 1800 --,) .venv/bin/pytest -W error
+	$(GATE_LOCK) .venv/bin/pytest -W error
 
 test-web:
 	cd apps/web && npm test
 
 # Browser journeys against an isolated stack (database hax_e2e, Redis db 15,
 # ports 3001/8001/8787) with a scripted model. Needs `make infra-up`. The
-# prepare step empties hax_e2e, so under HAX_LOCK it runs inside the lock too.
+# prepare step empties hax_e2e, so it runs inside the lock too.
 e2e:
 	@nc -z localhost 5432 >/dev/null 2>&1 && nc -z localhost 6379 >/dev/null 2>&1 || { echo "Postgres/Redis down: run make infra-up"; exit 1; }
-	$(if $(HAX_LOCK),scripts/with-lock.sh local/.gate.lock 1800 --,) sh -c '.venv/bin/python apps/web/e2e/prepare.py && cd apps/web && npx playwright test $(ARGS)'
+	$(GATE_LOCK) sh -c '.venv/bin/python apps/web/e2e/prepare.py && cd apps/web && npx playwright test $(ARGS)'
