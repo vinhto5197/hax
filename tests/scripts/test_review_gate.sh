@@ -58,6 +58,16 @@ blocked "$out" && report PASS "a go-word counts" || report FAIL "go-word passed:
 out=$(run "$(transcript 'All checks passed.')" false)
 [ -z "$out" ] && report PASS "only the final message is judged" || report FAIL "earlier text judged: '$out'"
 
+# A word mentioned, not asked for, passes: the check fires on an ask only.
+out=$(run "$(transcript 'The check looks for a quoted review word like "merge" or "commit".')" false)
+[ -z "$out" ] && report PASS "a mentioned word is not an ask" || report FAIL "a mention was blocked: '$out'"
+
+out=$(run "$(transcript 'The skill edit waits for your "commit".')" false)
+blocked "$out" && report PASS "a word waiting on the maintainer is an ask" || report FAIL "waiting-on ask passed: '$out'"
+
+out=$(run "$(transcript $'All green.\n\n**To end the review:** "merge".')" false)
+blocked "$out" && report PASS "a to-end-the-review line is an ask" || report FAIL "end-the-review ask passed: '$out'"
+
 out=$(run "$(transcript 'Reply "merge".')" true)
 [ -z "$out" ] && report PASS "a second stop in a row passes" || report FAIL "stop_hook_active blocked: '$out'"
 
