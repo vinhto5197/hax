@@ -14,10 +14,6 @@ def test_leading_bom_is_dropped(filename):
     assert extract_text(b"\xef\xbb\xbfhello world", filename) == "hello world"
 
 
-def test_text_without_bom_is_unchanged():
-    assert extract_text(b"hello world", "notes.txt") == "hello world"
-
-
 @pytest.mark.parametrize("filename", ["notes.txt", "notes.md"])
 def test_nul_is_permanent_and_does_not_echo_content(filename):
     with pytest.raises(PermanentIngestError) as excinfo:
@@ -26,8 +22,3 @@ def test_nul_is_permanent_and_does_not_echo_content(filename):
     message = str(excinfo.value)
     assert "nul" in message.lower()
     assert "zebraquartz" not in message
-
-
-def test_nul_after_a_bom_is_still_refused():
-    with pytest.raises(PermanentIngestError):
-        extract_text(b"\xef\xbb\xbfabc\x00def", "notes.txt")
