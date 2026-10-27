@@ -1,39 +1,67 @@
-"""Prepare the isolated browser-journey stack: database hax_e2e and Redis db 15.
+"""Prepare an isolated local stack's database and Redis db.
 
-Run from the repo root before Playwright (`make e2e`). Idempotent: creates the
-database if missing, migrates it as the owner role, grants the app role,
-empties every table but the migration ledger, seeds one verified member,
-flushes Redis db 15.
+Two targets, each a throwaway of its own: `e2e` (the default; database
+hax_e2e, Redis db 15) for the browser journeys (`make e2e`), and `explorer`
+(hax_explorer, Redis db 14) for the weekly product explorer
+(`scripts/explorer.sh`). Run from the repo root before the stack starts.
+Idempotent: creates the database if missing, migrates it as the owner role,
+grants the app role, empties every table but the migration ledger, seeds one
+verified member, flushes the Redis db.
 The connection targets are literals, never env: the dev shell exports the
 root .env (direnv), and this script must be unable to reach dev data.
 """
 
+import argparse
 import asyncio
 import os
 import sys
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-TARGET_DB = "hax_e2e"
 ADMIN_URL = "postgresql://hax:hax@localhost:5432/postgres"
-OWNER_URL = f"postgresql://hax:hax@localhost:5432/{TARGET_DB}"
-APP_URL = f"postgresql://hax_app:hax_app@localhost:5432/{TARGET_DB}"
-REDIS_URL = "redis://localhost:6379/15"
 
-# Contract with e2e/auth.setup.ts, which logs in with these.
-MEMBER_EMAIL = "e2e@example.com"
-MEMBER_NAME = "E2E"
-MEMBER_PASSWORD = "e2e-password-123"
+
+@dataclass(frozen=True)
+class Target:
+    database: str
+    redis_db: int
+    # The member each stack logs in as; e2e's is a contract with
+    # e2e/auth.setup.ts, the explorer's with scripts/explorer.sh.
+    member_email: str
+    member_name: str
+    member_password: str
+
+    @property
+    def owner_url(self) -> str:
+        return f"postgresql://hax:hax@localhost:5432/{self.database}"
+
+    @property
+    def app_url(self) -> str:
+        return f"postgresql://hax_app:hax_app@localhost:5432/{self.database}"
+
+    @property
+    def redis_url(self) -> str:
+        return f"redis://localhost:6379/{self.redis_db}"
+
+
+# Every entry is emptied on each run: never `hax` (dev), `hax_test` (pytest)
+# or Redis db 0 (dev), and no two entries share a database or a Redis db.
+TARGETS = {
+    "e2e": Target("hax_e2e", 15, "e2e@example.com", "E2E", "e2e-password-123"),
+    "explorer": Target(
+        "hax_explorer", 14, "explorer@example.com", "Explorer", "explorer-password-123"
+    ),
+}
 
 ROOT = Path(__file__).resolve().parents[3]
 
-assert TARGET_DB == "hax_e2e" and OWNER_URL.endswith("/hax_e2e")
 
-# Alembic's env.py and packages.db read these at import; set before either is
-# imported so nothing from the shell can redirect the migration.
-os.environ["MIGRATIONS_DATABASE_URL"] = OWNER_URL
-os.environ["DATABASE_URL"] = APP_URL
-sys.path.insert(0, str(ROOT))
+def parse_target(argv: list[str]) -> Target:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--target", choices=sorted(TARGETS), default="e2e")
+    return TARGETS[parser.parse_args(argv).target]
+
 
 # Mirrors tests/api/conftest.py (_APP_ROLE_SQL, _GRANTS_SQL); grants are
 # per-database, and init.sql only covered `hax`.
@@ -57,7 +85,7 @@ def fail(message: str) -> None:
     sys.exit(1)
 
 
-async def create_database() -> None:
+async def create_database(target: Target) -> None:
     import asyncpg
 
     try:
@@ -68,14 +96,14 @@ async def create_database() -> None:
         fail(f"cannot log in to Postgres as hax ({type(exc).__name__})")
     try:
         exists = await conn.fetchval(
-            "SELECT 1 FROM pg_database WHERE datname = $1", TARGET_DB
+            "SELECT 1 FROM pg_database WHERE datname = $1", target.database
         )
         if not exists:
-            await conn.execute(f'CREATE DATABASE "{TARGET_DB}"')
+            await conn.execute(f'CREATE DATABASE "{target.database}"')
         await conn.execute(_APP_ROLE_SQL)
     finally:
         await conn.close()
-    print(f"database {TARGET_DB}: {'present' if exists else 'created'}")
+    print(f"database {target.database}: {'present' if exists else 'created'}")
 
 
 def migrate() -> None:
@@ -86,12 +114,12 @@ def migrate() -> None:
     print("migrations: at head")
 
 
-async def grant_reset_seed() -> None:
+async def grant_reset_seed(target: Target) -> None:
     import asyncpg
 
     from packages.core.auth.passwords import hash_password
 
-    conn = await asyncpg.connect(dsn=OWNER_URL, timeout=5)
+    conn = await asyncpg.connect(dsn=target.owner_url, timeout=5)
     try:
         for stmt in _GRANTS_SQL:
             await conn.execute(stmt)
@@ -115,33 +143,39 @@ async def grant_reset_seed() -> None:
             "INSERT INTO users"
             " (email, name, password_hash, email_verified_at, sessions_valid_after)"
             " VALUES ($1, $2, $3, $4, $4)",
-            MEMBER_EMAIL,
-            MEMBER_NAME,
-            hash_password(MEMBER_PASSWORD),
+            target.member_email,
+            target.member_name,
+            hash_password(target.member_password),
             now,
         )
-        print(f"seeded: {MEMBER_EMAIL}")
+        print(f"seeded: {target.member_email}")
     finally:
         await conn.close()
 
 
-def flush_redis() -> None:
+def flush_redis(target: Target) -> None:
     import redis
 
-    assert REDIS_URL.endswith("/15")
     try:
-        redis.Redis.from_url(REDIS_URL, socket_connect_timeout=5).flushdb()
+        redis.Redis.from_url(target.redis_url, socket_connect_timeout=5).flushdb()
     except (redis.exceptions.ConnectionError, redis.exceptions.TimeoutError) as exc:
         fail(f"Redis unreachable ({type(exc).__name__}): run make infra-up")
-    print("redis db 15: flushed")
+    print(f"redis db {target.redis_db}: flushed")
 
 
-def main() -> None:
-    asyncio.run(create_database())
+def main(argv: list[str]) -> None:
+    target = parse_target(argv)
+    assert target.owner_url.endswith(f"/{target.database}")
+    # Alembic's env.py and packages.db read these at import; set before either
+    # is imported so nothing from the shell can redirect the migration.
+    os.environ["MIGRATIONS_DATABASE_URL"] = target.owner_url
+    os.environ["DATABASE_URL"] = target.app_url
+    sys.path.insert(0, str(ROOT))
+    asyncio.run(create_database(target))
     migrate()
-    asyncio.run(grant_reset_seed())
-    flush_redis()
+    asyncio.run(grant_reset_seed(target))
+    flush_redis(target)
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1:])
