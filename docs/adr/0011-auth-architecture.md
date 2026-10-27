@@ -34,7 +34,12 @@ newer login, because that would let a stolen token launder past a
 revocation check that compares `auth_time` against a stamped cutoff (see
 Revocation below).
 
-Passwords hash with **argon2id** (argon2-cffi, library defaults).
+Passwords hash with **argon2id** (argon2-cffi) at explicit parameters, not
+the library's defaults: time cost 2, memory 19 MiB (19456 KiB), parallelism
+1 — OWASP's argon2id minimum, sized so concurrent logins fit the 1 GiB box
+(`packages/core/auth/passwords.py`). Verification reads the parameters
+embedded in each stored hash, so changing them later never breaks existing
+hashes.
 
 ## Alternatives considered
 
@@ -59,11 +64,12 @@ the only option once Credentials is in the provider list.
 
 ## Consequences
 
-**Two-tier gating, not one:** Next's middleware only has enough
+**Two-tier gating, not one:** Next's request proxy (`apps/web/proxy.ts`,
+the file Next.js formerly called middleware) only has enough
 information to do a **crypto-only** check (valid signature, not expired) —
 it has no Redis/DB access. The **API** layer does the full check: crypto
-**plus** the revocation lookup. A token that fails middleware never reaches
-the API; a token revoked mid-life passes middleware (still
+**plus** the revocation lookup. A token that fails the proxy never reaches
+the API; a token revoked mid-life passes the proxy (still
 cryptographically valid) but is rejected at the API, which is where it
 actually matters.
 
@@ -75,12 +81,16 @@ check that can't reach its cache degrades to "not yet checked" rather than
 locking every session out; core JWT verification is unaffected either way.
 
 `verify-credentials` is **internal-only** (`X-Internal-Secret`-gated, called
-server-to-server from Auth.js's `authorize()`, never exposed publicly) and
-returns a **404-shaped disguise** on a wrong password rather than a
-distinguishable error — the endpoint is a credential oracle by nature (it
-exists to say yes/no to a password), so its blast radius is limited to
-"reachable only with the internal secret," not "returns a different status
-per failure mode."
+server-to-server from Auth.js's `authorize()`, never exposed publicly;
+without the secret it answers 404, as if it did not exist). Its failure is
+**uniform**: an unknown email, a passwordless (Google-only) account and a
+wrong password all return the same `401 {"code": "invalid_credentials"}`,
+and the unknown-email path burns a dummy argon2 verification so timing
+cannot tell them apart either — no account enumeration. Only a correct
+password can reach the distinct `403 email_unverified`, and the rate limit
+answers `429 rate_limited` before any lookup. The endpoint is still a
+credential oracle by nature (it exists to say yes/no to a password), so its
+blast radius is limited to "reachable only with the internal secret."
 
 **Known slice-1 gap:** login rate limiting is currently a per-account
 bucket, which is itself a lockout lever (anyone who knows a victim's email
