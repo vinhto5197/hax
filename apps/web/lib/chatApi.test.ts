@@ -638,3 +638,131 @@ describe("streamChat", () => {
     ]);
   });
 });
+
+describe("streamChat reply failure", () => {
+  function stream(reads: Array<string | Uint8Array>): void {
+    respondWith(() => sseResponse(reads));
+  }
+
+  async function rejection(promise: Promise<unknown>): Promise<unknown> {
+    return promise.then(
+      () => {
+        throw new Error("expected streamChat to reject");
+      },
+      (err: unknown) => err,
+    );
+  }
+
+  it("delivers every event before an error frame, then rejects with ReplyFailedError", async () => {
+    const api = await load();
+    const h = handlers();
+    stream([
+      sseEvent({ conversation_id: "c1" }),
+      sseEvent({ status: "Searching your documents" }),
+      sseEvent({ content: "Hello" }),
+      sseEvent({ sources: [source] }),
+      sseEvent({ content: " wor" }),
+      sseEvent({ error: "reply_failed" }),
+    ]);
+    const err = await rejection(api.streamChat("hi", null, h));
+    expect(err).toBeInstanceOf(api.ReplyFailedError);
+    expect(h.log).toEqual([
+      ["conversation", "c1"],
+      ["status", "Searching your documents"],
+      ["chunk", "Hello"],
+      ["sources", [source]],
+      ["chunk", " wor"],
+    ]);
+  });
+
+  it("a ReplyFailedError is named ReplyFailedError and carries the frame's code as its message", async () => {
+    const api = await load();
+    stream([sseEvent({ error: "reply_failed" })]);
+    const err = await rejection(api.streamChat("hi", null, handlers()));
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).name).toBe("ReplyFailedError");
+    expect((err as Error).message).toBe("reply_failed");
+  });
+
+  it("an error frame with any string code rejects with ReplyFailedError", async () => {
+    const api = await load();
+    stream([sseEvent({ content: "x" }), sseEvent({ error: "some_new_code" })]);
+    const err = await rejection(api.streamChat("hi", null, handlers()));
+    expect(err).toBeInstanceOf(api.ReplyFailedError);
+    expect((err as Error).message).toBe("some_new_code");
+  });
+
+  it("an event carrying both an error code and content is a failure and its content is not delivered", async () => {
+    const api = await load();
+    const h = handlers();
+    stream([
+      sseEvent({ content: "before" }),
+      sseEvent({ error: "reply_failed", content: "not shown" }),
+    ]);
+    const err = await rejection(api.streamChat("hi", null, h));
+    expect(err).toBeInstanceOf(api.ReplyFailedError);
+    expect(h.log).toEqual([["chunk", "before"]]);
+  });
+
+  it("nothing after an error frame reaches a handler", async () => {
+    const api = await load();
+    const h = handlers();
+    stream([
+      sseEvent({ content: "before" }),
+      sseEvent({ error: "reply_failed" }),
+      sseEvent({ content: "after" }),
+      sseEvent("[DONE]"),
+    ]);
+    const err = await rejection(api.streamChat("hi", null, h));
+    expect(err).toBeInstanceOf(api.ReplyFailedError);
+    expect(h.log).toEqual([["chunk", "before"]]);
+  });
+
+  it("rejects at an error frame with the connection still open, without cancelling the stream", async () => {
+    const api = await load();
+    const h = handlers();
+    const cancel = vi.fn();
+    const encoder = new TextEncoder();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode(sseEvent({ content: "hi" })));
+        controller.enqueue(encoder.encode(sseEvent({ error: "reply_failed" })));
+      },
+      cancel,
+    });
+    respondWith(() => new Response(body, { status: 200 }));
+    const outcome = await Promise.race([
+      rejection(api.streamChat("hi", null, h)),
+      new Promise((resolve) => setTimeout(() => resolve("still pending"), 500)),
+    ]);
+    expect(outcome).toBeInstanceOf(api.ReplyFailedError);
+    expect(h.log).toEqual([["chunk", "hi"]]);
+    await flush();
+    expect(cancel).not.toHaveBeenCalled();
+  });
+
+  it("an error frame left in the trailing buffer at EOF rejects with ReplyFailedError after the events before it", async () => {
+    const api = await load();
+    const h = handlers();
+    stream([sseEvent({ content: "first" }), 'data: {"error":"reply_failed"}']);
+    const err = await rejection(api.streamChat("hi", null, h));
+    expect(err).toBeInstanceOf(api.ReplyFailedError);
+    expect((err as Error).message).toBe("reply_failed");
+    expect(h.log).toEqual([["chunk", "first"]]);
+  });
+
+  it("[DONE] after content still resolves", async () => {
+    const api = await load();
+    const h = handlers();
+    stream([
+      sseEvent({ content: "Hello" }),
+      sseEvent({ content: " world" }),
+      sseEvent("[DONE]"),
+    ]);
+    await expect(api.streamChat("hi", null, h)).resolves.toBeUndefined();
+    expect(h.log).toEqual([
+      ["chunk", "Hello"],
+      ["chunk", " world"],
+    ]);
+  });
+});

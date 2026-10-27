@@ -8,7 +8,7 @@ Lanes: **J** a Playwright journey in `apps/web/e2e/` can observe it; **U** only 
 
 What the e2e stack can stage today, and what it cannot:
 
-- The fake model (`apps/web/e2e/fake-model/server.mjs`) has one default reply and the `slow:` prefix. It emits no tool_use (so no sources), no table, and no mid-stream failure. Rows marked **J\*** need a new prefix.
+- The fake model (`apps/web/e2e/fake-model/server.mjs`) has one default reply, the `slow:` prefix, and the `fail:` prefix (a model failure mid-reply: three pieces, then the connection is cut). It emits no tool_use (so no sources), no table, and cannot drop the client's connection. Rows marked **J\*** need a new prefix.
 - The e2e stack runs no worker and points S3 at an unreachable address, so a document never leaves `pending`. Rows marked **J†** need a worker or a scripted storage.
 
 ## Chat (member)
@@ -35,7 +35,8 @@ What the e2e stack can stage today, and what it cannot:
 | 18 | Empty sidebar shows "No conversations yet" | `chat-basics.member` | – |
 | 19 | "Couldn't load this conversation." | useChat.test | – |
 | 20 | 409 "reply in progress": message, refused turn removed, retry works | guard, useChat.test, chatApi.test, py:test_turn_guard | – |
-| 21 | Stream error shown; partial reply kept | useChat.test | J\* |
+| 21a | Model error mid-reply: "The reply was interrupted.", no partial, nothing stored, conversation free | `failed-reply.member`, useChat.test, chatApi.test, py:test_failed_reply, py:test_turn_guard | – |
+| 21b | Connection lost mid-reply: error shown, partial kept | useChat.test | J\* |
 | 22 | Stream ends without `[DONE]`: no error shown, partial reply looks complete (undecided behaviour) | chatApi.test (delivery), py:test_turn_guard (partial saved) | J\* |
 | 23 | Model picker has 4 options; the choice travels with the first turn | `chat-basics.member`, chatApi.test, py:test_demo_limits | – |
 | 24 | A 401 signs out to `/login` (or `/` on the landing page) | chatApi.test | – |

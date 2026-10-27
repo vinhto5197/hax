@@ -8,7 +8,7 @@ import type {
   StreamHandlers,
   streamChat as StreamChatFn,
 } from "@/lib/chatApi";
-import { TurnInProgressError } from "@/lib/chatApi";
+import { ReplyFailedError, TurnInProgressError } from "@/lib/chatApi";
 import { useChat } from "@/hooks/useChat";
 
 const { getConversation, streamChat, DemoLimitError } = vi.hoisted(() => ({
@@ -29,6 +29,7 @@ vi.mock("@/lib/chatApi", async () => {
     streamChat,
     DemoLimitError,
     TurnInProgressError: actual.TurnInProgressError,
+    ReplyFailedError: actual.ReplyFailedError,
   };
 });
 
@@ -468,5 +469,93 @@ describe("useChat sending", () => {
       (t) => t.fail("nope"),
     );
     expect(result.current.error).toBe("Unable to get response.");
+  });
+});
+
+describe("useChat reply failure", () => {
+  const INTERRUPTED = "The reply was interrupted.";
+
+  function transcript(result: { current: ReturnType<typeof useChat> }) {
+    return result.current.messages.map((m) => [m.role, m.content]);
+  }
+
+  it("a reply failure before any text shows 'The reply was interrupted.' and keeps the user message", async () => {
+    const turn = holdTurn();
+    const result = await newChatTurn(
+      turn,
+      () => {},
+      (t) => t.fail(new ReplyFailedError("reply_failed")),
+    );
+    expect(result.current.error).toBe(INTERRUPTED);
+    expect(transcript(result)).toEqual([["user", "hi"]]);
+    expect(result.current.streamingContent).toBe("");
+    expect(result.current.status).toBeNull();
+    expect(result.current.isLoading).toBe(false);
+  });
+
+  it("a reply failure after text shows 'The reply was interrupted.', keeps the user message and drops the partial", async () => {
+    const turn = holdTurn();
+    const result = await newChatTurn(
+      turn,
+      (h) => {
+        h.onChunk("Half an ");
+        h.onChunk("answer");
+      },
+      (t) => t.fail(new ReplyFailedError("reply_failed")),
+    );
+    expect(result.current.error).toBe(INTERRUPTED);
+    expect(transcript(result)).toEqual([["user", "hi"]]);
+    expect(
+      result.current.messages.some((m) => m.content.includes("Half an")),
+    ).toBe(false);
+  });
+
+  it("a reply failure after text clears the streaming text and the status and stops loading", async () => {
+    const turn = holdTurn();
+    const result = await newChatTurn(
+      turn,
+      (h) => {
+        h.onChunk("Half an answer");
+        h.onStatus?.("Searching your documents");
+      },
+      (t) => t.fail(new ReplyFailedError("reply_failed")),
+    );
+    expect(result.current.streamingContent).toBe("");
+    expect(result.current.status).toBeNull();
+    expect(result.current.isLoading).toBe(false);
+  });
+
+  it("a reply failure never shows the frame's code", async () => {
+    const turn = holdTurn();
+    const result = await newChatTurn(
+      turn,
+      (h) => h.onChunk("partial"),
+      (t) => t.fail(new ReplyFailedError("some_new_code")),
+    );
+    expect(result.current.error).toBe(INTERRUPTED);
+  });
+
+  it("a reply failure after text does not call onTurnComplete", async () => {
+    const turn = holdTurn();
+    const onTurnComplete = vi.fn();
+    await newChatTurn(
+      turn,
+      (h) => h.onChunk("partial"),
+      (t) => t.fail(new ReplyFailedError("reply_failed")),
+      { onTurnComplete },
+    );
+    expect(onTurnComplete).not.toHaveBeenCalled();
+  });
+
+  it("a reply failure before any text does not call onTurnComplete", async () => {
+    const turn = holdTurn();
+    const onTurnComplete = vi.fn();
+    await newChatTurn(
+      turn,
+      () => {},
+      (t) => t.fail(new ReplyFailedError("reply_failed")),
+      { onTurnComplete },
+    );
+    expect(onTurnComplete).not.toHaveBeenCalled();
   });
 });

@@ -186,7 +186,10 @@ reply. The claim and the message commit or roll back together; two concurrent
 claims serialize on the row lock. On a normal finish the reply is saved and
 the claim released before `[DONE]` is sent, so a client that sees the reply
 end can send at once; errors and disconnects save and release in the stream's
-`finally`.
+`finally`. A model error mid-reply is the exception: it stores nothing, the
+claim is released, and only then does the stream end with the
+`{"error": "reply_failed"}` frame in place of `[DONE]`, which follows the
+commit.
 
 The claim is never refreshed. A claim older than two minutes counts as free —
 the only thing that unlocks a conversation whose replying process died — so
