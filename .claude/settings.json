@@ -18,6 +18,17 @@
           }
         ]
       }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/due.sh",
+            "timeout": 15
+          }
+        ]
+      }
     ]
   }
 }
