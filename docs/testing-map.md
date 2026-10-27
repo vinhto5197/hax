@@ -2,6 +2,8 @@
 
 Every user-visible behaviour of the web app, and the test that would go red if it regressed. A behaviour change edits this file in the same PR as its test: a new row, or a row's **Pinned by** column.
 
+Swept through: 0cc67f8 — the weekly journeys sweep (`docs/routines/journeys-prompt.md`) checks only the changes after this commit and moves the line in its PR.
+
 Lanes: **J** a Playwright journey in `apps/web/e2e/` can observe it; **U** only a unit test can stage it (a race, an ordering, a mocked boundary); **L** a person has to look. Journey short names: demo = `demo.guest`, newchat = `new-chat.member`, hist = `history.member`, switch = `switch-mid-stream.member`, guard = `turn-guard.member`, setup = `auth.setup`. `py:` is a pytest module under `tests/`. A gap is a behaviour no test in its lane pins; a row whose gap is `–` is covered.
 
 What the e2e stack can stage today, and what it cannot:

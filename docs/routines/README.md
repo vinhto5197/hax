@@ -10,12 +10,14 @@ before it is fixed.
 - `nightly-prompt.md` — one branch and pull request per eligible item, CI as
   the only gate (up to 3 fix attempts per PR), one notification, no
   connectors. `main` is protected; the routine's GitHub app cannot push to it.
-- `journeys-prompt.md` — ad hoc, parked (`enabled: false`) between runs and fired by hand: each item is a
-  batch of `docs/testing-map.md` rows that becomes one Playwright spec file
-  under `apps/web/e2e/` on a `journey/<id>` branch. The sandbox never runs a
-  journey, so the prompt carries what the e2e stack can and cannot stage;
-  CI's e2e job is the gate, and a journey that finds a product bug is left
-  as `test.fixme` with the bug named in the PR, never fixed on that branch.
+- `journeys-prompt.md` — the weekly journeys sweep (cron, Friday 06:00 UTC):
+  it reads the `Swept through:` cursor in `docs/testing-map.md`, looks only
+  at the user-visible changes merged since, writes journeys for any that
+  reached `main` without one, and always opens one PR that moves the cursor.
+  The sandbox never runs a journey; CI is its gate, and the morning digest
+  runs the new specs locally and looks at their screens before merging. A
+  product bug found by a journey is left as `test.fixme`, never fixed there;
+  a path the e2e stack cannot stage is `test.skip` with the reason.
 
 Security-sensitive items, and anything touching auth, migrations, deploy or
 CI, are not routine work in this repo: every branch of a public repo is
