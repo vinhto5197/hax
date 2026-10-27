@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { resendVerification } from "@/lib/authApi";
 
@@ -15,10 +15,16 @@ export type ResendState =
 
 export function useResend() {
   const [state, setState] = useState<ResendState>("idle");
+  // Bumped by every resend() and reset(): a result lands only if nothing
+  // superseded its request, so a reply for an address the form has since
+  // moved on from never shows under the new one.
+  const requestRef = useRef(0);
 
   async function resend(email: string) {
+    const request = ++requestRef.current;
     setState("sending");
     const result = await resendVerification(email);
+    if (request !== requestRef.current) return;
     setState(
       result.ok
         ? "sent"
@@ -28,7 +34,12 @@ export function useResend() {
     );
   }
 
-  return { state, resend, reset: () => setState("idle") };
+  function reset() {
+    requestRef.current++;
+    setState("idle");
+  }
+
+  return { state, resend, reset };
 }
 
 export function ResendStatus({

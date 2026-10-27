@@ -17,6 +17,10 @@ from packages.db.models import Chunk, Document
 # fails), and the worker never leaves either.
 IN_FLIGHT = ("pending", "processing")
 
+# A response of the wrong shape (embeddings.py raises ValueError on a count or
+# dimension mismatch) will not change on a retry.
+BAD_EMBEDDINGS = "the embedding service returned an unusable response"
+
 
 async def ingest_document_async(document_id: UUID) -> None:
     """Read a document's raw file from object storage, then chunk -> embed -> store.
@@ -84,7 +88,12 @@ async def ingest_document_async(document_id: UUID) -> None:
         chunks = split_text(text)
         if not chunks:
             raise PermanentIngestError("document produced no chunks after splitting")
-        embeddings = await embed_documents(chunks)
+        try:
+            embeddings = await embed_documents(chunks)
+        except ValueError as exc:
+            raise PermanentIngestError(BAD_EMBEDDINGS) from exc
+        if len(embeddings) != len(chunks):
+            raise PermanentIngestError(BAD_EMBEDDINGS)
         # Delete-then-insert atomically with the status write — a re-run can't
         # duplicate chunks. The 'ready' write goes before the chunk inserts so
         # a deleted parent is seen here, not as the inserts' FK violation; the

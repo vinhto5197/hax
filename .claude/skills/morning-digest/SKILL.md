@@ -9,7 +9,7 @@ description: The one message that opens a day: nightly PRs reviewed, feature-lan
 
 ## Sources
 
-- The nightly routine: `RemoteTrigger list_runs` for the routine id in the marker; `get_run_log` for each run newer than `last_reported_run`; `gh pr list --search "head:routine/"`, `gh pr checks`, `gh pr diff`.
+- The nightly routine: `RemoteTrigger list_runs` for the routine id in the marker; `get_run_log` for each run newer than `last_reported_run`; `gh pr list --search "head:routine/"`, `gh pr checks`, `gh pr diff`. The journeys routine (`journeys_routine_id` in the marker, fired by hand; template `docs/routines/journeys-prompt.md`, queue `local/journeys-queue.md`, cap 8 open `journey/` PRs) the same way: runs newer than `journeys_last_reported_run`, PRs under `head:journey/`. A journey PR is Show when CI is green and no test is `fixme`; a `fixme` names a product bug, which becomes a backlog item in the digest.
 - The feature lane: `local/features.json` (every entry not `merged`) and each feature's `local/briefs/<id>/chain.json`.
 - Briefs waiting: ledger entries with `state: brief`.
 - Explorer findings: `local/explorer/*.md` newer than the last digest.
@@ -30,7 +30,11 @@ Then the main item.
 
 ## After the maintainer's merges
 
-Cross off merged items in `local/DEV_BACKLOG.local.md` (PR number beside each), note why for closed ones, update the marker's `last_reported_run`. Refill the routine's queue from the backlog's `[R]` items with full context per item (the template is `docs/routines/nightly-prompt.md`; at most ten items; the routine opens no new PR while ten are open), pulling any item a feature in flight would collide with; then clear the routine's connectors, which the service re-attaches by default. If every `[R]` item has a PR in some state, pause the routine (`enabled: false`) and re-enable it at the next refill.
+Cross off merged items in `local/DEV_BACKLOG.local.md` (PR number beside each), note why for closed ones, update the marker's `last_reported_run`. Refill the routine's queue from the backlog's `[R]` items with full context per item (the queue text lives in `local/routine-queue.md` and fills the template `docs/routines/nightly-prompt.md`; at most ten items; the routine opens no new PR while ten are open), pulling any item a feature in flight would collide with; then clear the routine's connectors, which the service re-attaches by default. If every `[R]` item has a PR in some state, pause the routine (`enabled: false`) and re-enable it at the next refill.
+
+## The week file
+
+`local/retro/<ISO week>.md` is the retro's memory across sessions and compactions: whenever something recurs during the week (a mistake made twice, a tool quirk, a reviewer finding that a rule should have prevented, a decision the maintainer made about process), the controller appends one line to it on the spot — date, what happened, the structure that would absorb it if one is obvious. The Friday retro is written from that file plus the hard sources above, never from recollection.
 
 ## Friday
 

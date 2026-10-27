@@ -121,7 +121,9 @@ dev: infra-up types
 dev-stop:
 	@echo "Stopping dev services..."
 	@pkill -f "uvicorn apps.api.main:app" || true
-	@pkill -f "next dev" || true
+	@# Anchored to this checkout: a bare "next dev" would also stop other
+	@# projects' dev servers on the machine.
+	@pkill -f "$(CURDIR)/apps/web/.*next dev" || true
 	@pkill -f "celery -A apps.worker.celery_app" || true
 
 # Like `make dev` but WITHOUT the API: the VS Code debugger (F5, see
@@ -173,24 +175,29 @@ prod-psql:
 # Show whether each service answers on its port. Uses a TCP connect probe
 # (nc -z) rather than lsof: lsof only sees host-process listeners, not
 # Colima/Docker port-forwarded ones, so it reports false "down" for postgres/redis.
+# -w1, not -G1: -G is BSD (macOS) only; both BSD and Linux nc take -w.
 status:
-	@printf "%-10s %-6s %s\n" "service" "port" "status"
-	@printf "%-10s %-6s %s\n" "-------" "----" "------"
+	@printf "%-14s %-6s %s\n" "service" "port" "status"
+	@printf "%-14s %-6s %s\n" "-------" "----" "------"
 	@for svc in "postgres 5432" "redis 6379" "minio 9000" "mailpit 8025" "api 8000" "web 3000"; do \
 	  set -- $$svc; name=$$1; port=$$2; \
-	  if nc -z -G1 localhost $$port >/dev/null 2>&1; then st="UP"; else st="down"; fi; \
-	  printf "%-10s %-6s %s\n" "$$name" "$$port" "$$st"; \
+	  if nc -z -w1 localhost $$port >/dev/null 2>&1; then st="UP"; else st="down"; fi; \
+	  printf "%-14s %-6s %s\n" "$$name" "$$port" "$$st"; \
 	done
-	@# The Celery worker listens on no port (it consumes from Redis), so probe the
-	@# process instead of a port.
-	@if pgrep -f "celery -A apps.worker.celery_app" >/dev/null 2>&1; then st="UP"; else st="down"; fi; \
-	  printf "%-10s %-6s %s\n" "worker" "-" "$$st"
+	@# The Celery workers listen on no port (they consume from Redis), so probe
+	@# each process by its queue instead of a port: worker-fast (default queue +
+	@# beat) and worker-ingest.
+	@for w in "worker-fast celery" "worker-ingest ingest"; do \
+	  set -- $$w; name=$$1; queue=$$2; \
+	  if pgrep -f "celery -A apps.worker.celery_app worker -Q $$queue" >/dev/null 2>&1; then st="UP"; else st="down"; fi; \
+	  printf "%-14s %-6s %s\n" "$$name" "-" "$$st"; \
+	done
 
 # ── Lint ─────────────────────────────────────────────────────
 .PHONY: lint
 
 lint:
-	ruff check . && ruff format --check .
+	.venv/bin/ruff check . && .venv/bin/ruff format --check .
 
 # ── Test ─────────────────────────────────────────────────────
 .PHONY: test test-web e2e

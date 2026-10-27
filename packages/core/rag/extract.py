@@ -3,10 +3,11 @@
 The upload route validated the suffix and the compressed size; this decides
 the reader and bounds the work, because a few kilobytes of PDF or DOCX can
 inflate to hundreds of megabytes and a page tree can be arbitrarily deep.
-Text formats are UTF-8; PDF and DOCX are parsed for their text layer only
-(no OCR), so a scanned PDF yields nothing and fails with a message the user
-can act on. Every failure here is a PermanentIngestError: parsing is pure,
-so a file that cannot be read now will not be readable on retry.
+Text formats are UTF-8 (a leading BOM is dropped); PDF and DOCX are parsed
+for their text layer only (no OCR), so a scanned PDF yields nothing and fails
+with a message the user can act on. Every failure here is a
+PermanentIngestError: parsing is pure, so a file that cannot be read now will
+not be readable on retry.
 """
 
 import io
@@ -27,6 +28,9 @@ MAX_PDF_PAGES = 500
 MAX_TEXT_CHARS = 2_000_000
 
 TOO_LONG = "the document is too long; split it and upload the parts"
+# Postgres text columns refuse NUL, so this is caught here rather than as a
+# late chunk-insert failure.
+HAS_NUL = "the document contains NUL characters, which cannot be stored"
 
 
 def extract_text(raw: bytes, filename: str) -> str:
@@ -37,11 +41,13 @@ def extract_text(raw: bytes, filename: str) -> str:
         text = _docx(raw)
     else:
         try:
-            text = raw.decode("utf-8")
+            text = raw.decode("utf-8-sig")
         except UnicodeDecodeError as exc:
             raise PermanentIngestError("the file is not valid UTF-8 text") from exc
     if len(text) > MAX_TEXT_CHARS:
         raise PermanentIngestError(TOO_LONG)
+    if "\x00" in text:
+        raise PermanentIngestError(HAS_NUL)
     return text
 
 
