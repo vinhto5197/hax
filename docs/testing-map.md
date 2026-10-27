@@ -61,10 +61,10 @@ What the e2e stack can stage today, and what it cannot:
 | 36 | Pending becomes ready via a 2.5 s poll that then stops | none | J† |
 | 37 | Failed status; tapping it shows the reason | py:test_ingest_status, py:test_authz_documents | J† |
 | 38 | Order: failed, then in progress, then ready | none | J† |
-| 39 | Upload refusals (type, 5 MB, 256 KB, hourly and daily caps) shown | chatApi.test, py:test_upload_limits, py:test_authz_documents | J |
+| 39 | Upload refusals (type, 5 MB, 256 KB, hourly and daily caps) shown | `documents-panel.member` (type, 5 MB, 256 KB), chatApi.test, py:test_upload_limits (caps), py:test_authz_documents | – |
 | 40 | Delete with confirm; a 404 counts as success | chatApi.test, py:test_authz_documents | J† |
 | 41 | Download by clicking the filename; download error message | chatApi.test, py:test_authz_documents | J† |
-| 42 | Empty state, count, help text, collapse; closed by default on short screens | none | J |
+| 42 | Empty state, count, help text, collapse; closed by default on short screens | `documents-panel.member` | – |
 
 ## Sidebar, drawer, phone
 
