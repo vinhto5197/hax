@@ -21,7 +21,7 @@ Dispatch a background general-purpose agent with: the persona file (`persona-sev
 - abort after three consecutive failed actions (a click that did nothing, a page that did not load);
 - screenshots into `local/explorer/<YYYY-MM-DD>-<persona>/`.
 
-The agent writes the notes file as it goes (the file is the memory between its own steps), ends with `## Findings` and `## Did not get to`, and records in a footer the turns used, the minutes used, and whether it stopped on a bound or on completion. It never edits a file outside `local/explorer/`.
+The agent writes the notes file as it goes (the file is the memory between its own steps), ends with `## Findings` and `## Did not get to`, and records in a footer the turns used, the minutes used, whether it stopped on a bound or on completion, and the token count the controller reads from the task notification when the agent finishes (the agent cannot see its own; the controller appends it). It never edits a file outside `local/explorer/`.
 
 ## After the run
 

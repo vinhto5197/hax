@@ -32,6 +32,10 @@ Then the main item.
 
 Cross off merged items in `local/DEV_BACKLOG.local.md` (PR number beside each), note why for closed ones, update the marker's `last_reported_run`. Refill the routine's queue from the backlog's `[R]` items with full context per item (the queue text lives in `local/routine-queue.md` and fills the template `docs/routines/nightly-prompt.md`; at most ten items; the routine opens no new PR while ten are open), pulling any item a feature in flight would collide with; then clear the routine's connectors, which the service re-attaches by default. If every `[R]` item has a PR in some state, pause the routine (`enabled: false`) and re-enable it at the next refill.
 
+## The week file
+
+`local/retro/<ISO week>.md` is the retro's memory across sessions and compactions: whenever something recurs during the week (a mistake made twice, a tool quirk, a reviewer finding that a rule should have prevented, a decision the maintainer made about process), the controller appends one line to it on the spot — date, what happened, the structure that would absorb it if one is obvious. The Friday retro is written from that file plus the hard sources above, never from recollection.
+
 ## Friday
 
 The digest gains a retro, at most fifteen lines: the week's recurring mistakes and the structure that absorbs each (a lint rule, a CI check, a test, a skill edit; a memory note only when nothing structural fits); cost by lane for the week against the previous one; changes to the brief template or the chain the week's gate blocks argue for.
