@@ -106,6 +106,7 @@ What the e2e stack can stage today, and what it cannot:
 | 59 | Google button shows "Redirecting…" | none (logo: L) | J |
 | 60 | Password Show/Hide | `auth-login.guest` | – |
 | 61 | Resend status messages | `auth-login.guest` (sent), useResend.test, authApi.test | – |
+| 76 | A write signed in by the cookie from a page that is not hax's own is refused (403); hax's own pages write as before | py:test_cross_site_writes (every member journey writes through the check; a refusal needs a sibling-subdomain page, which the e2e stack cannot serve) | – |
 
 ## Other
 
@@ -121,4 +122,4 @@ What the e2e stack can stage today, and what it cannot:
 
 Produced by `python scripts/testing_map_counts.py` from the tables above; rerun it after editing a row and paste its output here.
 
-76 behaviours; 52 covered; 24 gaps: J 20 (J\* 7, J† 8), U 2, L 2.
+77 behaviours; 53 covered; 24 gaps: J 20 (J\* 7, J† 8), U 2, L 2.
