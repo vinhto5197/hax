@@ -15,21 +15,23 @@ The problem in plain words, as a user or developer meets it, with jargon defined
 
 Every PR and every bite is classed, and the class decides who merges:
 - **Ship** — tests, docs, comments, copy, dev tooling, small logic with a unit test and no user-visible change: the controller merges after its own review, and the digest lists it as merged.
-- **Show** — user-visible behaviour, touching no schema, auth, infra or deploy path: it carries a journey for everything a browser can observe (a unit test only for what a test alone can stage); the controller checks the branch out, looks at desktop and phone width, and only then merges, pointing the maintainer at the hunks that matter and the screenshots.
-- **Ask** — schema, auth, isolation, infra, deploy, data deletion, anything irreversible, any design decision: nothing merges until the maintainer has read it; the main lane's bite review.
+- **Show** — user-visible behaviour, touching no schema, auth, infra or deploy path: it carries a journey for everything a browser can observe (a unit test only for what a test alone can stage); the controller checks the branch out, looks at desktop and phone width, and merges without waiting for the maintainer, like Ship. The maintainer gets a **short brief**, not the full block: what changed for users in a line or two, and anything worth knowing (a screenshot path, a call the controller made). No review section: nothing waits on them.
+- **Ask** — schema, auth, isolation, infra, deploy, data deletion, anything irreversible, any design decision: nothing merges until the maintainer has read it; the full block (problem, fix, tests, flags, the hunks to read) and its review section; the main lane's bite review.
 A merge to main deploys, so Ship still means CI green and the post-deploy health check watched.
 
 Where a change lands depends on who wrote it, not on its class. Work done with the maintainer in the main lane goes straight to `main` on their word ("commit", "push"), whatever its class, once the same checks CI runs have passed locally: the maintainer's word is the permission, and CI still gates the deploy, so a red push never reaches production (it only holds main red until fixed). A pull request is for authors who may not push to `main`: the unattended routines and the feature chain's agents.
 
-## Your review, on every Show and Ask
+## Your review, on every Ask
 
-Every hand-off that waits for the maintainer (Show, Ask, a feature PR) ends with **Your review**: what only a human can judge here, as a short checklist the maintainer can finish in minutes. What the machines already proved (CI, the gates, the reviews, the controller's own look at the screens) is stated in one line so the maintainer does not redo it. Then, numbered:
+Every hand-off that waits for the maintainer (an Ask PR or bite, a feature PR, anything asking for their word) ends with **Your review**: what only a human can judge here, as a short checklist the maintainer can finish in minutes. What the machines already proved (CI, the gates, the reviews, the controller's own look at the screens) is stated in one line so the maintainer does not redo it. Then, numbered:
 1. What to look at (a screenshot, a screen to try, a copy line), with the path or the steps.
-2. The judgment calls to accept or refuse, each one sentence: copy, a behaviour choice, a deferral, a trade-off.
-3. Code worth raising, only when there is some: `file:line` and why a human should read it (a security boundary, a choice the maintainer might make differently, a surprising pattern); otherwise "no code to read".
-4. The word that ends the review ("merge", "commit", "approved").
-Ship needs none: it is merged by the controller and listed in the digest.
-Enforced, not remembered: a Stop hook (`.claude/hooks/review_gate.sh`) refuses to end a turn whose final message asks for a review word without this section.
+2. **Decisions for you**: only what is genuinely the maintainer's (product behaviour users will notice, scope, a risk to accept, a cost), each one sentence with a recommendation; "None" when none, which should be common.
+3. **Adds to the stack**: every new service or container (production, CI or the test stack), dependency (package, image, external API), table or column, environment variable, and production code that exists only for tests, one line each with why; "None" when none. Never folded into the calls, and a change that adds one is never Ship or Show.
+4. **Calls I made**: technical choices the controller or a chain made, one line each, for information only; nothing waits on them, and the maintainer may overrule any. Never dressed up as a decision.
+5. Code worth raising, only when there is some: `file:line` and why a human should read it (a security boundary, a choice the maintainer might make differently, a surprising pattern); otherwise "no code to read".
+6. The word that ends the review ("merge", "commit", "approved").
+Ship and Show need none: the controller merges them and the digest lists them.
+Enforced, not remembered: a Stop hook (`.claude/hooks/review_gate.sh`) refuses to end a turn whose final message asks for a review word without this section; the message is already on screen by then, so the answer to it is the missing section alone, never a repeat.
 
 ## Provenance, per bite
 

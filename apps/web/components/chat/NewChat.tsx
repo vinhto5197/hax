@@ -58,8 +58,8 @@ export function NewChat({
       <div className="flex flex-1 flex-col gap-4">
         {visitor ? (
           <p className="text-center text-lead text-ink-2">
-            Chat with your own documents. Try it without an account: ask about
-            hax itself.
+            hax is a chat that answers from your own documents. Try it without
+            an account: ask about hax itself.
           </p>
         ) : null}
         {visitor ? (
@@ -82,6 +82,7 @@ export function NewChat({
           disabled={disabled}
           model={model}
           onModelChange={onModelChange}
+          visitor={visitor}
         />
         {error ? (
           <p className="text-small text-status-failed">{error}</p>

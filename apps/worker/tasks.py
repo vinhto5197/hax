@@ -157,7 +157,11 @@ def ingest_document(self, document_id: str, user_id: str) -> None:
     except SoftTimeLimitExceeded as exc:
         # A document too slow to finish once is as slow on every retry, and a
         # retry would take the one ingest slot again: fail it now, while the
-        # hard limit still leaves time for the write.
+        # hard limit still leaves time for the write. This catches the slow
+        # network phases (embedding batches), not a slow parse: the parse runs
+        # in asyncio.to_thread, which the soft limit cannot interrupt, so it is
+        # bounded by extract.py's budgets instead, and a parse that still
+        # overruns ends in the hard kill with no status write.
         logger.error("ingest time limit for %s: %s", doc_id, type(exc).__name__)
         _record_failed(doc_id, TIME_LIMIT_INGEST_ERROR)
         raise RuntimeError(type(exc).__name__) from None

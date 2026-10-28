@@ -75,10 +75,10 @@ worker:
 	@$(MAKE) -j2 worker-fast worker-ingest
 
 worker-fast:
-	celery -A apps.worker.celery_app worker -Q celery --beat --schedule /tmp/celerybeat-schedule --loglevel=$${LOG_LEVEL:-info} --pool=solo
+	$(CURDIR)/.venv/bin/celery -A apps.worker.celery_app worker -Q celery --beat --schedule /tmp/celerybeat-schedule --loglevel=$${LOG_LEVEL:-info} --pool=solo
 
 worker-ingest:
-	celery -A apps.worker.celery_app worker -Q ingest --loglevel=$${LOG_LEVEL:-info} --pool=solo
+	$(CURDIR)/.venv/bin/celery -A apps.worker.celery_app worker -Q ingest --loglevel=$${LOG_LEVEL:-info} --pool=solo
 
 # ── Frontend (Next.js) ────────────────────────────────────────
 .PHONY: web
@@ -97,7 +97,7 @@ types:
 	cd apps/web && npm run generate:types
 
 # ── Setup ─────────────────────────────────────────────────────
-.PHONY: setup sync sync-web
+.PHONY: setup sync sync-web constraints
 
 setup:
 	@bash setup.sh
@@ -110,6 +110,16 @@ sync:
 sync-web:
 	cd apps/web && npm install
 
+# CI and the production image install Python packages only at these
+# versions (scripts/check_constraints.sh fails CI on any package outside
+# them), so an upstream release cannot turn CI red overnight (2026-10-28: langsmith 0.14.14 and
+# pytest-asyncio 1.4.1). Refresh on purpose, from a dev venv whose suite is
+# green, and land the new file in its own commit.
+constraints:
+	@{ echo "# Python versions for CI and the production image, from \`make constraints\` ($$(date +%F)). Refresh on purpose; never edit by hand."; \
+	  .venv/bin/pip freeze --exclude-editable | grep -E '^[A-Za-z0-9._-]+==' | sort -f; } > constraints.txt
+	@echo "constraints.txt: $$(grep -c '==' constraints.txt) pins"
+
 # ── Dev (infra + api + web) ───────────────────────────────────
 .PHONY: dev dev-stop debug
 
@@ -120,11 +130,14 @@ dev: infra-up types
 
 dev-stop:
 	@echo "Stopping dev services..."
-	@pkill -f "uvicorn apps.api.main:app" || true
-	@# Anchored to this checkout: a bare "next dev" would also stop other
-	@# projects' dev servers on the machine.
-	@pkill -f "$(CURDIR)/apps/web/.*next dev" || true
-	@pkill -f "celery -A apps.worker.celery_app" || true
+	@# Anchored to this checkout: a bare pattern would also stop another
+	@# checkout's (or project's) servers on the machine. A venv script's
+	@# command line starts with its shebang, this venv's absolute python.
+	@# The bracket keeps each pattern from matching the recipe's own shell,
+	@# whose command line holds the pattern text: pkill would kill it.
+	@pkill -f "$(CURDIR)/[.]venv/bin/.*uvicorn apps.api.main:app" || true
+	@pkill -f "$(CURDIR)/[a]pps/web/.*next dev" || true
+	@pkill -f "$(CURDIR)/[.]venv/bin/.*celery -A apps.worker.celery_app" || true
 
 # Like `make dev` but WITHOUT the API: the VS Code debugger (F5, see
 # .vscode/launch.json) launches uvicorn itself, so :8000 must stay free.

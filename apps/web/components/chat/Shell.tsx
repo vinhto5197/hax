@@ -2,48 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useConversations } from "@/components/chat/ConversationsProvider";
 import { Sidebar } from "@/components/chat/Sidebar";
 import { Wordmark } from "@/components/Wordmark";
+import { DESKTOP, SHORT, useMediaQuery } from "@/lib/media";
 import { SHOW_DOCUMENT_EVENT, revealDocumentRow } from "@/lib/showInPanel";
 
-// These must match Tailwind's `md` and the `short` custom variant in
-// globals.css, in the unit each is declared in there (rem and px); `SHORT`
-// is also declared in DocumentsPanel.tsx.
-const DESKTOP = "(min-width: 48rem)";
-const SHORT = "(max-height: 500px)";
 const REVEAL_POLL_MS = 100;
 const REVEAL_TIMEOUT_MS = 2000;
-
-// The server cannot know the viewport, so it renders the desktop shell; the
-// static column is also CSS-hidden below `md` and under `short`, which keeps
-// a phone's first paint free of the sidebar until the client measures and
-// unmounts it.
-function useIsDesktop(): boolean {
-  return useSyncExternalStore(
-    (onChange) => {
-      const mq = window.matchMedia(DESKTOP);
-      mq.addEventListener("change", onChange);
-      return () => mq.removeEventListener("change", onChange);
-    },
-    () => window.matchMedia(DESKTOP).matches,
-    () => true,
-  );
-}
-
-function useIsShort(): boolean {
-  return useSyncExternalStore(
-    (onChange) => {
-      const mq = window.matchMedia(SHORT);
-      mq.addEventListener("change", onChange);
-      return () => mq.removeEventListener("change", onChange);
-    },
-    () => window.matchMedia(SHORT).matches,
-    () => false,
-  );
-}
 
 // The shell owns the drawer, which exists only on a phone shell: a viewport
 // narrower than `md` or shorter than 500 px (a landscape phone). The sidebar
@@ -54,8 +22,12 @@ function useIsShort(): boolean {
 export function Shell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
-  const isDesktop = useIsDesktop();
-  const isShort = useIsShort();
+  // The server cannot know the viewport, so it renders the desktop shell; the
+  // static column is also CSS-hidden below `md` and under `short`, which keeps
+  // a phone's first paint free of the sidebar until the client measures and
+  // unmounts it.
+  const isDesktop = useMediaQuery(DESKTOP, true);
+  const isShort = useMediaQuery(SHORT, false);
   const phoneShell = !isDesktop || isShort;
   const { startNewChat } = useConversations();
   const menuRef = useRef<HTMLButtonElement>(null);
@@ -104,7 +76,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!drawerOpen) return;
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
+      // A menu or dialog inside the drawer marks the Escape it handled as
+      // defaultPrevented; that one closes only itself.
+      if (event.key === "Escape" && !event.defaultPrevented) setOpen(false);
     }
     document.addEventListener("keydown", onKeyDown);
     const previousOverflow = document.body.style.overflow;
@@ -112,7 +86,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
     // Focus follows the dialog in, and returns to the control that opened it.
     const opener = openerRef.current ?? menuRef.current;
     openerRef.current = null;
-    panelRef.current?.focus();
+    const panel = panelRef.current;
+    panel?.focus();
     // The drawer's documents panel fetches its list after mount, so a pending
     // reveal may find no row yet: poll briefly, until the row appears or the
     // drawer closes.
@@ -131,6 +106,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
       window.clearTimeout(revealTimer);
       document.removeEventListener("keydown", onKeyDown);
       document.body.style.overflow = previousOverflow;
+      // Never pull focus out of another open modal (About you, rendered above
+      // the drawer): a drawer closed by a rotation would otherwise take the
+      // cursor out of the text being typed. Focus is checked at close.
+      const modal = document.activeElement?.closest(
+        '[role="dialog"][aria-modal="true"]',
+      );
+      if (modal && modal !== panel) return;
       opener?.focus();
     };
   }, [drawerOpen]);

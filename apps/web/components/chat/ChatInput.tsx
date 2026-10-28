@@ -25,6 +25,9 @@ interface ChatInputProps {
   // sits in the frame's bottom row; a visitor's composer passes none.
   model?: string;
   onModelChange?: (value: string) => void;
+  // A demo visitor has no documents to ask about, so the placeholder
+  // points them at hax itself.
+  visitor?: boolean;
 }
 
 export function ChatInput({
@@ -33,6 +36,7 @@ export function ChatInput({
   draft = null,
   model,
   onModelChange,
+  visitor = false,
 }: ChatInputProps) {
   const [input, setInput] = useState("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -112,7 +116,7 @@ export function ChatInput({
         ref={inputRef}
         rows={1}
         className="block max-h-[40vh] w-full resize-none bg-transparent py-1.5 pr-1 pl-2 text-body text-ink outline-hidden"
-        placeholder="Type your prompt..."
+        placeholder={visitor ? "Ask what hax is…" : "What's up?"}
         aria-label="Message"
         maxLength={PROMPT_MAX_LENGTH}
         value={input}

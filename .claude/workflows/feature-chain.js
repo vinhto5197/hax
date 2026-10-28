@@ -10,9 +10,13 @@
 // of local/features.json; this script writes only under local/briefs/<id>/.
 // A chain never commits unless `ship` is true, and then only its shipper, on
 // branch feat/<id> inside the worktree.
-// `rulings` carries the maintainer's decisions on review findings after a stop
-// at Fix: [{ match, ruling: "fix" | "defer", note }], `match` a substring of
-// the finding's title. They enter through the Fix stage only, never through
+// `rulings` carries the maintainer's decisions after a stop at Fix:
+// [{ match, keywords?, ruling, note }]. On a review finding, `match` is a
+// substring of its title, or every one of `keywords` is (case, _ and -
+// ignored; keywords never enter a prompt, so adding them keeps a resume's
+// cache) and `ruling` is "fix" or "defer"; at the gate's fix, a ruling names a
+// test and says to keep, rewrite or retire it. They enter through the fix
+// stages only, never through
 // the brief, so a resumed run (resumeFromRunId, same args otherwise) replays
 // Build, the blind tests and the reviews from cache: changing the brief would
 // change its hash, which every prompt carries, and rerun the whole chain.
@@ -137,7 +141,7 @@ if (!state.stoppedAt && !stop('Gate')) {
     phase('Fix')
     const f = await tryAgent(`${BASE}
 ## Stage: fix (gate red)
-The gate failed. Failures:\n${JSON.stringify(gate1.results.filter(r => !r.passed), null, 1)}\nFix the code, never the tests' intent (a test that contradicts the brief is a wrong behaviour line: report it as blocked instead of changing it). Same roadblock line as the implementer. Return status, files, calls.`,
+The gate failed. Failures:\n${JSON.stringify(gate1.results.filter(r => !r.passed), null, 1)}\nFix the code, never the tests' intent (a test that contradicts the brief is a wrong behaviour line: report it as blocked instead of changing it). Same roadblock line as the implementer.${(args.rulings || []).length ? `\nThe maintainer's rulings, which outrank the brief for exactly the tests or findings they name (a test named here may be rewritten or retired as its ruling says; name each such change in your calls):\n${JSON.stringify(args.rulings.map(({ keywords, ...r }) => r), null, 1)}` : ''} Return status, files, calls.`,
       { label: 'fix:gate', phase: 'Fix', schema: BUILD_SCHEMA, agentType: 'implementer' })
     if (!f || f.status === 'blocked') { state.stoppedAt = 'Fix'; state.blockedOn = f ? f.blockedOn : 'fixer returned nothing'; record('Gate', 'failed') }
     else { gate2 = await gate('gate:2'); record('Gate', gate2.passed ? 'done after fix' : 'failed'); if (!gate2.passed) state.stoppedAt = 'Gate' }
@@ -154,7 +158,7 @@ const LENSES = [
 ]
 if (!state.stoppedAt && !stop('Review')) {
   phase('Review')
-  const REVIEW_BASE = `${BASE}\nThe change is \`git diff origin/main\` inside the worktree (plus untracked files; \`git status --short\`). Read only the files the diff touches and their direct callers. Report ONLY findings you can substantiate with file:line and a concrete scenario; an empty list is a valid result. Severity: critical = exposure or corruption reachable today; high = same with an uncommon precondition; medium = a defense gap with a realistic trigger; low = hygiene. Mark needsDecision when fixing it would change what the brief specifies.`
+  const REVIEW_BASE = `${BASE}\nThe change is \`git diff origin/main\` inside the worktree (plus untracked files; \`git status --short\`). Read only the files the diff touches and their direct callers. Report ONLY findings you can substantiate with file:line and a concrete scenario; an empty list is a valid result. Severity: critical = exposure or corruption reachable today; high = same with an uncommon precondition; medium = a defense gap with a realistic trigger; low = hygiene. Mark needsDecision when fixing it would change what the brief specifies. Accessibility (ARIA, screen readers, keyboard-only navigation, focus management, contrast) is out of scope for a first implementation by the maintainer's rule: never report it as a finding; the controller queues such points separately.`
   const [fresh, ...lensResults] = await parallel([
     () => agent(`${REVIEW_BASE}\n## Stage: fresh-eyes reviewer\nWalk the change caller-first. Real defects only.`,
       { label: 'review:fresh-eyes', phase: 'Review', schema: FINDINGS_SCHEMA, agentType: 'general-purpose' }),
@@ -192,7 +196,13 @@ if (!state.stoppedAt && !stop('Review')) {
 // only above low severity; a low one is left for the maintainer as "Consider".
 if (!state.stoppedAt && review && review.confirmed.length && !stop('Fix')) {
   phase('Fix')
-  const rulingFor = f => (args.rulings || []).find(r => r.match && f.title.includes(r.match))
+  // Reviewers reword the same finding on every run, so matching ignores case
+  // and treats _ and - as spaces, and `keywords` (all present) catch
+  // rewordings a phrase cannot.
+  const norm = t => t.toLowerCase().replace(/[_-]+/g, ' ')
+  const rulingFor = f => (args.rulings || []).find(r =>
+    (r.match && norm(f.title).includes(norm(r.match))) ||
+    (r.keywords && r.keywords.length && r.keywords.every(k => norm(f.title).includes(norm(k)))))
   const ruled = review.confirmed.map(f => ({ ...f, ruling: rulingFor(f) }))
   const blocking = ruled.filter(f => f.needsDecision && f.severity !== 'low' && !f.ruling)
   review.deferred = ruled.filter(f => f.ruling ? f.ruling.ruling === 'defer' : (f.needsDecision && f.severity === 'low'))

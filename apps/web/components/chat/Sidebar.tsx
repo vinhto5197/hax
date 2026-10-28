@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { signOut, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
 
+import { AccountMenu } from "@/components/chat/AccountMenu";
 import { useConversations } from "@/components/chat/ConversationsProvider";
 import { DocumentsPanel } from "@/components/chat/DocumentsPanel";
 import { Wordmark } from "@/components/Wordmark";
@@ -136,7 +137,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                     onClick={() => handleDelete(conversation)}
                     disabled={deletingId === conversation.id}
                     aria-label={`Delete ${conversation.title ?? "conversation"}`}
-                    className={`shrink-0 px-2 py-2 text-sm leading-none hover:text-status-failed disabled:opacity-50 ${active ? "text-ink-2" : "text-ink-3"}`}
+                    className="flex min-h-11 min-w-11 shrink-0 items-center justify-center text-sm leading-none text-ink-2 hover:text-status-failed focus-visible:text-status-failed disabled:opacity-50"
                   >
                     ×
                   </button>
@@ -147,33 +148,13 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 
       <DocumentsPanel />
 
-      {account && (
-        <div className="flex items-center justify-between gap-2 border-t border-border pt-3">
-          <div className="min-w-0">
-            <p
-              className="truncate text-body font-medium text-ink"
-              title={displayName}
-            >
-              {displayName}
-            </p>
-            {displayName !== account.email ? (
-              <p
-                className="truncate text-small text-ink-3"
-                title={account.email}
-              >
-                {account.email}
-              </p>
-            ) : null}
-          </div>
-          <button
-            type="button"
-            onClick={() => signOut({ callbackUrl: "/" })}
-            className="shrink-0 text-body text-ink-2 hover:text-ink"
-          >
-            Sign out
-          </button>
-        </div>
-      )}
+      {account && displayName ? (
+        <AccountMenu
+          name={displayName}
+          email={account.email}
+          onNavigate={onNavigate}
+        />
+      ) : null}
     </aside>
   );
 }

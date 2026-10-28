@@ -163,6 +163,7 @@ function ChatSession({
           disabled={isLoading || limited}
           model={demo ? undefined : model}
           onModelChange={demo ? undefined : setModel}
+          visitor={demo}
         />
       </div>
 
