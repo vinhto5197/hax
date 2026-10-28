@@ -97,7 +97,7 @@ types:
 	cd apps/web && npm run generate:types
 
 # ── Setup ─────────────────────────────────────────────────────
-.PHONY: setup sync sync-web
+.PHONY: setup sync sync-web constraints
 
 setup:
 	@bash setup.sh
@@ -109,6 +109,15 @@ sync:
 # Re-sync web deps with package.json (after editing dependencies).
 sync-web:
 	cd apps/web && npm install
+
+# CI installs Python packages only at these versions, so an upstream release
+# cannot turn CI red overnight (2026-10-28: langsmith 0.14.14 and
+# pytest-asyncio 1.4.1). Refresh on purpose, from a dev venv whose suite is
+# green, and land the new file in its own commit.
+constraints:
+	@{ echo "# CI's Python versions, from \`make constraints\` ($$(date +%F)). Refresh on purpose; never edit by hand."; \
+	  .venv/bin/pip freeze --exclude-editable | grep -E '^[A-Za-z0-9._-]+==' | sort -f; } > ci-constraints.txt
+	@echo "ci-constraints.txt: $$(grep -c '==' ci-constraints.txt) pins"
 
 # ── Dev (infra + api + web) ───────────────────────────────────
 .PHONY: dev dev-stop debug
