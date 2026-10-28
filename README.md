@@ -194,7 +194,7 @@ make e2e        # Browser journeys: Playwright (Chromium) against an isolated st
 
 `make test` and `make e2e` always run under `scripts/with-lock.sh` when `local/` exists, so two runs that share the test database or the e2e ports queue instead of colliding; a second run waits for the first.
 
-CI installs Python packages only at the versions in `ci-constraints.txt`, so an upstream release cannot turn it red overnight. To move CI to newer versions on purpose: upgrade the dev venv, run the suites green, then `make constraints` and commit the new file on its own.
+CI and the production image install Python packages only at the versions in `constraints.txt`, on the same Python patch version, so an upstream release cannot turn CI red overnight or reach production untested. CI fails if any installed package is missing from the file, so a new dependency comes with a refreshed `make constraints`. To move to newer versions on purpose: upgrade the dev venv, run the suites green, then `make constraints` and commit the new file on its own.
 
 Web tests sit beside the code they cover as `*.test.ts` / `*.test.tsx`. All three suites run in CI, and the web unit suite also runs as a pre-commit hook when a source file under `apps/web` changes.
 
