@@ -8,6 +8,8 @@ What the maintainer reads and approves: one screen, written for an engineering m
 
 **How, in one paragraph.** The shape of the change in plain words: which parts of the product move (the server, the app, a background job, the database), and the one idea that makes it work. No file names, function names or code.
 
+**Adds to the stack.** Always present, "None" when none. Every new service or container (in production, CI or the test stack), dependency (a package, an image, an external API), database table or column, environment variable, and production code that exists only for tests, one line each with why; never only under the brief's calls.
+
 **Not in this one.** What a reader might expect that is deliberately left out, and where it goes instead.
 
 **Risks and trade-offs.** At most three bullets, each one sentence: what could go wrong or what we give up, and why it is acceptable.
