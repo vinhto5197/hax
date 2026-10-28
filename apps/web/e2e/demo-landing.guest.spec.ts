@@ -36,6 +36,14 @@ test("the landing page shows the greeting, the blurb, three chips and the sign-i
   await expect(privacy).toHaveAttribute("href", "/privacy");
 });
 
+test("a visitor's empty composer asks what hax is", async ({ page }) => {
+  await page.goto("/");
+  await expect(composer(page)).toHaveAttribute(
+    "placeholder",
+    "Ask what hax is…",
+  );
+});
+
 test("a demo turn runs in place: the URL stays /", async ({ page }) => {
   await page.goto("/");
   await send(page, "Demo landing journey: does the URL move?");
