@@ -201,9 +201,13 @@ export function DocumentsPanel() {
                     type="button"
                     onClick={() => handleDownload(doc)}
                     title="Download"
-                    className="flex-1 truncate text-left text-ink hover:underline"
+                    aria-label={`Download ${doc.filename}`}
+                    className="flex min-w-0 flex-1 items-center gap-1 text-left text-ink hover:underline"
                   >
-                    {doc.filename}
+                    <span className="truncate">{doc.filename}</span>
+                    <span aria-hidden="true" className="shrink-0 text-ink-3">
+                      ↓
+                    </span>
                   </button>
                   {doc.error ? (
                     <button
