@@ -18,7 +18,7 @@ from fastapi import HTTPException
 from sqlalchemy import text
 
 import apps.api.chat_service as chat_service
-from apps.api import enqueue
+from apps.api import enqueue, turns
 from packages.db import engine as app_engine
 from packages.db.user_context import current_user_id
 from tests.api.factories import make_conversation, make_message
@@ -234,7 +234,7 @@ async def test_event_stream_forwards_the_user_id(admin_engine, user_a, published
         chunks = [
             chunk
             async for chunk in chat_service.event_stream(
-                stream_fn, [], conv, user_a.id, claimed_at
+                turns.start_turn(stream_fn, [], conv, user_a.id, claimed_at), conv
             )
         ]
     finally:
@@ -292,7 +292,7 @@ async def _run_stream(admin_engine, user, conv, events):
     claimed_at = await _claim(admin_engine, conv)
     frames = []
     async for chunk in chat_service.event_stream(
-        stream_fn, [], conv, user.id, claimed_at
+        turns.start_turn(stream_fn, [], conv, user.id, claimed_at), conv
     ):
         frames.append(chunk)
     return frames

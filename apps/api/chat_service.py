@@ -1,25 +1,38 @@
+import asyncio
 import json
 import logging
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator
 from datetime import datetime
+from typing import TYPE_CHECKING, TypeVar
 from uuid import UUID
 
-import anyio
 from anthropic.types import MessageParam
 from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
 
 from apps.api.enqueue import fire_and_forget
 from apps.worker.tasks import generate_title
 from packages.db import AsyncSessionLocal
 from packages.db.repos import conversations as conversations_repo
 
+if TYPE_CHECKING:
+    from apps.api.turns import Turn
+
 logger = logging.getLogger(__name__)
+
+T = TypeVar("T")
+
+# Under the client's 45-second silence limit (apps/web/lib/chatApi.ts), after
+# which it treats the connection as lost.
+KEEPALIVE_SECONDS = 15
 
 # no-cache: SSE must not be cached/buffered by intermediaries.
 SSE_HEADERS = {"Cache-Control": "no-cache", "Connection": "keep-alive"}
 
 # The 409 detail when a conversation already has a reply in progress.
 TURN_IN_PROGRESS = "A reply is already in progress in this conversation."
+# The 409 detail when the request's message id is already stored.
+ALREADY_SENT = "This message was already sent."
 
 
 def _enqueue_title(conversation_id: UUID, user_id: UUID) -> None:
@@ -43,7 +56,10 @@ def sse_event(data: dict) -> str:
 
 
 async def persist_user_turn(
-    prompt: str, conversation_id: UUID | None, user_id: UUID
+    prompt: str,
+    conversation_id: UUID | None,
+    user_id: UUID,
+    message_id: UUID | None = None,
 ) -> tuple[UUID, datetime]:
     """Resolve or lazily create the caller's conversation, claim its turn,
     persist the user message, and return (conversation id, claimed_at).
@@ -51,9 +67,10 @@ async def persist_user_turn(
     Runs before the LLM call so the user turn survives a model error. 404 if
     conversation_id isn't owned by user_id — the write-path ownership gate
     (a foreign id and a nonexistent one are indistinguishable); 409 if another
-    reply holds the conversation's claim. Claim, ownership check and message
-    commit or roll back together, so a refused turn leaves no trace. The
-    caller MUST hand claimed_at to persist_assistant_turn (via event_stream)
+    reply holds the conversation's claim, or if `message_id` is already
+    stored (a duplicate send). Claim, ownership check and message commit or
+    roll back together, so a refused turn leaves no trace. The
+    caller MUST hand claimed_at to start_turn (whose task saves or releases)
     or release_claim; otherwise the claim holds until TURN_WINDOW lapses.
 
     A newly created conversation is queued for titling here, not after the
@@ -76,8 +93,18 @@ async def persist_user_turn(
                 raise HTTPException(status_code=404, detail="conversation not found")
             raise HTTPException(status_code=409, detail=TURN_IN_PROGRESS)
 
-        await conversations_repo.add_message(session, conversation_id, "user", prompt)
-        await session.commit()
+        await conversations_repo.add_message(
+            session, conversation_id, "user", prompt, id=message_id
+        )
+        try:
+            await session.commit()
+        except IntegrityError:
+            # The user message is the transaction's only insert that can
+            # collide: its client-chosen id. The rollback drops the claim and
+            # any conversation created above.
+            if message_id is None:
+                raise
+            raise HTTPException(status_code=409, detail=ALREADY_SENT) from None
 
     if created:
         _enqueue_title(conversation_id, user_id)
@@ -116,11 +143,12 @@ async def persist_assistant_turn(
     sources), bumping updated_at, in one transaction — "reply saved" and
     "conversation free" cannot disagree.
 
-    Runs from the stream's finally, so completion AND disconnect both save
-    whatever streamed. The claim is always released; the message is written
-    only if something streamed — sources alone are not a turn. `sources` is
-    the deduplicated provenance from the turn's searches; it is stored for the
-    client and never replayed to the model.
+    Called only by the turn's task (apps/api/turns.py), on a clean finish:
+    a stored reply is always complete. The claim is always released; the
+    message is written only if something streamed — sources alone are not a
+    turn. `claimed_at` is the claim's latest value, after any refresh.
+    `sources` is the deduplicated provenance from the turn's searches; it is
+    stored for the client and never replayed to the model.
 
     user_id is needed for the title task: the worker has no request to take an
     identity from, so the owner rides the Celery payload and the task announces
@@ -146,96 +174,52 @@ async def persist_assistant_turn(
 
 
 async def release_claim(conversation_id: UUID, claimed_at: datetime) -> None:
-    """Release a claim whose reply never started streaming (the route's error
-    path between persist_user_turn and the StreamingResponse)."""
+    """Release a claim with nothing stored: the route's error path before
+    start_turn, and a turn that failed, hit its deadline or was cancelled."""
     async with AsyncSessionLocal() as session:
         await conversations_repo.release_turn(session, conversation_id, claimed_at)
         await session.commit()
 
 
-async def event_stream(
-    stream_fn: Callable[[list[MessageParam]], AsyncIterator[str | dict]],
-    messages: list[MessageParam],
-    conversation_id: UUID,
-    user_id: UUID,
-    claimed_at: datetime,
-) -> AsyncIterator[str]:
-    """Wrap an LLM stream as SSE, persisting the assistant turn at the end.
+async def event_stream(turn: "Turn", conversation_id: UUID) -> AsyncIterator[str]:
+    """Listen to a running turn as SSE: the conversation-id prelude, every
+    event the turn yields, then [DONE] when the reply is saved and the claim
+    released, or {"error": "reply_failed"} (a fixed code, never an exception's
+    text) when it ended with nothing stored.
 
-    `stream_fn` may yield plain text tokens or structured events ({"content": …}
-    deltas, {"status": …} tool-activity notes, {"sources": […]} provenance);
-    bare tokens are normalized to content events. Emits a conversation-id
-    prelude, forwards every event, then [DONE]. Content and sources are
-    buffered and persisted as the assistant turn — status events (and the
-    harness's tool_use/tool_result blocks) never reach Postgres. Sources are
-    deduplicated by (document_id, chunk_idx), first hit wins, across every
-    search of the turn; the forwarded events are unchanged.
-
-    If `stream_fn` raises, nothing is stored, the claim is released, and the
-    stream ends with {"error": "reply_failed"} instead of [DONE] — a fixed
-    code, never the exception's text. A disconnect still saves what streamed.
+    Only listens: it never saves or releases. A disconnect or cancellation
+    detaches it and the turn carries on. While the turn is silent (the model
+    thinking, a slow tool) an SSE comment goes out every KEEPALIVE_SECONDS,
+    so a live connection is never silent long enough for a client to take it
+    for a lost one; clients ignore comment lines.
     """
-    buffer: list[str] = []
-    # Insertion-ordered dedup: a turn may search twice and hit the same chunk.
-    sources: dict[tuple[str, int], dict] = {}
-    persisted = False
-
-    async def persist() -> None:
-        # Shielded: disconnect cancels the surrounding anyio scope, and that
-        # cancellation is level-triggered — the first await inside an
-        # unshielded persist would re-raise CancelledError and drop the write.
-        with anyio.CancelScope(shield=True):
-            await persist_assistant_turn(
-                conversation_id,
-                user_id,
-                "".join(buffer),
-                list(sources.values()),
-                claimed_at=claimed_at,
-            )
-
+    # Prelude: tells the client its conversation id (server-created on turn 1).
+    yield sse_event({"conversation_id": str(conversation_id)})
+    events = turn.listen()
+    # One pending read carried across keepalives: a timeout must not cancel
+    # the read itself, which would close the listen generator.
+    pending: asyncio.Task | None = None
     try:
-        # Prelude: tells the client its conversation id (server-created on
-        # turn 1). Inside the try: a disconnect while it is sent must still
-        # reach the finally, which releases the turn's claim.
-        yield sse_event({"conversation_id": str(conversation_id)})
-        model_failed = False
-        try:
-            async for item in stream_fn(messages):
-                event = {"content": item} if isinstance(item, str) else item
-                if "content" in event:
-                    buffer.append(event["content"])
-                for s in event.get("sources", ()):
-                    sources.setdefault((s["document_id"], s["chunk_idx"]), s)
-                yield sse_event(event)
-        except Exception as exc:
-            # Model failure only: disconnect and cancellation are BaseException
-            # and fall through to the finally. Type name only — provider errors
-            # can echo prompt content.
-            logger.warning(
-                "reply failed for conversation %s: %s",
-                conversation_id,
-                type(exc).__name__,
-            )
-            model_failed = True
-        # Outside the except: a release that raises there would chain the
-        # provider exception, text included, into the logged traceback.
-        if model_failed:
-            # A partial reply is never stored: history replays it as whole.
-            buffer.clear()
-            sources.clear()
-            # Released before the frame, as before [DONE]. If the release
-            # raises, no frame is sent and the finally retries it.
-            await persist()
-            persisted = True
-            yield sse_event({"error": "reply_failed"})
-            return
-        # Saved and released BEFORE [DONE]: a client that sees the reply end
-        # may send the next turn at once, and must find the conversation free.
-        await persist()
-        persisted = True
-        yield "data: [DONE]\n\n"
+        while True:
+            if pending is None:
+                pending = asyncio.create_task(_next(events))
+            done, _ = await asyncio.wait({pending}, timeout=KEEPALIVE_SECONDS)
+            if not done:
+                yield ": keepalive\n\n"
+                continue
+            item = pending.result()
+            pending = None
+            if item == "done":
+                yield "data: [DONE]\n\n"
+                return
+            if item == "failed":
+                yield sse_event({"error": "reply_failed"})
+                return
+            yield sse_event(item)
     finally:
-        # Disconnect, or a fault before the release: save whatever is
-        # buffered (nothing after a model failure) and release.
-        if not persisted:
-            await persist()
+        if pending is not None:
+            pending.cancel()
+
+
+async def _next(events: AsyncIterator[T]) -> T:
+    return await anext(events)

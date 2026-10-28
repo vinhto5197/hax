@@ -5,7 +5,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.auth import CurrentUser, current_user
 from apps.api.deps import get_session
-from packages.core.schemas.conversation import ConversationDetailOut, ConversationOut
+from packages.core.schemas.conversation import (
+    ConversationDetailOut,
+    ConversationOut,
+    MessageOut,
+)
 from packages.db.repos import conversations as conversations_repo
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
@@ -27,13 +31,16 @@ async def get_conversation(
     session: AsyncSession = Depends(get_session),
     user: CurrentUser = Depends(current_user),
 ) -> ConversationDetailOut:
-    conversation = await conversations_repo.get_owned(
-        session, user.id, conversation_id, with_messages=True
-    )
-    if conversation is None:
+    found = await conversations_repo.get_owned_detail(session, user.id, conversation_id)
+    if found is None:
         # Ownership miss == nonexistent id, deliberately indistinguishable.
         raise HTTPException(status_code=404, detail="conversation not found")
-    return ConversationDetailOut.model_validate(conversation)
+    conversation, replying = found
+    return ConversationDetailOut(
+        **ConversationOut.model_validate(conversation).model_dump(),
+        messages=[MessageOut.model_validate(m) for m in conversation.messages],
+        replying=replying,
+    )
 
 
 @router.delete("/{conversation_id}", status_code=204)

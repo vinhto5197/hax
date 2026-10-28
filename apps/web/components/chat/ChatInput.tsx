@@ -18,6 +18,9 @@ export const PROMPT_MAX_LENGTH = 20000;
 interface ChatInputProps {
   onSend: (text: string) => Promise<void>;
   disabled: boolean;
+  // Text put back into the composer (a send that never reached the server);
+  // applied whenever it changes to a non-null value.
+  draft?: string | null;
   // The model choice belongs to the composer: given a handler, the picker
   // sits in the frame's bottom row; a visitor's composer passes none.
   model?: string;
@@ -27,11 +30,20 @@ interface ChatInputProps {
 export function ChatInput({
   onSend,
   disabled,
+  draft = null,
   model,
   onModelChange,
 }: ChatInputProps) {
   const [input, setInput] = useState("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Adjusted during render, not in an effect: the restored text must be in
+  // the first paint of the re-enabled composer.
+  const [appliedDraft, setAppliedDraft] = useState<string | null>(null);
+  if (draft !== appliedDraft) {
+    setAppliedDraft(draft);
+    if (draft !== null) setInput(draft);
+  }
 
   // A disabled input drops focus, so after a turn streams (disabled while it
   // runs) the keyboard would land nowhere; take it back as soon as the

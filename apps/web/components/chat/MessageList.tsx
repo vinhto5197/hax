@@ -13,6 +13,8 @@ interface MessageListProps {
   streamingContent: string;
   // Live tool-activity note ("Searching documents…"); null when no tool runs.
   status: string | null;
+  // A reply is being written on the server that this tab is not streaming.
+  stillAnswering?: boolean;
 }
 
 // Follows the conversation: the list is the scroll container, and nothing
@@ -72,6 +74,7 @@ export function MessageList({
   isLoading,
   streamingContent,
   status,
+  stillAnswering = false,
 }: MessageListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   // Whether the reader was at the bottom BEFORE this render's content landed;
@@ -88,7 +91,7 @@ export function MessageList({
     // leaving); record what it settled on so that clamp never reads as the
     // user scrolling up.
     lastTopRef.current = el.scrollTop;
-  }, [messages, streamingContent, status]);
+  }, [messages, streamingContent, status, stillAnswering]);
 
   // The scroller shrinking (viewport resize, the composer growing) leaves a
   // stuck reader scrolled up from the bottom with no content change to re-pin.
@@ -178,15 +181,19 @@ export function MessageList({
           </div>
         ) : null}
 
-        {/* Activity indicator: the live tool status (even mid-stream), else the
-            generic line in the gap before the first chunk. */}
-        {isLoading && (status || !streamingContent) ? (
+        {/* Activity indicator: "Still answering…" while the reply is written
+            on the server without this tab streaming it; else the live tool
+            status (even mid-stream), else the generic line in the gap before
+            the first chunk. */}
+        {stillAnswering || (isLoading && (status || !streamingContent)) ? (
           <p
             role="status"
             aria-live="polite"
             className="animate-pulse text-small text-ink-3"
           >
-            {status ?? "Assistant is thinking..."}
+            {stillAnswering
+              ? "Still answering…"
+              : (status ?? "Assistant is thinking...")}
           </p>
         ) : null}
       </div>
