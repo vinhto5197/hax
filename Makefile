@@ -75,10 +75,10 @@ worker:
 	@$(MAKE) -j2 worker-fast worker-ingest
 
 worker-fast:
-	celery -A apps.worker.celery_app worker -Q celery --beat --schedule /tmp/celerybeat-schedule --loglevel=$${LOG_LEVEL:-info} --pool=solo
+	.venv/bin/celery -A apps.worker.celery_app worker -Q celery --beat --schedule /tmp/celerybeat-schedule --loglevel=$${LOG_LEVEL:-info} --pool=solo
 
 worker-ingest:
-	celery -A apps.worker.celery_app worker -Q ingest --loglevel=$${LOG_LEVEL:-info} --pool=solo
+	.venv/bin/celery -A apps.worker.celery_app worker -Q ingest --loglevel=$${LOG_LEVEL:-info} --pool=solo
 
 # ── Frontend (Next.js) ────────────────────────────────────────
 .PHONY: web
@@ -120,11 +120,14 @@ dev: infra-up types
 
 dev-stop:
 	@echo "Stopping dev services..."
-	@pkill -f "uvicorn apps.api.main:app" || true
-	@# Anchored to this checkout: a bare "next dev" would also stop other
-	@# projects' dev servers on the machine.
-	@pkill -f "$(CURDIR)/apps/web/.*next dev" || true
-	@pkill -f "celery -A apps.worker.celery_app" || true
+	@# Anchored to this checkout: a bare pattern would also stop another
+	@# checkout's (or project's) servers on the machine. A venv script's
+	@# command line starts with its shebang, this venv's absolute python.
+	@# The bracket keeps each pattern from matching the recipe's own shell,
+	@# whose command line holds the pattern text: pkill would kill it.
+	@pkill -f "$(CURDIR)/[.]venv/bin/.*uvicorn apps.api.main:app" || true
+	@pkill -f "$(CURDIR)/[a]pps/web/.*next dev" || true
+	@pkill -f "$(CURDIR)/[.]venv/bin/.*celery -A apps.worker.celery_app" || true
 
 # Like `make dev` but WITHOUT the API: the VS Code debugger (F5, see
 # .vscode/launch.json) launches uvicorn itself, so :8000 must stay free.
