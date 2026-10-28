@@ -1,6 +1,6 @@
 """Prints the Counts line of docs/testing-map.md from its tables. Read-only.
 
-    python scripts/testing_map_counts.py
+Usage: python scripts/testing_map_counts.py
 """
 
 import re
