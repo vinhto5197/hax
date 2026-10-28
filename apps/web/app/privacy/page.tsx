@@ -28,6 +28,7 @@ export default function Privacy() {
             Your uploads: the files themselves, and the text and numeric
             embeddings derived from them for search.
           </li>
+          <li>Your note about yourself, if you write one.</li>
           <li>
             A session cookie so you stay signed in; it carries your account id,
             email address and name. There are no advertising or analytics
@@ -50,8 +51,8 @@ export default function Privacy() {
             Amazon Web Services (US East) hosts the database and file storage.
           </li>
           <li>
-            Anthropic receives your messages and relevant excerpts of your
-            documents to generate replies.
+            Anthropic receives your messages, your note about yourself and
+            relevant excerpts of your documents to generate replies.
           </li>
           <li>
             Voyage AI receives document text, and the search queries derived

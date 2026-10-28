@@ -76,7 +76,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!drawerOpen) return;
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
+      // A menu or dialog inside the drawer marks the Escape it handled as
+      // defaultPrevented; that one closes only itself.
+      if (event.key === "Escape" && !event.defaultPrevented) setOpen(false);
     }
     document.addEventListener("keydown", onKeyDown);
     const previousOverflow = document.body.style.overflow;
@@ -84,7 +86,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
     // Focus follows the dialog in, and returns to the control that opened it.
     const opener = openerRef.current ?? menuRef.current;
     openerRef.current = null;
-    panelRef.current?.focus();
+    const panel = panelRef.current;
+    panel?.focus();
     // The drawer's documents panel fetches its list after mount, so a pending
     // reveal may find no row yet: poll briefly, until the row appears or the
     // drawer closes.
@@ -103,6 +106,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
       window.clearTimeout(revealTimer);
       document.removeEventListener("keydown", onKeyDown);
       document.body.style.overflow = previousOverflow;
+      // Never pull focus out of another open modal (About you, rendered above
+      // the drawer): a drawer closed by a rotation would otherwise take the
+      // cursor out of the text being typed. Focus is checked at close.
+      const modal = document.activeElement?.closest(
+        '[role="dialog"][aria-modal="true"]',
+      );
+      if (modal && modal !== panel) return;
       opener?.focus();
     };
   }, [drawerOpen]);
