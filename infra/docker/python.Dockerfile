@@ -1,23 +1,23 @@
 # syntax=docker/dockerfile:1.7
 # One image for api, worker and the migrate one-shot: identical code and
 # dependencies, different commands (compose sets them).
-FROM python:3.14-slim AS builder
+FROM python:3.14.8-slim AS builder
 ENV PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1
 WORKDIR /app
 # A compiler for any dependency that has no wheel for this interpreter; it
 # stays in this stage and never reaches the runtime image.
 RUN apt-get update && apt-get install -y --no-install-recommends build-essential \
     && rm -rf /var/lib/apt/lists/*
-COPY pyproject.toml ./
+COPY pyproject.toml constraints.txt ./
 # Runtime dependencies only — the project itself is deliberately NOT installed,
 # so site-packages never holds a second, build-time snapshot of packages/ that
 # could shadow the COPYed tree. /app is the only copy of the code in the image.
 RUN python -c "import pathlib,tomllib;pathlib.Path('requirements.txt').write_text(chr(10).join(tomllib.load(open('pyproject.toml','rb'))['project']['dependencies']))"
 RUN python -m venv /venv \
     && /venv/bin/pip install --upgrade pip \
-    && /venv/bin/pip install -r requirements.txt
+    && /venv/bin/pip install -r requirements.txt -c constraints.txt
 
-FROM python:3.14-slim AS runtime
+FROM python:3.14.8-slim AS runtime
 # PYTHONPATH pins /app as the import root. Without it each entrypoint reaches
 # the code by its own cwd heuristic (uvicorn's --app-dir, celery's temporary
 # cwd_in_path, alembic's prepend_sys_path), which all break the moment a
