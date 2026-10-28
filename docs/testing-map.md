@@ -43,6 +43,8 @@ What the e2e stack can stage today, and what it cannot:
 | 25 | 20 000-character cap; composer grows on resize | ChatInput.test | – |
 | 26 | Sidebar refresh keeps the latest list | ConversationsProvider.test | – |
 | 27 | Error line is `role=alert` | ChatWindow.test | – |
+| 67 | Each model option carries a one-line hint; the chosen option's hint shows beside the picker (a caption below it on a phone) | ModelSelect.test | J |
+| 68 | Empty composer reads "What's up?" for a member and "Ask what hax is…" for a visitor | `new-chat.member`, `demo-landing.guest`, ChatInput.test | – |
 
 ## Demo and routing
 
@@ -66,8 +68,9 @@ What the e2e stack can stage today, and what it cannot:
 | 38 | Order: failed, then in progress, then ready | none | J† |
 | 39 | Upload refusals (type, 5 MB, 256 KB, hourly and daily caps) shown | `documents-panel.member` (type, 5 MB, 256 KB), chatApi.test, py:test_upload_limits (caps), py:test_authz_documents | – |
 | 40 | Delete with confirm; a 404 counts as success | chatApi.test, py:test_authz_documents | J† |
-| 41 | Download by clicking the filename; download error message | chatApi.test, py:test_authz_documents | J† |
+| 41 | Download by clicking the filename (labelled "Download <filename>", ↓ after the name); download error message | DocumentsPanel.test, chatApi.test, py:test_authz_documents | J† |
 | 42 | Empty state, count, help text, collapse; closed by default on short screens | `documents-panel.member` | – |
+| 69 | An in-flight document reads "Processing…" with a spinner, a hint and aria-busy | DocumentsPanel.test | J† |
 
 ## Sidebar, drawer, phone
 
@@ -112,4 +115,4 @@ What the e2e stack can stage today, and what it cannot:
 
 Produced by `python scripts/testing_map_counts.py` from the tables above; rerun it after editing a row and paste its output here.
 
-67 behaviours; 45 covered; 22 gaps: J 18 (J\* 7, J† 7), U 2, L 2.
+70 behaviours; 46 covered; 24 gaps: J 20 (J\* 7, J† 8), U 2, L 2.
