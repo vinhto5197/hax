@@ -83,4 +83,7 @@ asyncio_mode = "auto"
 # use; on Python 3.14.9 importing it raises a DeprecationWarning, which
 # -W error turns into a failed collection. Skipping it means it is never imported.
 addopts = "-p no:langsmith_plugin"
+# pytest-asyncio 1.4.1 warns while this is unset, which -W error fails on.
+# Every async fixture here is function-scoped, so this is today's behaviour.
+asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
