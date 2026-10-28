@@ -26,11 +26,12 @@ fi
 
 # An ask, not a mention: the quoted word follows an ask cue within a few
 # characters ("Reply "merge"", "waits for your "commit"", "To end the review:
-# "commit""). A word only quoted as an example does not fire.
-asks=$(printf '%s' "$message" | grep -Eio '(say|reply|type|answer|respond|your|waits? for|waiting on|end(s)? the review)[^"\n]{0,24}["“](merge|commit|approved|push|go [a-z0-9][a-z0-9._-]*)["”]' \
+# "commit""). A word only quoted as an example, or an earlier ask recounted
+# ("asked for your "commit""), does not fire.
+asks=$(printf '%s' "$message" | grep -Eio '\b(say|reply|respond|waits? for|waiting on|end(s)? the review)\b[^"\n]{0,24}["“](merge|commit|approved|push|go [a-z0-9][a-z0-9._-]*)["”]' \
   | grep -Eio '["“](merge|commit|approved|push|go [a-z0-9][a-z0-9._-]*)["”]' | head -1)
 [ -n "$asks" ] || exit 0
 printf '%s' "$message" | grep -q 'Your review' && exit 0
 
-jq -n --arg w "$asks" '{decision: "block", reason: ("This message asks the maintainer for " + $w + " but has no **Your review** section (skill gate-block, \"Your review, on every Show and Ask\"). Rewrite the hand-off with it: one line on what is already proven; then what to look at, the judgment calls to accept or refuse, code worth raising or \"no code to read\", and the word that ends the review.")}'
+jq -n --arg w "$asks" '{decision: "block", reason: ("Your last message asks the maintainer for " + $w + " but has no **Your review** section (skill gate-block). It is already on their screen: add only the missing section now, and do not repeat anything already said. The section: one line on what is already proven; what to look at; the judgment calls to accept or refuse; code worth raising or \"no code to read\"; the word that ends the review.")}'
 exit 0
