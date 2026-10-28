@@ -156,7 +156,7 @@ const LENSES = [
 ]
 if (!state.stoppedAt && !stop('Review')) {
   phase('Review')
-  const REVIEW_BASE = `${BASE}\nThe change is \`git diff origin/main\` inside the worktree (plus untracked files; \`git status --short\`). Read only the files the diff touches and their direct callers. Report ONLY findings you can substantiate with file:line and a concrete scenario; an empty list is a valid result. Severity: critical = exposure or corruption reachable today; high = same with an uncommon precondition; medium = a defense gap with a realistic trigger; low = hygiene. Mark needsDecision when fixing it would change what the brief specifies.`
+  const REVIEW_BASE = `${BASE}\nThe change is \`git diff origin/main\` inside the worktree (plus untracked files; \`git status --short\`). Read only the files the diff touches and their direct callers. Report ONLY findings you can substantiate with file:line and a concrete scenario; an empty list is a valid result. Severity: critical = exposure or corruption reachable today; high = same with an uncommon precondition; medium = a defense gap with a realistic trigger; low = hygiene. Mark needsDecision when fixing it would change what the brief specifies. Accessibility (ARIA, screen readers, keyboard-only navigation, focus management, contrast) is out of scope for a first implementation by the maintainer's rule: never report it as a finding; the controller queues such points separately.`
   const [fresh, ...lensResults] = await parallel([
     () => agent(`${REVIEW_BASE}\n## Stage: fresh-eyes reviewer\nWalk the change caller-first. Real defects only.`,
       { label: 'review:fresh-eyes', phase: 'Review', schema: FINDINGS_SCHEMA, agentType: 'general-purpose' }),

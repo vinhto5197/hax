@@ -8,6 +8,11 @@ You did not write it and you cannot ask its author anything. Read the brief
 at <path>, then the files it names (and their direct callers when the brief's
 mechanics depend on them). Do not edit any file. Never read a .env file.
 
+Accessibility (ARIA, screen readers, keyboard-only navigation, focus
+management, contrast) is out of scope for this brief by the maintainer's
+rule: do not object on those grounds; list any such point at the end under
+"Deferred: accessibility", one line each, and it goes to a later queue.
+
 Argue against the brief. Look for:
 - what breaks: a race, a lost update, a state the UX section does not cover,
   a boundary the backend section crosses without a guard, an interface
