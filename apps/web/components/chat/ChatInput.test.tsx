@@ -98,10 +98,7 @@ describe("ChatInput placeholder by audience", () => {
   it("asks a member about their documents when visitor is omitted", () => {
     render(<ChatInput onSend={async () => {}} disabled={false} />);
     const textbox = screen.getByRole("textbox", { name: "Message" });
-    expect(textbox).toHaveAttribute(
-      "placeholder",
-      "Ask about your documents…",
-    );
+    expect(textbox).toHaveAttribute("placeholder", "Ask about your documents…");
   });
 
   it("asks a member about their documents when visitor is false", () => {
@@ -109,9 +106,6 @@ describe("ChatInput placeholder by audience", () => {
       <ChatInput onSend={async () => {}} disabled={false} visitor={false} />,
     );
     const textbox = screen.getByRole("textbox", { name: "Message" });
-    expect(textbox).toHaveAttribute(
-      "placeholder",
-      "Ask about your documents…",
-    );
+    expect(textbox).toHaveAttribute("placeholder", "Ask about your documents…");
   });
 });
