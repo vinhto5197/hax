@@ -67,7 +67,7 @@ jobs:
           # interpreter it develops on, not lint's floor version.
           python-version: "3.14"
       - name: Install dependencies
-        run: pip install -e ".[dev]"
+        run: pip install -e ".[dev]" -c ci-constraints.txt
       # fakeredis stands in for Redis; Postgres is the service above (the authz
       # suite needs real RLS/pgvector); conftest.py hard-assigns env secrets.
       - name: Pytest
@@ -152,7 +152,7 @@ jobs:
           python-version: "3.14"
       # The Makefile and playwright.config.ts call .venv/bin/python.
       - name: Install Python dependencies
-        run: python -m venv .venv && .venv/bin/pip install -e ".[dev]"
+        run: python -m venv .venv && .venv/bin/pip install -e ".[dev]" -c ci-constraints.txt
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22"
