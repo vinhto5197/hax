@@ -25,9 +25,10 @@ Where a change lands depends on who wrote it, not on its class. Work done with t
 
 Every hand-off that waits for the maintainer (an Ask PR or bite, a feature PR, anything asking for their word) ends with **Your review**: what only a human can judge here, as a short checklist the maintainer can finish in minutes. What the machines already proved (CI, the gates, the reviews, the controller's own look at the screens) is stated in one line so the maintainer does not redo it. Then, numbered:
 1. What to look at (a screenshot, a screen to try, a copy line), with the path or the steps.
-2. The judgment calls to accept or refuse, each one sentence: copy, a behaviour choice, a deferral, a trade-off.
-3. Code worth raising, only when there is some: `file:line` and why a human should read it (a security boundary, a choice the maintainer might make differently, a surprising pattern); otherwise "no code to read".
-4. The word that ends the review ("merge", "commit", "approved").
+2. **Decisions for you**: only what is genuinely the maintainer's (product behaviour users will notice, scope, a risk to accept, a cost), each one sentence with a recommendation; "None" when none, which should be common.
+3. **Calls I made**: technical choices the controller or a chain made, one line each, for information only; nothing waits on them, and the maintainer may overrule any. Never dressed up as a decision.
+4. Code worth raising, only when there is some: `file:line` and why a human should read it (a security boundary, a choice the maintainer might make differently, a surprising pattern); otherwise "no code to read".
+5. The word that ends the review ("merge", "commit", "approved").
 Ship and Show need none: the controller merges them and the digest lists them.
 Enforced, not remembered: a Stop hook (`.claude/hooks/review_gate.sh`) refuses to end a turn whose final message asks for a review word without this section; the message is already on screen by then, so the answer to it is the missing section alone, never a repeat.
 

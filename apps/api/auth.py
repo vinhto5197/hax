@@ -1,7 +1,8 @@
 """Request authentication for the API.
 
 current_user is the single enforcement point: cookie (web) or
-Authorization: Bearer (tests and non-browser clients) -> pinned-alg JWT decode
+Authorization: Bearer (tests and non-browser clients) -> for a cookie write,
+the same-origin check -> pinned-alg JWT decode
 -> revocation check -> CurrentUser. No DB read on the hot path (Redis only;
 DB only on cache miss). internal_only guards the server-to-server endpoints
 Next calls (verify-credentials, oauth-upsert, anonymous) — a wrong or missing
@@ -13,6 +14,7 @@ In production Caddy never routes /internal/* at all.)
 import hmac
 import os
 import uuid
+from urllib.parse import urlsplit
 
 from fastapi import Header, HTTPException, Request
 from pydantic import BaseModel
@@ -49,6 +51,39 @@ def extract_token(request: Request) -> str | None:
     return request.cookies.get(os.getenv(COOKIE_NAME_ENV, _DEFAULT_COOKIE))
 
 
+_SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+
+
+def _allowed_origins() -> set[str]:
+    # The origins hax's own pages are served from: the CORS allowlist (dev and
+    # the journey stack put the web on another port of the same host) and the
+    # app's base URL (production is one origin behind Caddy). Read per request,
+    # like the CORS list, so tests and deploys need no restart to change them.
+    allowed = {o for o in os.getenv("CORS_ALLOW_ORIGINS", "").split(",") if o}
+    base = urlsplit(os.getenv("APP_BASE_URL", ""))
+    if base.scheme and base.netloc:
+        allowed.add(f"{base.scheme}://{base.netloc}")
+    return allowed
+
+
+def _refuse_cross_site_cookie_write(request: Request) -> None:
+    """403 for a write the login cookie authenticates unless the browser says it
+    came from hax's own pages. SameSite=Lax already keeps the cookie off other
+    sites' background requests; this is the second layer, for a page on the
+    same site (another subdomain), which Lax lets through. Browsers send
+    Sec-Fetch-Site on every request; Origin is the fallback. A cookie write
+    with neither signal is refused: no browser sends that, and a non-browser
+    client authenticates with a Bearer token, which never reaches here."""
+    if request.method in _SAFE_METHODS:
+        return
+    if request.headers.get("sec-fetch-site") in ("same-origin", "none"):
+        return
+    origin = request.headers.get("origin")
+    if origin and origin in _allowed_origins():
+        return
+    raise HTTPException(status_code=403, detail="cross-site request refused")
+
+
 async def _fetch_sva(user_id: uuid.UUID):
     async with AsyncSessionLocal() as session:
         return await users_repo.get_sessions_valid_after(session, user_id)
@@ -56,6 +91,10 @@ async def _fetch_sva(user_id: uuid.UUID):
 
 async def current_user(request: Request) -> CurrentUser:
     token = extract_token(request)
+    if token is not None and not request.headers.get(
+        "authorization", ""
+    ).lower().startswith("bearer "):
+        _refuse_cross_site_cookie_write(request)
     if token is None:
         raise HTTPException(
             status_code=401,
