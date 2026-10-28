@@ -75,10 +75,10 @@ worker:
 	@$(MAKE) -j2 worker-fast worker-ingest
 
 worker-fast:
-	.venv/bin/celery -A apps.worker.celery_app worker -Q celery --beat --schedule /tmp/celerybeat-schedule --loglevel=$${LOG_LEVEL:-info} --pool=solo
+	$(CURDIR)/.venv/bin/celery -A apps.worker.celery_app worker -Q celery --beat --schedule /tmp/celerybeat-schedule --loglevel=$${LOG_LEVEL:-info} --pool=solo
 
 worker-ingest:
-	.venv/bin/celery -A apps.worker.celery_app worker -Q ingest --loglevel=$${LOG_LEVEL:-info} --pool=solo
+	$(CURDIR)/.venv/bin/celery -A apps.worker.celery_app worker -Q ingest --loglevel=$${LOG_LEVEL:-info} --pool=solo
 
 # ── Frontend (Next.js) ────────────────────────────────────────
 .PHONY: web
