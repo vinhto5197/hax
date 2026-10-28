@@ -26,3 +26,4 @@ chain call.
 | `chain_cost.py` | Tokens per phase of one feature-chain run (`chain_cost.py <runId>`), from its agents' own transcripts; the gate block's Cost section comes from it. Read-only. |
 | `state.sh` | The project's live state from its sources (main's head, open PRs, the feature ledger, the nightly queue, the marks, the week's retro tally, the explorer), then the ordered next list from the backlog's START HERE; `--next` prints the list only. The due hook attaches it to the day's first prompt. Read-only. |
 | `week_transcript.py` | Prints one ISO week of this project's Claude Code transcripts reduced to the maintainer's typed messages and every refused or failed tool call; the Friday retro reads it, because transcripts are never compacted. Read-only. |
+| `testing_map_counts.py` | Prints the Counts line of `docs/testing-map.md` from its tables (rows by Gap lane); paste its output into that line after editing a row. Read-only. |
