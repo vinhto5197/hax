@@ -11,7 +11,7 @@ const CHIPS = [
 const GREETING =
   /^(Good (morning|afternoon|evening)|Early bird gets the worm|Happy \w+|Pushing through the day\?|Winding down\?|How was your \w+\?|Staying up late\?|Burning the midnight oil\?|Still at it\?)$/;
 const BLURB =
-  "Chat with your own documents. Try it without an account: ask about hax itself.";
+  "hax is a chat that answers from your own documents. Try it without an account: ask about hax itself.";
 
 async function expectReplies(page: Page, count: number) {
   const main = page.getByRole("main");

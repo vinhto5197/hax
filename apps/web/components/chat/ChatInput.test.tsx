@@ -4,10 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ChatInput, PROMPT_MAX_LENGTH } from "@/components/chat/ChatInput";
 
 describe("ChatInput composer", () => {
-  it("names the textarea 'Message' and keeps its placeholder", () => {
+  it("names the textarea 'Message'", () => {
     render(<ChatInput onSend={async () => {}} disabled={false} />);
-    const textbox = screen.getByRole("textbox", { name: "Message" });
-    expect(textbox).toHaveAttribute("placeholder", "Type your prompt...");
+    expect(
+      screen.getByRole("textbox", { name: "Message" }),
+    ).toBeInTheDocument();
   });
 
   it("caps the textarea at the API's 20000-character prompt limit", () => {
@@ -84,5 +85,33 @@ describe("ChatInput auto-grow on resize", () => {
     });
 
     expect(textbox.style.height).toBe("7px");
+  });
+});
+
+describe("ChatInput placeholder by audience", () => {
+  it("asks a visitor what hax is", () => {
+    render(<ChatInput onSend={async () => {}} disabled={false} visitor />);
+    const textbox = screen.getByRole("textbox", { name: "Message" });
+    expect(textbox).toHaveAttribute("placeholder", "Ask what hax is…");
+  });
+
+  it("asks a member about their documents when visitor is omitted", () => {
+    render(<ChatInput onSend={async () => {}} disabled={false} />);
+    const textbox = screen.getByRole("textbox", { name: "Message" });
+    expect(textbox).toHaveAttribute(
+      "placeholder",
+      "Ask about your documents…",
+    );
+  });
+
+  it("asks a member about their documents when visitor is false", () => {
+    render(
+      <ChatInput onSend={async () => {}} disabled={false} visitor={false} />,
+    );
+    const textbox = screen.getByRole("textbox", { name: "Message" });
+    expect(textbox).toHaveAttribute(
+      "placeholder",
+      "Ask about your documents…",
+    );
   });
 });
