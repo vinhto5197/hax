@@ -22,12 +22,21 @@ from packages.core.rag.errors import PermanentIngestError
 # Budgets, all static. A DOCX is a zip: its members' declared sizes are read
 # before anything is inflated. PDF memory per page is pypdf's own, which these
 # do not bound — the worker's memory fence and the redelivery stop in
-# apps/worker/tasks.py are the backstop for a page that explodes.
+# apps/worker/tasks.py are the backstop for a page that explodes. The page and
+# paragraph budgets also bound parse time: the parse runs in a thread the
+# task's soft time limit cannot interrupt, so a huge file must fail here, fast.
 MAX_INFLATED_BYTES = 25 * 1024 * 1024
-MAX_PDF_PAGES = 500
+MAX_PDF_PAGES = 300
+MAX_DOCX_PARAGRAPHS = 5000
 MAX_TEXT_CHARS = 2_000_000
 
 TOO_LONG = "the document is too long; split it and upload the parts"
+TOO_MANY_PAGES = (
+    "the document is too long (too many pages); split it and upload the parts"
+)
+TOO_MANY_PARAGRAPHS = (
+    "the document is too long (too many paragraphs); split it and upload the parts"
+)
 # Postgres text columns refuse NUL, so this is caught here rather than as a
 # late chunk-insert failure.
 HAS_NUL = "the document contains NUL characters, which cannot be stored"
@@ -54,8 +63,9 @@ def extract_text(raw: bytes, filename: str) -> str:
 def _pdf(raw: bytes) -> str:
     try:
         reader = PdfReader(io.BytesIO(raw))
+        # Counted from the page tree before any page is parsed.
         if len(reader.pages) > MAX_PDF_PAGES:
-            raise PermanentIngestError(TOO_LONG)
+            raise PermanentIngestError(TOO_MANY_PAGES)
         pages: list[str] = []
         total = 0
         for page in reader.pages:
@@ -88,7 +98,12 @@ def _docx(raw: bytes) -> str:
         if sizes and max(max(sizes), sum(sizes)) > MAX_INFLATED_BYTES:
             raise PermanentIngestError(TOO_LONG)
         doc = DocxDocument(io.BytesIO(raw))
-        parts = [p.text for p in doc.paragraphs if p.text.strip()]
+        parts: list[str] = []
+        for count, paragraph in enumerate(doc.paragraphs, start=1):
+            if count > MAX_DOCX_PARAGRAPHS:
+                raise PermanentIngestError(TOO_MANY_PARAGRAPHS)
+            if paragraph.text.strip():
+                parts.append(paragraph.text)
         for table in doc.tables:
             for row in table.rows:
                 cells = [c.text.strip() for c in row.cells if c.text.strip()]
