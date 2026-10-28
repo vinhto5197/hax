@@ -87,3 +87,36 @@ for (const { label, file, message } of REFUSALS) {
     await expect(upload).toBeEnabled();
   });
 }
+
+// The listing is stubbed: the e2e stack cannot store an upload, and this test
+// is about geometry only. Each delete target spans its own row and no more.
+test("document delete targets are 44 px wide and never overlap a neighbour", async ({
+  page,
+}) => {
+  const docs = [1, 2, 3].map((n) => ({
+    id: `00000000-0000-4000-8000-00000000000${n}`,
+    filename: `notes-${n}.txt`,
+    mime_type: "text/plain",
+    size_bytes: 10,
+    status: "ready",
+    error: null,
+    created_at: "2026-10-28T10:00:00Z",
+    updated_at: "2026-10-28T10:00:00Z",
+  }));
+  await page.route("**/api/documents", (route) =>
+    route.request().method() === "GET"
+      ? route.fulfill({ json: docs })
+      : route.fallback(),
+  );
+  await page.goto("/chat");
+  const targets = page.getByRole("button", { name: /^Delete notes-/ });
+  await expect(targets).toHaveCount(3);
+  const boxes = [];
+  for (let i = 0; i < 3; i++) boxes.push(await targets.nth(i).boundingBox());
+  for (const box of boxes) expect(box!.width).toBeGreaterThanOrEqual(44);
+  for (let i = 1; i < 3; i++) {
+    expect(boxes[i]!.y).toBeGreaterThanOrEqual(
+      boxes[i - 1]!.y + boxes[i - 1]!.height,
+    );
+  }
+});
