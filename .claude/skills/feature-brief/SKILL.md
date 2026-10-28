@@ -26,6 +26,8 @@ A brief is the complete design of one feature-lane item, written by the orchestr
 
 ## Rules
 
+- Build for typical users first: accessibility (ARIA roles and states beyond what a journey selector needs, screen-reader checks, keyboard-only navigation, focus traps and focus return, contrast-only fixes) is never part of a brief, in either lane. An accessibility point raised while writing or reviewing a brief becomes a backlog item for the nightly queue, written at that moment, and the brief does not carry it. Accessible names that journeys select by stay, as test hooks; Escape closing a dialog stays, as mouse-and-keyboard behaviour.
+
 - No strategy, no product plans beyond the feature itself, in the brief: it will be summarized in a public PR body.
 - A brief that needs the maintainer's attention mid-build has failed its job; when that happens, the stop-and-report goes into the ledger entry as `state: blocked` with the decision needed, and the brief is amended before the chain resumes.
 - Credit lifted text at the bottom of the template, never in the brief.
