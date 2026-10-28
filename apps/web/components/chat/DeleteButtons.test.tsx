@@ -88,6 +88,8 @@ describe("delete buttons have a 44x44 hit area", () => {
     const button = await screen.findByRole("button", {
       name: "Delete notes.pdf",
     });
-    expect(button).toHaveClass("min-h-11", "min-w-11");
+    // Row-tall and 44 px wide: a taller target would overhang the next row
+    // (the journey measures the real geometry).
+    expect(button).toHaveClass("w-11", "self-stretch");
   });
 });

@@ -213,10 +213,10 @@ export function DocumentsPanel() {
                     aria-label={`Download ${doc.filename}`}
                     className="flex min-w-0 flex-1 items-center gap-1 text-left text-ink hover:underline"
                   >
-                    <span className="truncate">{doc.filename}</span>
                     <span aria-hidden="true" className="shrink-0 text-ink-3">
                       ↓
                     </span>
+                    <span className="truncate">{doc.filename}</span>
                   </button>
                   {doc.error ? (
                     <button
@@ -261,7 +261,7 @@ export function DocumentsPanel() {
                     onClick={() => handleDelete(doc)}
                     disabled={deletingId === doc.id}
                     aria-label={`Delete ${doc.filename}`}
-                    className="-my-3 flex min-h-11 min-w-11 shrink-0 items-center justify-center text-sm leading-none text-ink-2 hover:text-status-failed focus-visible:text-status-failed disabled:opacity-50"
+                    className="flex w-11 shrink-0 self-stretch items-center justify-center text-sm leading-none text-ink-2 hover:text-status-failed focus-visible:text-status-failed disabled:opacity-50"
                   >
                     ×
                   </button>
