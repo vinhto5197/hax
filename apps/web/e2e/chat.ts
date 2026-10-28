@@ -4,7 +4,8 @@ export const REPLY = "Hello from the fake model.";
 export const SLOW_REPLY = "Slowly streaming reply";
 
 export function composer(page: Page) {
-  return page.getByPlaceholder("Type your prompt...");
+  // By name, not placeholder: the placeholder differs for a visitor.
+  return page.getByRole("textbox", { name: "Message" });
 }
 
 export async function send(page: Page, text: string) {

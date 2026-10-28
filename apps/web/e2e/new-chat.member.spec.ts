@@ -1,5 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { openNewChat, REPLY, sidebarLink, startConversation } from "./chat";
+import {
+  composer,
+  openNewChat,
+  REPLY,
+  sidebarLink,
+  startConversation,
+} from "./chat";
 
 test("New chat clears the screen and the next message starts a separate conversation", async ({
   page,
@@ -18,4 +24,9 @@ test("New chat clears the screen and the next message starts a separate conversa
   await expect(main.getByText("First conversation opener")).toHaveCount(0);
 
   await expect(sidebarLink(page, first)).toBeVisible();
+});
+
+test("a member's empty composer says What's up?", async ({ page }) => {
+  await page.goto("/chat");
+  await expect(composer(page)).toHaveAttribute("placeholder", "What's up?");
 });
