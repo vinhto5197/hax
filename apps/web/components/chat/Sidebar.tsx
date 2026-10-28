@@ -136,7 +136,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                     onClick={() => handleDelete(conversation)}
                     disabled={deletingId === conversation.id}
                     aria-label={`Delete ${conversation.title ?? "conversation"}`}
-                    className={`shrink-0 px-2 py-2 text-sm leading-none hover:text-status-failed disabled:opacity-50 ${active ? "text-ink-2" : "text-ink-3"}`}
+                    className="flex min-h-11 min-w-11 shrink-0 items-center justify-center text-sm leading-none text-ink-2 hover:text-status-failed focus-visible:text-status-failed disabled:opacity-50"
                   >
                     ×
                   </button>
