@@ -21,7 +21,7 @@ Two independent layers:
    agent's `search_documents` receives it via a per-request `ToolContext`,
    never as a model-controllable tool parameter.
 2. **Postgres RLS** as backstop: ENABLE + FORCE on conversations, messages,
-   documents, chunks. Policies compare `user_id` to the transaction-local GUC
+   documents, chunks, user_profiles. Policies compare `user_id` to the transaction-local GUC
    `app.current_user_id` (`messages` via EXISTS on its conversation).
    Identity is announced by ONE engine-level begin listener reading a
    ContextVar (set by `current_user` / the Celery task body) and issuing

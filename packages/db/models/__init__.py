@@ -5,6 +5,7 @@ from packages.db.models.document import Document
 from packages.db.models.email_token import EMAIL_TOKEN_PURPOSES, EmailToken
 from packages.db.models.message import Message
 from packages.db.models.user import User
+from packages.db.models.user_profile import UserProfile
 
 __all__ = [
     "Conversation",
@@ -12,6 +13,7 @@ __all__ = [
     "Document",
     "Chunk",
     "User",
+    "UserProfile",
     "Account",
     "EmailToken",
     "EMAIL_TOKEN_PURPOSES",

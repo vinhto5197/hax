@@ -15,7 +15,7 @@ test("a member at /, /login and /signup lands on /chat", async ({ page }) => {
 // Signs this test's context out, so it stays last in the file and alone in
 // its block: no later test may reuse the signed-out state.
 test.describe.serial("account block", () => {
-  test("shows the member's name and email, and Sign out lands on /", async ({
+  test("shows the member's name and email, and Sign out in the account menu lands on /", async ({
     page,
   }) => {
     await page.goto("/chat");
@@ -23,7 +23,8 @@ test.describe.serial("account block", () => {
     await expect(sidebar.getByText(NAME, { exact: true })).toBeVisible();
     await expect(sidebar.getByText(EMAIL, { exact: true })).toBeVisible();
 
-    await sidebar.getByRole("button", { name: "Sign out" }).click();
+    await sidebar.getByRole("button", { name: "Account menu" }).click();
+    await sidebar.getByRole("menuitem", { name: "Sign out" }).click();
     await expect(page).toHaveURL(/^http:\/\/[^/]+\/$/);
     const logIn = page.getByRole("link", { name: "Log in", exact: true });
     await expect(logIn).toBeVisible();

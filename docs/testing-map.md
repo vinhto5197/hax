@@ -4,7 +4,7 @@ Every user-visible behaviour of the web app, and the test that would go red if i
 
 Swept through: 0cc67f8 — the weekly journeys sweep (`docs/routines/journeys-prompt.md`) checks only the changes after this commit and moves the line in its PR.
 
-Lanes: **J** a Playwright journey in `apps/web/e2e/` can observe it; **U** only a unit test can stage it (a race, an ordering, a mocked boundary); **L** a person has to look. Journey short names: demo = `demo.guest`, newchat = `new-chat.member`, hist = `history.member`, switch = `switch-mid-stream.member`, guard = `turn-guard.member`, setup = `auth.setup`; the newer journeys go by file stem: `auth-login.guest`, `auth-signup.guest`, `demo-landing.guest`, `routing.guest` and `routing.member`, `chat-basics.member`, `chat-thread.member`, `drawer.member`, `documents-panel.member`, `failed-reply.member`. `py:` is a pytest module under `tests/`. A gap is a behaviour no test in its lane pins; a row whose gap is `–` is covered. **Gap** holds only the lane(s) of the gap, or `–`; a note on partial coverage goes in **Pinned by**, in parentheses.
+Lanes: **J** a Playwright journey in `apps/web/e2e/` can observe it; **U** only a unit test can stage it (a race, an ordering, a mocked boundary); **L** a person has to look. Journey short names: demo = `demo.guest`, newchat = `new-chat.member`, hist = `history.member`, switch = `switch-mid-stream.member`, guard = `turn-guard.member`, setup = `auth.setup`; the newer journeys go by file stem: `auth-login.guest`, `auth-signup.guest`, `demo-landing.guest`, `routing.guest` and `routing.member`, `chat-basics.member`, `chat-thread.member`, `drawer.member`, `documents-panel.member`, `failed-reply.member`, `about-you.member`. `py:` is a pytest module under `tests/`. A gap is a behaviour no test in its lane pins; a row whose gap is `–` is covered. **Gap** holds only the lane(s) of the gap, or `–`; a note on partial coverage goes in **Pinned by**, in parentheses.
 
 What the e2e stack can stage today, and what it cannot:
 
@@ -83,6 +83,12 @@ What the e2e stack can stage today, and what it cannot:
 | 47 | "Show in panel" on a phone opens the drawer and reveals the row | none | J\* |
 | 48 | Account name and email; Sign out goes to `/` | `routing.member` | – |
 | 49 | Active row highlight | none | L |
+| 70 | The account row is a button "Account menu" that opens About you, Privacy, Sign out (in that order); Escape or a click outside closes it; Privacy goes to `/privacy`, which names the note | `about-you.member`, AccountMenu.test | – |
+| 71 | About you dialog: help line, "N / 1000" counting code points of the trimmed text; Save disabled while unchanged or over 1000; saving closes it; clearing and saving removes the note | `about-you.member`, AboutYouDialog.test, py:test_profile | – |
+| 72 | Dialog errors: textarea and Save disabled until the note loads; the load-failure line; a failed save (a 422 included) keeps the dialog open with "Couldn't save. Try again."; a save in flight leaves Cancel and Escape inert | AboutYouDialog.test, py:test_profile (422) | – |
+| 73 | The saved note is in the dialog after a reload | `about-you.member`, py:test_profile | – |
+| 74 | Phone: the menu opens inside the drawer; the dialog fills the width less the gutter; Escape closes only the menu or the dialog; a backdrop tap does nothing and leaves focus in the dialog; saving keeps the drawer open | `about-you.member`, AboutYouDialog.test, Shell.test | – |
+| 75 | The dialog and its text survive a resize across the breakpoint and a remount of the sidebar; it closes when the signed-in member changes, and a save under another member's cookie does not go out | `about-you.member` (resize), AboutYouProvider.test, Shell.test (route change: no journey can open the dialog in time) | – |
 
 ## Auth
 
@@ -115,4 +121,4 @@ What the e2e stack can stage today, and what it cannot:
 
 Produced by `python scripts/testing_map_counts.py` from the tables above; rerun it after editing a row and paste its output here.
 
-70 behaviours; 46 covered; 24 gaps: J 20 (J\* 7, J† 8), U 2, L 2.
+76 behaviours; 52 covered; 24 gaps: J 20 (J\* 7, J† 8), U 2, L 2.
