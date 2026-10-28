@@ -6,7 +6,6 @@ import {
   useEffect,
   useRef,
   useState,
-  useSyncExternalStore,
 } from "react";
 
 import {
@@ -16,6 +15,7 @@ import {
   listDocuments,
   uploadDocument,
 } from "@/lib/chatApi";
+import { SHORT, useMediaQuery } from "@/lib/media";
 
 const STATUS_STYLES: Record<string, string> = {
   ready: "text-status-ready",
@@ -31,7 +31,6 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const POLL_INTERVAL_MS = 2500;
-const SHORT = "(max-height: 500px)";
 const IN_FLIGHT: ReadonlySet<string> = new Set(["pending", "processing"]);
 
 // Failed rows sort above the fold of the capped list, then in-flight, then
@@ -61,15 +60,7 @@ export function DocumentsPanel() {
   // renders open and the client corrects after hydration. A user's own toggle
   // wins from then on. The toggle event keeps this state in step with the DOM
   // attribute, which the Upload button and "Show in panel" set directly.
-  const short = useSyncExternalStore(
-    (onChange) => {
-      const mq = window.matchMedia(SHORT);
-      mq.addEventListener("change", onChange);
-      return () => mq.removeEventListener("change", onChange);
-    },
-    () => window.matchMedia(SHORT).matches,
-    () => false,
-  );
+  const short = useMediaQuery(SHORT, false);
   const [toggled, setToggled] = useState<boolean | null>(null);
   const open = toggled ?? !short;
 
