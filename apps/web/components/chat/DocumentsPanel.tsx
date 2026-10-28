@@ -6,7 +6,6 @@ import {
   useEffect,
   useRef,
   useState,
-  useSyncExternalStore,
 } from "react";
 
 import {
@@ -16,6 +15,7 @@ import {
   listDocuments,
   uploadDocument,
 } from "@/lib/chatApi";
+import { SHORT, useMediaQuery } from "@/lib/media";
 
 const STATUS_STYLES: Record<string, string> = {
   ready: "text-status-ready",
@@ -24,8 +24,13 @@ const STATUS_STYLES: Record<string, string> = {
   processing: "text-ink-3",
 };
 
+// What a row says for a status; one missing here reads as the raw status.
+const STATUS_LABELS: Record<string, string> = {
+  pending: "Processing…",
+  processing: "Processing…",
+};
+
 const POLL_INTERVAL_MS = 2500;
-const SHORT = "(max-height: 500px)";
 const IN_FLIGHT: ReadonlySet<string> = new Set(["pending", "processing"]);
 
 // Failed rows sort above the fold of the capped list, then in-flight, then
@@ -55,15 +60,7 @@ export function DocumentsPanel() {
   // renders open and the client corrects after hydration. A user's own toggle
   // wins from then on. The toggle event keeps this state in step with the DOM
   // attribute, which the Upload button and "Show in panel" set directly.
-  const short = useSyncExternalStore(
-    (onChange) => {
-      const mq = window.matchMedia(SHORT);
-      mq.addEventListener("change", onChange);
-      return () => mq.removeEventListener("change", onChange);
-    },
-    () => window.matchMedia(SHORT).matches,
-    () => false,
-  );
+  const short = useMediaQuery(SHORT, false);
   const [toggled, setToggled] = useState<boolean | null>(null);
   const open = toggled ?? !short;
 
@@ -198,11 +195,14 @@ export function DocumentsPanel() {
         <ul className="flex max-h-24 scroll-smooth flex-col gap-1 overflow-y-auto short:max-h-20">
           {ordered.map((doc) => {
             const statusClass = STATUS_STYLES[doc.status] ?? "text-ink-3";
+            const statusLabel = STATUS_LABELS[doc.status] ?? doc.status;
+            const inFlight = IN_FLIGHT.has(doc.status);
             return (
               // Reach-in point for lib/showInPanel's revealDocumentRow.
               <li
                 key={doc.id}
                 id={`doc-${doc.id}`}
+                aria-busy={inFlight || undefined}
                 className="scroll-mt-2 rounded-control px-1 text-body transition-colors duration-500 ease-in-out"
               >
                 <div className="flex items-center gap-2">
@@ -210,9 +210,13 @@ export function DocumentsPanel() {
                     type="button"
                     onClick={() => handleDownload(doc)}
                     title="Download"
-                    className="flex-1 truncate text-left text-ink hover:underline"
+                    aria-label={`Download ${doc.filename}`}
+                    className="flex min-w-0 flex-1 items-center gap-1 text-left text-ink hover:underline"
                   >
-                    {doc.filename}
+                    <span className="truncate">{doc.filename}</span>
+                    <span aria-hidden="true" className="shrink-0 text-ink-3">
+                      ↓
+                    </span>
                   </button>
                   {doc.error ? (
                     <button
@@ -227,11 +231,27 @@ export function DocumentsPanel() {
                       aria-expanded={openErrorIds.has(doc.id)}
                       className={`text-small font-medium underline decoration-dotted underline-offset-2 ${statusClass}`}
                     >
-                      {doc.status}
+                      {statusLabel}
                     </button>
                   ) : (
-                    <span className={`text-small font-medium ${statusClass}`}>
-                      {doc.status}
+                    <span
+                      title={inFlight ? "Usually under a minute" : undefined}
+                      className={`flex shrink-0 items-center gap-1 text-small font-medium ${statusClass}`}
+                    >
+                      {inFlight && (
+                        <svg
+                          aria-hidden="true"
+                          viewBox="0 0 16 16"
+                          className="size-[1em] animate-spin motion-reduce:animate-none"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        >
+                          <circle cx="8" cy="8" r="6" opacity="0.3" />
+                          <path d="M14 8a6 6 0 0 0-6-6" strokeLinecap="round" />
+                        </svg>
+                      )}
+                      {statusLabel}
                     </span>
                   )}
                   {/* The 44 px hit area overhangs the row vertically, so
