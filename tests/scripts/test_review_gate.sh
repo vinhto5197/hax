@@ -68,6 +68,13 @@ blocked "$out" && report PASS "a word waiting on the maintainer is an ask" || re
 out=$(run "$(transcript $'All green.\n\n**To end the review:** "merge".')" false)
 blocked "$out" && report PASS "a to-end-the-review line is an ask" || report FAIL "end-the-review ask passed: '$out'"
 
+# Recounting an earlier ask is not an ask: "your" alone is no cue.
+out=$(run "$(transcript 'My first answer asked for your "commit" without the section.')" false)
+[ -z "$out" ] && report PASS "a recounted ask is not an ask" || report FAIL "recounted ask blocked: '$out'"
+
+out=$(run "$(transcript 'Reply "merge".')" false)
+case "$out" in *"only"*"do not repeat"*) report PASS "the reason asks for the section alone, no repeat" ;; *) report FAIL "reason: '$out'" ;; esac
+
 out=$(run "$(transcript 'Reply "merge".')" true)
 [ -z "$out" ] && report PASS "a second stop in a row passes" || report FAIL "stop_hook_active blocked: '$out'"
 

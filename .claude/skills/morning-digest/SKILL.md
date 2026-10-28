@@ -18,7 +18,7 @@ description: The one message that opens a day: nightly PRs reviewed, feature-lan
 
 ## Order
 
-1. **Nightly PRs**, one block per PR: the problem in plain words, how the change fixes it, test names, flags, CI state, the verdict from reading the diff and its class — Ship (merged by the controller before the digest), Show (merged, with the hunks to read) or Ask (held) — per the gate-block skill; the run's session link. UI items get a look in the browser on the local stack.
+1. **Nightly PRs**, by class (gate-block skill), never collapsed into one table: **Ship** — one line each, merged by the controller before the digest; **Show** — merged by the controller after its look in the browser on the local stack, then a short brief each: what changed for users in a line or two, and anything worth knowing; **Ask** — held, the full block each (problem, fix, test names, flags, the hunks to read) and its review section. A PR waiting on a fix the controller can make is fixed first, not handed over. The run's session link once.
 2. **Features**, one line each: `<id> — <state>`; a `blocked` one names the decision it needs; a `pr` one links the PR and says the gate block is ready.
 3. **Briefs waiting** for approval, with artifact URLs and open-decision counts.
 4. **Explorer findings** worth promoting (each: what, evidence path, proposed lane) and the count dropped.

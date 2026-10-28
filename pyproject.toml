@@ -79,4 +79,8 @@ known-first-party = ["apps", "packages"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# langsmith (pulled in by langchain-core) registers a pytest plugin we never
+# use; on Python 3.14.9 importing it raises a DeprecationWarning, which
+# -W error turns into a failed collection. Skipping it means it is never imported.
+addopts = "-p no:langsmith_plugin"
 testpaths = ["tests"]
