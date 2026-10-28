@@ -24,7 +24,7 @@ export type Source = components["schemas"]["SourceOut"];
 
 // Dev: NEXT_PUBLIC_API_URL hits FastAPI directly (Next's dev rewrite buffers
 // SSE). Prod: unset — same-origin via the reverse proxy. See ADR 0005.
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 // Collapses the parallel 401s of one eviction into a single signOut. Never
 // reset on success (the navigation discards module state); the .catch re-arms
@@ -35,7 +35,10 @@ let evictingSession = false;
 // callsite can drop them (dev is cross-origin — ADR 0005, pairs with
 // allow_credentials=True), and a 401 (cookie expired, revoked, or tampered —
 // proxy.ts's crypto-only check can still pass one) evicts centrally.
-async function apiFetch(input: string, init?: RequestInit): Promise<Response> {
+export async function apiFetch(
+  input: string,
+  init?: RequestInit,
+): Promise<Response> {
   const response = await fetch(input, { ...init, credentials: "include" });
   if (response.status === 401 && !evictingSession) {
     evictingSession = true;
