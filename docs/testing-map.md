@@ -4,7 +4,7 @@ Every user-visible behaviour of the web app, and the test that would go red if i
 
 Swept through: 0cc67f8 — the weekly journeys sweep (`docs/routines/journeys-prompt.md`) checks only the changes after this commit and moves the line in its PR.
 
-Lanes: **J** a Playwright journey in `apps/web/e2e/` can observe it; **U** only a unit test can stage it (a race, an ordering, a mocked boundary); **L** a person has to look. Journey short names: demo = `demo.guest`, newchat = `new-chat.member`, hist = `history.member`, switch = `switch-mid-stream.member`, guard = `turn-guard.member`, setup = `auth.setup`. `py:` is a pytest module under `tests/`. A gap is a behaviour no test in its lane pins; a row whose gap is `–` is covered.
+Lanes: **J** a Playwright journey in `apps/web/e2e/` can observe it; **U** only a unit test can stage it (a race, an ordering, a mocked boundary); **L** a person has to look. Journey short names: demo = `demo.guest`, newchat = `new-chat.member`, hist = `history.member`, switch = `switch-mid-stream.member`, guard = `turn-guard.member`, setup = `auth.setup`; the newer journeys go by file stem: `auth-login.guest`, `auth-signup.guest`, `demo-landing.guest`, `routing.guest` and `routing.member`, `chat-basics.member`, `chat-thread.member`, `drawer.member`, `documents-panel.member`, `failed-reply.member`. `py:` is a pytest module under `tests/`. A gap is a behaviour no test in its lane pins; a row whose gap is `–` is covered. **Gap** holds only the lane(s) of the gap, or `–`; a note on partial coverage goes in **Pinned by**, in parentheses.
 
 What the e2e stack can stage today, and what it cannot:
 
@@ -16,22 +16,22 @@ What the e2e stack can stage today, and what it cannot:
 | # | Behaviour | Pinned by | Gap |
 |---|---|---|---|
 | 1 | Enter sends; the question shows above the reply | demo, every member journey | – |
-| 2 | Shift+Enter adds a line; Enter during IME composition is ignored | `chat-basics.member` (Shift+Enter) | – (IME: U) |
+| 2 | Shift+Enter adds a line; Enter during IME composition is ignored | `chat-basics.member` (Shift+Enter; IME: U) | – |
 | 3 | Send disabled when empty; composer and picker disabled while streaming; focus returns after | `chat-basics.member`, useChat.test (whitespace only) | – |
 | 4 | Reply streams piece by piece | switch, guard | – |
 | 5 | "Assistant is thinking…" and the tool status line | MessageList.test, useChat.test | – |
 | 6 | URL becomes `/chat/<id>`; a sidebar row appears | newchat, hist | – |
-| 7 | "Untitled" row replaced by the title once polled | py:test_title_trigger | J |
+| 7 | "Untitled" row replaced by the title once polled | py:test_title_trigger | J† |
 | 8 | Source chips grouped by file, expand to passages, deduplicated | useChat.test | J\* |
 | 9 | "Show in panel" reveals and flashes the document row (desktop) | showInPanel.test | J\* |
 | 10 | Table sort (numbers; placeholders last), Copy table, Download CSV | DataTable.test (formula escaping only) | J\* |
-| 11 | Copy message; timestamp on hover | `chat-thread.member` | – (the hover look: L) |
-| 12 | Remote image src removed; code highlighted | none | J (highlighting: L) |
+| 11 | Copy message; timestamp on hover | `chat-thread.member` (the hover look: L) | – |
+| 12 | Remote image src removed; code highlighted | none (highlighting: L) | J\* |
 | 13 | View follows the bottom while streaming; scrolling up stops it | `chat-thread.member`, MessageList.test (re-pin on resize) | – |
 | 14 | New chat clears the screen and starts a separate conversation | newchat | – |
 | 15 | New chat during a reply keeps that reply out of the new chat | switch | – |
 | 16 | Switch via the sidebar; reload, back and forward | hist | – |
-| 17 | Delete conversation: confirm or cancel; deleting the open one goes to `/chat`; error line | `chat-basics.member`, py:test_authz_conversations | – (error line: no journey can fail a delete) |
+| 17 | Delete conversation: confirm or cancel; deleting the open one goes to `/chat`; error line | `chat-basics.member`, py:test_authz_conversations (error line: no journey can fail a delete) | – |
 | 18 | Empty sidebar shows "No conversations yet", only once the list has loaded (never while it loads) | `chat-basics.member` | – |
 | 19 | "Couldn't load this conversation." | useChat.test | – |
 | 20 | 409 "reply in progress": message, refused turn removed, retry works | guard, useChat.test, chatApi.test, py:test_turn_guard | – |
@@ -73,7 +73,7 @@ What the e2e stack can stage today, and what it cannot:
 
 | # | Behaviour | Pinned by | Gap |
 |---|---|---|---|
-| 43 | Phone (<48 rem wide or ≤500 px tall): top bar with menu, logo, +; no fixed sidebar | `drawer.member` (narrow) | – (short landscape: J) |
+| 43 | Phone (<48 rem wide or ≤500 px tall): top bar with menu, logo, +; no fixed sidebar | `drawer.member` (narrow; short landscape: J) | – |
 | 44 | Drawer backdrop out of the Tab order; tapping it closes the drawer | Shell.test | – |
 | 45 | Drawer: Escape closes; focus moves in and back; page behind inert and unscrollable; closes on navigation | `drawer.member` | – |
 | 46 | Drawer closes when the window becomes desktop width | `drawer.member` | – |
@@ -90,11 +90,11 @@ What the e2e stack can stage today, and what it cannot:
 | 52 | Unverified-email message and Resend button | `auth-login.guest`, py:test_login_gate, useResend.test | – |
 | 53 | `?error=` messages; `?verified` / `?reset` banners; email prefilled | `auth-login.guest` | – |
 | 54 | Signup: check-your-inbox panel, resend, validation, rate limit | `auth-signup.guest` (rate limit: py:test_signup_flow) | – |
-| 55 | Verify: no token → invalid view; verifies only on Confirm, then `/login?verified=1`; invalid link → resend form | `auth-signup.guest` (invalid paths), py:test_verify_email | J (the `/login?verified=1` hand-off needs a real token; fixme: tokens never reach a journey) |
+| 55 | Verify: no token → invalid view; verifies only on Confirm, then `/login?verified=1`; invalid link → resend form | `auth-signup.guest` (invalid paths), py:test_verify_email (the `/login?verified=1` hand-off needs a real token; fixme: tokens never reach a journey) | J |
 | 56 | Forgot password: same panel whatever the email; error messages | `auth-signup.guest`, py:test_password_reset | – |
-| 57 | Reset: "Checking your link…", invalid view, validation, success → `/chat` | `auth-signup.guest` (checking, invalid view), py:test_password_reset | J (validation, success; fixme: needs a real reset token) |
+| 57 | Reset: "Checking your link…", invalid view, validation, success → `/chat` | `auth-signup.guest` (checking, invalid view), py:test_password_reset (validation, success; fixme: needs a real reset token) | J |
 | 58 | Reset succeeds but sign-in fails → `/login?reset=1` | none | U |
-| 59 | Google button shows "Redirecting…" | none | J (logo: L) |
+| 59 | Google button shows "Redirecting…" | none (logo: L) | J |
 | 60 | Password Show/Hide | `auth-login.guest` | – |
 | 61 | Resend status messages | `auth-login.guest` (sent), useResend.test, authApi.test | – |
 
@@ -110,4 +110,6 @@ What the e2e stack can stage today, and what it cannot:
 
 ## Counts
 
-66 behaviours; 18 covered; 48 gaps: J 44 (J\* 6, J† 6), U 2, L 2.
+Produced by `python scripts/testing_map_counts.py` from the tables above; rerun it after editing a row and paste its output here.
+
+67 behaviours; 45 covered; 22 gaps: J 18 (J\* 7, J† 7), U 2, L 2.
