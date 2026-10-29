@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # Runs one command under a directory lock so gate steps that share a resource
 # never overlap: pytest on hax_test, and the e2e stack (hax_e2e, Redis db 15,
-# ports 3001/8001/8787). `mkdir <lockdir>` is the atomic primitive: the process
-# that creates the directory holds the lock; every other caller polls every
-# 2 s until it is gone or <timeout-seconds> pass, then exits 75 (EX_TEMPFAIL).
-# <lockdir>/owner records the holder's pid and command. A holder removes the
+# ports 3001/8001/8787). The atomic primitive is creating <lockdir>/owner with
+# noclobber, which bash opens O_CREAT|O_EXCL: the process that creates it
+# holds the lock and records its pid and command there. Not `mkdir`: the Rust
+# coreutils that Ubuntu 26.04 ships as `mkdir` lets two racing callers both
+# succeed. Every other caller polls every 2 s until the lock is gone or
+# <timeout-seconds> pass, then exits 75 (EX_TEMPFAIL). A holder removes the
 # lock when its command ends or when the holder is sent INT or TERM; the
 # command is signalled first and waited for, so the lock is never free while
 # the command still runs. A lock left behind by kill -9 is stale and the
@@ -31,7 +33,8 @@ parent=$(dirname "$lockdir")
 }
 
 SECONDS=0
-until mkdir "$lockdir" 2>/dev/null; do
+until mkdir -p "$lockdir" 2>/dev/null &&
+  (set -o noclobber && echo "$$ $*" >"$lockdir/owner") 2>/dev/null; do
   if [ "$SECONDS" -ge "$timeout" ]; then
     owner=$(cat "$lockdir/owner" 2>/dev/null || echo unknown)
     echo "${0##*/}: timed out after ${timeout}s waiting for $lockdir (owner: $owner)" >&2
@@ -53,7 +56,6 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 143' TERM
 trap 'exit 130' INT
-echo "$$ $*" >"$lockdir/owner"
 
 # The command runs as a background job that the script waits on: bash holds a
 # trap back while a foreground child runs, so a TERM would otherwise sit until

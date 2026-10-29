@@ -262,3 +262,16 @@ checking back needs one boolean on an existing endpoint — the cost is that a
 returning user sees the reply appear whole); a longer claim window instead
 of the heartbeat (a crashed reply's conversation would stay blocked for that
 whole window).
+
+A send whose connection drops before any response cannot tell whether the
+message arrived. The client chooses the user message's id
+(`ChatRequest.message_id`, a UUID stored as `messages.id`) and, after such a
+drop, re-reads the conversation: the id present means it arrived (the reply
+appears as above); absent on two reads in a row with the conversation not
+replying means it was not sent, and the text returns to the composer. A
+second send with the same id is refused with 409 "This message was already
+sent." and stores nothing, so a retried request never duplicates the
+message. Matching by text was rejected: a lost repeat of an earlier
+identical message would read as delivered. A save that fails still releases
+the claim (best effort), so the conversation is free at once instead of
+after the window.
