@@ -58,6 +58,7 @@ dev = [
   "ruff==0.15.0",
   "pytest>=8.3.0",
   "pytest-asyncio>=0.24.0",
+  "pytest-cov>=7.1.0",
   "fakeredis>=2.26.0",
 ]
 
@@ -87,3 +88,13 @@ addopts = "-p no:langsmith_plugin"
 # Every async fixture here is function-scoped, so this is today's behaviour.
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
+
+# `make coverage` only: what pytest exercises in the services and libraries.
+# The e2e helper (prepare.py) is test tooling, measured by the journeys.
+[tool.coverage.run]
+source = ["apps", "packages"]
+omit = ["*/migrations/*", "apps/web/*"]
+
+[tool.coverage.report]
+skip_covered = true
+sort = "Cover"

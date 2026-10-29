@@ -19,5 +19,13 @@ export default defineConfig({
     restoreMocks: true,
     mockReset: true,
     unstubGlobals: true,
+    // `make coverage` only. Pages and display components are exercised by
+    // the Playwright journeys, which this report does not measure.
+    coverage: {
+      provider: "v8",
+      include: ["app/**", "components/**", "hooks/**", "lib/**"],
+      exclude: ["**/*.test.*", "lib/openapi.ts"],
+      reporter: ["text-summary", "text"],
+    },
   },
 });

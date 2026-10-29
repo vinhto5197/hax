@@ -213,7 +213,7 @@ lint:
 	.venv/bin/ruff check . && .venv/bin/ruff format --check .
 
 # ── Test ─────────────────────────────────────────────────────
-.PHONY: test test-web e2e
+.PHONY: test test-web coverage e2e
 
 # The targets that share hax_test or the e2e stack always run under
 # scripts/with-lock.sh where local/ exists, so two runs (two agents, a chain
@@ -229,6 +229,14 @@ test:
 
 test-web:
 	cd apps/web && npm test
+
+# Line coverage, on demand: pytest's over apps/ and packages/, then Vitest's
+# over the web's unit-tested code. Neither sees what the journeys run, and
+# CI sets no floor (the testing map, docs/testing-map.md, is the measure of
+# behaviour covered).
+coverage:
+	$(GATE_LOCK) .venv/bin/pytest -W error --cov --cov-report=term-missing
+	cd apps/web && npx vitest run --coverage
 
 # Browser journeys against an isolated stack (database hax_e2e, Redis db 15,
 # ports 3001/8001/8787) with a scripted model. Needs `make infra-up`. The
