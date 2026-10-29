@@ -171,5 +171,6 @@ Redis volume).
   mirror can vanish the same way); SeaweedFS and Garage (more setup: a
   credentials file, or a bootstrap step after start).
 - The service is named `s3`, not after the product, so a future swap is an
-  image change. RustFS has its own web console (`:9001/rustfs/console/`,
-  behind `RUSTFS_CONSOLE_ENABLE`); dev leaves it off for now.
+  image change. Dev keeps a web console as it had with MinIO: RustFS's, on
+  loopback `:9001/rustfs/console/`; the laptop-prod stand-in has none, as
+  before.
