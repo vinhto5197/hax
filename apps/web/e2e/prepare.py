@@ -6,7 +6,10 @@ hax_e2e, Redis db 15) for the browser journeys (`make e2e`), and `explorer`
 (`scripts/explorer.sh`). Run from the repo root before the stack starts.
 Idempotent: creates the database if missing, migrates it as the owner role,
 grants the app role, empties every table but the migration ledger, seeds one
-verified member, flushes the Redis db.
+verified member, flushes the Redis db. The `e2e` target also requires the
+dev S3 stand-in (its uploads land in the stand-in's hax-e2e bucket) and never
+empties it: object keys are unique per document and the database is
+truncated, so a leftover object is never referenced.
 The connection targets are literals, never env: the dev shell exports the
 root .env (direnv), and this script must be unable to reach dev data.
 """
@@ -20,6 +23,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 ADMIN_URL = "postgresql://hax:hax@localhost:5432/postgres"
+S3_HEALTH_URL = "http://localhost:9000/health"
 
 
 @dataclass(frozen=True)
@@ -31,6 +35,8 @@ class Target:
     member_email: str
     member_name: str
     member_password: str
+    # Only the journeys' stack uploads (playwright.config.ts points it here).
+    needs_storage: bool = False
 
     @property
     def owner_url(self) -> str:
@@ -48,7 +54,14 @@ class Target:
 # Every entry is emptied on each run: never `hax` (dev), `hax_test` (pytest)
 # or Redis db 0 (dev), and no two entries share a database or a Redis db.
 TARGETS = {
-    "e2e": Target("hax_e2e", 15, "e2e@example.com", "E2E", "e2e-password-123"),
+    "e2e": Target(
+        "hax_e2e",
+        15,
+        "e2e@example.com",
+        "E2E",
+        "e2e-password-123",
+        needs_storage=True,
+    ),
     "explorer": Target(
         "hax_explorer", 14, "explorer@example.com", "Explorer", "explorer-password-123"
     ),
@@ -163,8 +176,24 @@ def flush_redis(target: Target) -> None:
     print(f"redis db {target.redis_db}: flushed")
 
 
+def check_storage() -> None:
+    import urllib.error
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen(S3_HEALTH_URL, timeout=5) as response:
+            ready = response.status == 200
+    except (urllib.error.URLError, OSError):
+        ready = False
+    if not ready:
+        fail("S3 stand-in unreachable: run make infra-up")
+    print("s3 stand-in: ready")
+
+
 def main(argv: list[str]) -> None:
     target = parse_target(argv)
+    if target.needs_storage:
+        check_storage()
     assert target.owner_url.endswith(f"/{target.database}")
     # Alembic's env.py and packages.db read these at import; set before either
     # is imported so nothing from the shell can redirect the migration.

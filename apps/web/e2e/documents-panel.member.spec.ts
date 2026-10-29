@@ -1,8 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 
 // Every refusal here comes from apps/api/routers/documents.py before the
-// upload limiter or storage is touched; a file that passed validation would
-// spend an upload slot and then fail at the unreachable storage.
+// upload limiter or storage is touched, so none spends one of the member's
+// five uploads an hour (sources and documents-lifecycle spend them all). The
+// empty panel holds whatever the order: those journeys delete their uploads.
 const EMPTY =
   "No documents yet. Upload a .txt, .md, .pdf or .docx to chat over it.";
 const HELP = /^PDF, Word \(\.docx\), \.txt or \.md\./;

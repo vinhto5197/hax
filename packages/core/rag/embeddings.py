@@ -1,3 +1,4 @@
+import os
 import warnings
 
 from packages.db.models.chunk import EMBEDDING_DIM
@@ -36,8 +37,14 @@ def _get_client() -> voyageai.AsyncClient:
     global _client
     if _client is None:
         # Bounded per attempt: the SDK default is 600 s, and retrieval runs on
-        # the request path. Reads VOYAGE_API_KEY from env.
-        _client = voyageai.AsyncClient(max_retries=2, timeout=15)
+        # the request path. Reads VOYAGE_API_KEY from env. VOYAGE_BASE_URL is
+        # set only by the e2e stack (its fake model serves /v1/embeddings);
+        # unset, None keeps the SDK's own endpoint.
+        _client = voyageai.AsyncClient(
+            max_retries=2,
+            timeout=15,
+            base_url=os.getenv("VOYAGE_BASE_URL") or None,
+        )
     return _client
 
 
