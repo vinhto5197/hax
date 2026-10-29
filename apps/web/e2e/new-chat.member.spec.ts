@@ -30,3 +30,31 @@ test("a member's empty composer says What's up?", async ({ page }) => {
   await page.goto("/chat");
   await expect(composer(page)).toHaveAttribute("placeholder", "What's up?");
 });
+
+// The worker titles a conversation through the fake model, which answers a
+// title only for a first message starting with `title:`, after 2 s.
+test("row 7: a new conversation's sidebar row reads Untitled, then Fake model title without a reload", async ({
+  page,
+}) => {
+  await page.goto("/chat");
+  const path = await startConversation(
+    page,
+    "title: plan a picnic by the river",
+  );
+  const row = sidebarLink(page, path);
+  await expect(row).toContainText("Untitled");
+
+  // A marker on the window survives only if the page is never reloaded.
+  await page.evaluate(() => {
+    (window as unknown as { titleMarker: string }).titleMarker = "kept";
+  });
+
+  await expect(row).toContainText("Fake model title", { timeout: 20_000 });
+  await expect(row).not.toContainText("Untitled");
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { titleMarker?: string }).titleMarker,
+    ),
+  ).toBe("kept");
+  await expect(page).toHaveURL(new RegExp(`${path}$`));
+});
