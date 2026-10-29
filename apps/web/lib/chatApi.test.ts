@@ -389,6 +389,18 @@ describe("streamChat", () => {
     });
   });
 
+  it("posts the message id when one is given", async () => {
+    const api = await load();
+    stream([sseEvent("[DONE]")]);
+    await api.streamChat("again", "c1", handlers(), null, "m-1");
+    expect(JSON.parse(call().init.body as string)).toEqual({
+      prompt: "again",
+      conversation_id: "c1",
+      model: null,
+      message_id: "m-1",
+    });
+  });
+
   it("dispatches every event kind to its handler in stream order", async () => {
     const api = await load();
     const h = handlers();
@@ -625,18 +637,6 @@ describe("streamChat", () => {
     expect((err as Error).message).toBe("API 422: Unprocessable Entity");
     expect(err).not.toBeInstanceOf(api.TurnInProgressError);
   });
-
-  it("delivers a final event that lacks the trailing blank line", async () => {
-    const api = await load();
-    const h = handlers();
-    stream([sseEvent({ content: "first" }), 'data: {"content":"tail"}']);
-    // Whether ending without [DONE] resolves or rejects is undecided; only delivery is asserted.
-    await api.streamChat("hi", null, h).catch(() => {});
-    expect(h.log).toEqual([
-      ["chunk", "first"],
-      ["chunk", "tail"],
-    ]);
-  });
 });
 
 describe("streamChat reply failure", () => {
@@ -764,5 +764,228 @@ describe("streamChat reply failure", () => {
       ["chunk", "Hello"],
       ["chunk", " world"],
     ]);
+  });
+});
+
+describe("streamChat lost connection", () => {
+  const SILENCE_MS = 45_000;
+
+  function stream(reads: Array<string | Uint8Array>): void {
+    respondWith(() => sseResponse(reads));
+  }
+
+  async function rejection(promise: Promise<unknown>): Promise<unknown> {
+    return promise.then(
+      () => {
+        throw new Error("expected streamChat to reject");
+      },
+      (err: unknown) => err,
+    );
+  }
+
+  // A response body the test feeds by hand and can break or leave silent.
+  function openStream() {
+    const encoder = new TextEncoder();
+    let controller!: ReadableStreamDefaultController<Uint8Array>;
+    const cancelled = vi.fn();
+    const body = new ReadableStream<Uint8Array>({
+      start(c) {
+        controller = c;
+      },
+      cancel: cancelled,
+    });
+    respondWith(
+      () =>
+        new Response(body, {
+          status: 200,
+          headers: { "Content-Type": "text/event-stream" },
+        }),
+    );
+    return {
+      push: (text: string) => controller.enqueue(encoder.encode(text)),
+      fail: (reason: unknown) => controller.error(reason),
+      cancelled,
+    };
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("ConnectionLostError is an Error named ConnectionLostError", async () => {
+    const api = await load();
+    const err = new api.ConnectionLostError();
+    expect(err).toBeInstanceOf(Error);
+    expect(err.name).toBe("ConnectionLostError");
+  });
+
+  it("a read that rejects after the response started rejects with ConnectionLostError after the events before it", async () => {
+    const api = await load();
+    const h = handlers();
+    const body = openStream();
+    const settled = rejection(api.streamChat("hi", "c1", h));
+    body.push(sseEvent({ conversation_id: "c1" }));
+    body.push(sseEvent({ content: "partial" }));
+    await flush();
+    body.fail(new TypeError("network error"));
+    const err = await settled;
+    expect(err).toBeInstanceOf(api.ConnectionLostError);
+    expect(h.log).toEqual([
+      ["conversation", "c1"],
+      ["chunk", "partial"],
+    ]);
+  });
+
+  it("EOF without [DONE] or an error frame rejects with ConnectionLostError", async () => {
+    const api = await load();
+    const h = handlers();
+    stream([
+      sseEvent({ conversation_id: "c1" }),
+      sseEvent({ content: "partial" }),
+    ]);
+    const err = await rejection(api.streamChat("hi", "c1", h));
+    expect(err).toBeInstanceOf(api.ConnectionLostError);
+    expect(err).not.toBeInstanceOf(api.ReplyFailedError);
+    expect(h.log).toEqual([
+      ["conversation", "c1"],
+      ["chunk", "partial"],
+    ]);
+  });
+
+  it("a response that ends with no bytes at all rejects with ConnectionLostError", async () => {
+    const api = await load();
+    stream([]);
+    const err = await rejection(api.streamChat("hi", "c1", handlers()));
+    expect(err).toBeInstanceOf(api.ConnectionLostError);
+  });
+
+  it("a final event without its blank line is a cut connection: not delivered, and ConnectionLostError", async () => {
+    const api = await load();
+    const h = handlers();
+    stream([sseEvent({ content: "first" }), 'data: {"content":"tail"}']);
+    const err = await rejection(api.streamChat("hi", null, h));
+    expect(err).toBeInstanceOf(api.ConnectionLostError);
+    expect(h.log).toEqual([["chunk", "first"]]);
+  });
+
+  it("a fetch rejected before any response is not a ConnectionLostError", async () => {
+    const api = await load();
+    fetchMock.mockImplementation(async () => {
+      throw new TypeError("Failed to fetch");
+    });
+    const err = await rejection(api.streamChat("hi", "c1", handlers()));
+    expect(err).not.toBeInstanceOf(api.ConnectionLostError);
+  });
+
+  it("keepalive comment lines reach no handler and the stream still resolves at [DONE]", async () => {
+    const api = await load();
+    const h = handlers();
+    stream([
+      sseEvent({ conversation_id: "c1" }),
+      ": keepalive\n\n",
+      sseEvent({ content: "Hello" }),
+      ": keepalive\n\n",
+      sseEvent("[DONE]"),
+    ]);
+    await api.streamChat("hi", "c1", h);
+    expect(h.log).toEqual([
+      ["conversation", "c1"],
+      ["chunk", "Hello"],
+    ]);
+  });
+
+  it("45 silent seconds after the response started reject with ConnectionLostError and cancel the reader", async () => {
+    vi.useFakeTimers();
+    const api = await load();
+    const h = handlers();
+    const body = openStream();
+    let outcome: unknown = "pending";
+    void api.streamChat("hi", "c1", h).then(
+      () => {
+        outcome = "resolved";
+      },
+      (err: unknown) => {
+        outcome = err;
+      },
+    );
+    body.push(sseEvent({ conversation_id: "c1" }));
+    body.push(sseEvent({ content: "partial" }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(h.log).toEqual([
+      ["conversation", "c1"],
+      ["chunk", "partial"],
+    ]);
+
+    await vi.advanceTimersByTimeAsync(SILENCE_MS - 1_000);
+    expect(outcome).toBe("pending");
+
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(outcome).toBeInstanceOf(api.ConnectionLostError);
+    expect(body.cancelled).toHaveBeenCalled();
+  });
+
+  it("45 seconds with no response headers abort the request with an AbortError, not a ConnectionLostError", async () => {
+    vi.useFakeTimers();
+    const api = await load();
+    fetchMock.mockImplementation(
+      (_input, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () =>
+            reject(
+              new DOMException("The operation was aborted.", "AbortError"),
+            ),
+          );
+        }),
+    );
+    let outcome: unknown = "pending";
+    void api.streamChat("hi", "c1", handlers()).then(
+      () => {
+        outcome = "resolved";
+      },
+      (err: unknown) => {
+        outcome = err;
+      },
+    );
+
+    await vi.advanceTimersByTimeAsync(SILENCE_MS - 1_000);
+    expect(outcome).toBe("pending");
+
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect((outcome as { name?: unknown }).name).toBe("AbortError");
+    expect(outcome).not.toBeInstanceOf(api.ConnectionLostError);
+  });
+
+  it("keepalives more often than every 45 seconds keep a long reply alive until [DONE]", async () => {
+    vi.useFakeTimers();
+    const api = await load();
+    const h = handlers();
+    const body = openStream();
+    let outcome: unknown = "pending";
+    void api.streamChat("hi", "c1", h).then(
+      () => {
+        outcome = "resolved";
+      },
+      (err: unknown) => {
+        outcome = err;
+      },
+    );
+    body.push(sseEvent({ conversation_id: "c1" }));
+    await vi.advanceTimersByTimeAsync(0);
+    for (let i = 0; i < 6; i++) {
+      await vi.advanceTimersByTimeAsync(30_000);
+      body.push(": keepalive\n\n");
+    }
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(outcome).toBe("pending");
+
+    body.push(sseEvent({ content: "late answer" }));
+    body.push(sseEvent("[DONE]"));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(outcome).toBe("resolved");
+    expect(h.log).toEqual([
+      ["conversation", "c1"],
+      ["chunk", "late answer"],
+    ]);
+    expect(body.cancelled).not.toHaveBeenCalled();
   });
 });

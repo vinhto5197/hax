@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ChatInput, PROMPT_MAX_LENGTH } from "@/components/chat/ChatInput";
@@ -18,6 +18,44 @@ describe("ChatInput composer", () => {
     // from the constant so a drift on either side fails here.
     expect(PROMPT_MAX_LENGTH).toBe(20000);
     expect(textbox).toHaveAttribute("maxlength", "20000");
+  });
+});
+
+describe("ChatInput restored draft", () => {
+  const send = async () => {};
+
+  it("puts a draft into the composer when it arrives, replacing what was typed", () => {
+    const { rerender } = render(
+      <ChatInput onSend={send} disabled={false} draft={null} />,
+    );
+    const textbox = screen.getByRole("textbox", { name: "Message" });
+    fireEvent.change(textbox, { target: { value: "typed meanwhile" } });
+
+    rerender(<ChatInput onSend={send} disabled={false} draft="unsent" />);
+    expect(textbox).toHaveValue("unsent");
+  });
+
+  it("a draft going back to null leaves the text as the user left it", () => {
+    const { rerender } = render(
+      <ChatInput onSend={send} disabled={false} draft="unsent" />,
+    );
+    const textbox = screen.getByRole("textbox", { name: "Message" });
+    fireEvent.change(textbox, { target: { value: "unsent, edited" } });
+
+    rerender(<ChatInput onSend={send} disabled={false} draft={null} />);
+    expect(textbox).toHaveValue("unsent, edited");
+  });
+
+  it("the same text restored a second time, after a null in between, is applied again", () => {
+    const { rerender } = render(
+      <ChatInput onSend={send} disabled={false} draft="unsent" />,
+    );
+    const textbox = screen.getByRole("textbox", { name: "Message" });
+    fireEvent.change(textbox, { target: { value: "" } });
+    rerender(<ChatInput onSend={send} disabled={false} draft={null} />);
+
+    rerender(<ChatInput onSend={send} disabled={false} draft="unsent" />);
+    expect(textbox).toHaveValue("unsent");
   });
 });
 

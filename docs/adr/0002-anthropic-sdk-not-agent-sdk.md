@@ -202,3 +202,63 @@ be taken before the ownership check); Postgres advisory locks (held by a
 connection, so every streaming reply would pin a pooled connection for its
 whole length); live replies across tabs (a reply generated apart from its
 request, streamed to any subscriber) — other tabs see a reply after a reload.
+
+## Addendum (2026-10-27) — the server owns the turn
+
+A reply no longer ends with its request. The chat route claims the turn,
+loads the history and starts the reply as an `asyncio` task in the API
+process (`apps/api/turns.py`) before it returns the response; a module-level
+registry holds the task until it finishes. The request only listens: it
+sends the prelude, forwards the task's events, and ends with `[DONE]` or the
+`reply_failed` frame. A listener that disconnects detaches and the task
+carries on, so a user who closes the tab, locks the phone or loses the
+network comes back to the whole reply. This replaces the previous addendum's
+"errors and disconnects save and release in the stream's `finally`": nothing
+in the listener saves or releases.
+
+A stored reply is always complete. The task owns the end of the turn: it
+stops the heartbeat (below) and waits for it, then either saves the reply and
+releases the claim in one transaction, or — on a model error, the 10-minute
+turn deadline, or cancellation at shutdown — stores nothing and releases.
+Only then does it signal its listener, so `[DONE]` still follows the commit.
+Any other fault (the save itself failing) ends the listener with
+`reply_failed`.
+
+The claim is now refreshed while the turn runs, replacing "the claim is never
+refreshed": every 30 seconds a heartbeat moves `streaming_since` to the
+database's `now()` where it still equals the turn's current value, and the
+turn keeps the new value for its release. The two-minute window stays; it now
+bounds only how long a dead process blocks its conversation, not the length
+of a reply. A refresh whose commit lands but whose response is lost leaves
+the turn holding the old value: its release then clears nothing, and the
+conversation reads as replying until the window lapses. Accepted as rare.
+The heartbeat is stopped by an event, never cancelled, so a refresh in flight
+finishes before the release.
+
+The turn deadline exists because of the heartbeat: the SDK client allows a
+600-second timeout and two retries per call, so a stalled provider would
+otherwise keep a claim alive, and every send refused, for up to an hour.
+
+A returning client learns the state from `replying` on the conversation,
+derived on read from the claim against the database clock, in the same
+SELECT as the conversation and before its messages. While it is true the
+client shows "Still answering…" and re-reads every two seconds; the reply
+then appears whole. One listener per turn: a second tab checks back like any
+returning client.
+
+Shutdown: uvicorn waits for open connections before the lifespan's shutdown,
+and a listener stays open until its turn ends, so production runs uvicorn
+with `--timeout-graceful-shutdown 1`; the lifespan then gives in-flight turns
+8 seconds before cancelling them. Both fit compose's 10-second stop window. A
+reply cut by a deploy is released with nothing stored. The lasting fix is two
+API processes rolled one at a time, each draining for as long as it needs;
+nothing here blocks it, since `replying` reads Postgres and the heartbeat
+works across processes.
+
+Rejected: Celery for generation (chat is streamed from the API, never
+queued); re-attaching a returning client to the live stream (needs the events
+shared across requests through Redis pub/sub or a replay buffer, where
+checking back needs one boolean on an existing endpoint — the cost is that a
+returning user sees the reply appear whole); a longer claim window instead
+of the heartbeat (a crashed reply's conversation would stay blocked for that
+whole window).

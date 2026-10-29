@@ -45,9 +45,14 @@ services:
     # any client-sent X-Forwarded-For with the real peer address, so
     # request.client.host — the key the rate limits use — is the visitor and
     # cannot be spoofed from outside.
+    # --timeout-graceful-shutdown 1: an open chat listener stays open until
+    # its reply ends, and uvicorn runs the lifespan's drain only after its
+    # connections close; one second for those plus the 8 s drain fit inside
+    # compose's default 10 s stop window (the replies themselves carry on).
+    # It also cuts an upload in flight during a deploy.
     command: >
       uvicorn apps.api.main:app --host 0.0.0.0 --port 8000 --workers 1
-      --proxy-headers --forwarded-allow-ips=*
+      --proxy-headers --forwarded-allow-ips=* --timeout-graceful-shutdown 1
     # The image has no curl/wget.
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/api/health')"]

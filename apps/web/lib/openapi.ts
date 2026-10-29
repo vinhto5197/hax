@@ -350,6 +350,8 @@ export interface components {
             conversation_id?: string | null;
             /** Model */
             model?: ("claude-haiku-4-5" | "claude-sonnet-4-6" | "claude-opus-4-8") | null;
+            /** Message Id */
+            message_id?: string | null;
         };
         /** ConversationDetailOut */
         ConversationDetailOut: {
@@ -372,6 +374,8 @@ export interface components {
             updated_at: string;
             /** Messages */
             messages: components["schemas"]["MessageOut"][];
+            /** Replying */
+            replying: boolean;
         };
         /** ConversationOut */
         ConversationOut: {
@@ -820,7 +824,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description a reply is already in progress in this conversation */
+            /** @description a reply is already in progress in this conversation, or this message was already sent */
             409: {
                 headers: {
                     [name: string]: unknown;

@@ -9,6 +9,9 @@
 // - default reply: "Hello from the fake model." in three deltas;
 // - a prompt starting with "slow:" streams ten "Slowly streaming reply, part
 //   N. " deltas, 300 ms apart;
+// - a prompt starting with "long:" streams twenty "Long reply, part N. "
+//   deltas, 500 ms apart (about ten seconds), long enough to reload, switch
+//   away or go offline while the reply is certainly still running;
 // - a prompt starting with "fail:" streams "Failing reply, part N. " for N =
 //   1..3, 500 ms apart, then destroys the connection without message_stop,
 //   which the SDK raises on (the API's model-failure path);
@@ -37,6 +40,7 @@ import http from "node:http";
 const PORT = Number(process.env.FAKE_MODEL_PORT ?? 8787);
 const SLOW_DELAY_MS = 300;
 const FAIL_DELAY_MS = 500;
+const LONG_DELAY_MS = 500;
 const SEARCH_FOLLOW_UP_DELAY_MS = 1500;
 const TITLE_DELAY_MS = 2000;
 const SLOW_EMBED_DELAY_MS = 8000;
@@ -124,6 +128,15 @@ function scriptReply(messages) {
         (_, i) => `Slowly streaming reply, part ${i + 1}. `,
       ),
       delayMs: SLOW_DELAY_MS,
+    };
+  }
+  if (prompt.startsWith("long:")) {
+    return {
+      pieces: Array.from(
+        { length: 20 },
+        (_, i) => `Long reply, part ${i + 1}. `,
+      ),
+      delayMs: LONG_DELAY_MS,
     };
   }
   if (prompt.startsWith("fail:")) {

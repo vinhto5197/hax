@@ -29,3 +29,7 @@ class ChatRequest(BaseModel):
     # any model is called. None -> the server's DEFAULT_MODEL (env LLM_MODEL);
     # the web sends null, never "", for Default.
     model: ModelId | None = None
+    # The user message's id, chosen by the client so it can later ask whether
+    # this send reached the server. An id already stored is a duplicate send
+    # (409). None -> the database assigns one.
+    message_id: UUID | None = None
