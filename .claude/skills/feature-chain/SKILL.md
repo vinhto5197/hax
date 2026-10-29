@@ -10,6 +10,7 @@ The chain is `.claude/workflows/feature-chain.js`: a deterministic sequence of a
 ## Preconditions
 
 - The brief is `approved` in `local/features.json` and its `briefSha256` matches `shasum -a 256 local/briefs/<id>/brief.md` (a brief edited after approval is re-approved first).
+- One chain builds one slice (skill `feature-brief`, section Slices): `id` is the slice's (`<id>-<n>`, or `<id>` for a one-slice feature) and `brief` is that slice's brief. Slice n+1 launches from main only after slice n has merged.
 - Postgres and Redis are up (`make infra-up`); the main checkout has `.venv`, `apps/web/node_modules` and `.env`.
 - At most two chains in flight to start (three once two pilots have been measured); two chains that touch the same files are run one after the other.
 

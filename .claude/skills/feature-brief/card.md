@@ -16,7 +16,9 @@ What the maintainer reads and approves: one screen, written for an engineering m
 
 **Decisions for you.** Each with the options and a recommendation, one or two sentences each; "None" when none.
 
-**Size.** Lines of code, a token estimate, wall time, and the review ceiling approval pre-authorizes, on one line.
+**Slices.** "One pull request" or one line per slice in build order: what it delivers on its own and its reviewed lines. Each slice is its own pull request, built after the previous one merges.
+
+**Size.** Reviewed lines (code, test infrastructure, CI, docs) and test lines, a token estimate, wall time, and the review ceiling approval pre-authorizes, on one line; per slice when sliced.
 
 **Design review.** The reviewer's verdict in one line.
 

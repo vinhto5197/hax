@@ -22,7 +22,7 @@ Anything the maintainer might decide differently; tests whose meaning changed; f
 Concepts in this change not yet on the front-loading ledger, two lines each, with an offer to go deeper. "Nothing new" when none.
 
 ## Cost
-Tokens by phase (build, tests, reviews, fixes) and total, wall time, against the brief's estimate.
+Size first: reviewed lines (production code, test infrastructure, CI, infra, docs) and test lines from `git diff --numstat` against main, beside the brief's estimate; more than 1.5× the estimate, or over the 300-line slice limit, is flagged and also named in Your review's first line. Then tokens by phase (build, tests, reviews, fixes) and total, wall time, against the brief's estimate.
 
 ## Your review
 What only the maintainer can judge, as a checklist of a few minutes (skill gate-block, "Your review, on every Show and Ask"): one line on what the machines already proved; then, numbered, what to look at (screenshot paths, a screen to try), the decisions that are genuinely the maintainer's (product behaviour users will notice, scope, a risk to accept, a cost; each with a recommendation; "None" when none), then what the change adds to the stack (new services or containers, dependencies, tables or columns, environment variables, test-only production code; "None" when none), then the technical calls made, listed apart for information only, code worth raising (`file:line` and why) or "no code to read", and the word that ends the review. Written by the chain from its own record; the controller completes it after its own look at the screens, and the chat hand-off leads with it.

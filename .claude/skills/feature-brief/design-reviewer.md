@@ -19,6 +19,10 @@ Argue against the brief. Look for:
   bullet that cannot be implemented as written;
 - what is over-built: a mechanism, column, event or screen the Goal does
   not need, or a second system for state the existing store already owns;
+- what is under-sized: re-estimate the reviewed lines (production code, test
+  infrastructure, CI, infra, docs; not test files) from the files the
+  brief names; a slice over about 300, or a slice that cannot merge and
+  deploy without the next one, is an objection that changes the build;
 - what is left to guessing: any choice an implementer would have to make
   that the UX, Backend, Infra or Interface sections do not settle — name
   each one, because every one becomes a stop-and-report or a surprise in
