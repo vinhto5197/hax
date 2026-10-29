@@ -203,6 +203,23 @@ export class ReplyFailedError extends Error {
   }
 }
 
+// The connection carrying a reply ended or went silent before the reply's
+// end ([DONE] or an error frame). The reply itself runs on in the server,
+// which saves it whole or not at all; the caller checks back on the
+// conversation instead of trusting what streamed. `message` is never user copy.
+export class ConnectionLostError extends Error {
+  constructor() {
+    super("connection_lost");
+    this.name = "ConnectionLostError";
+  }
+}
+
+// Silence this long with nothing received (headers, events or the server's
+// keepalive comments, sent every 15 s while the reply is quiet) is a dead
+// connection: a phone changing networks can leave one open that delivers
+// nothing.
+const SILENCE_LIMIT_MS = 45_000;
+
 // Parsed result of one SSE event — a discriminated union so callers switch on
 // `type`: prelude (conversation), token (chunk), tool-activity note (status),
 // provenance (sources), terminator (done), model failure (error), or
@@ -232,6 +249,7 @@ function isSource(value: unknown): value is Source {
 
 function parseStreamEvent(rawEvent: string): StreamEvent {
   for (const line of rawEvent.split("\n")) {
+    // Also skips SSE comment lines (": keepalive").
     if (!line.startsWith("data:")) continue;
 
     const data = line.slice(5).trim();
@@ -283,65 +301,101 @@ export type StreamHandlers = {
   onSources?: (sources: Source[]) => void;
 };
 
+// Rejects with ConnectionLostError once the response has started and the
+// stream ends without [DONE] or an error frame (a rejected read, EOF, or the
+// silence limit). Before any response, the silence limit aborts the request
+// and the rejection is fetch's own (an AbortError), as for any network failure.
 export async function streamChat(
   prompt: string,
   conversationId: string | null,
   handlers: StreamHandlers,
   model: string | null = null,
+  // The user message's id, chosen here so the caller can later ask whether
+  // the send reached the server; null -> the server assigns one.
+  messageId: string | null = null,
 ): Promise<void> {
-  const response = await apiFetch(`${API_BASE}/api/chat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    // Field names must match ChatRequest (hand-built body, not typed).
-    // model null -> server default.
-    body: JSON.stringify({ prompt, conversation_id: conversationId, model }),
-  });
+  const controller = new AbortController();
+  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+  let silence: ReturnType<typeof setTimeout> | undefined;
+  const armSilence = () => {
+    clearTimeout(silence);
+    silence = setTimeout(() => {
+      if (reader) void reader.cancel().catch(() => {});
+      else controller.abort();
+    }, SILENCE_LIMIT_MS);
+  };
 
-  if (await isDemoLimit(response)) throw new DemoLimitError();
-  if (response.status === 409) {
-    throw new TurnInProgressError(
-      await errorDetail(response, TURN_IN_PROGRESS),
-    );
-  }
-  if (!response.ok) throw new Error(await errorDetail(response));
-  if (!response.body) {
-    throw new Error("Streaming response body is missing.");
-  }
+  armSilence();
+  try {
+    const response = await apiFetch(`${API_BASE}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      // Field names must match ChatRequest (hand-built body, not typed).
+      // model null -> server default.
+      body: JSON.stringify({
+        prompt,
+        conversation_id: conversationId,
+        model,
+        ...(messageId ? { message_id: messageId } : {}),
+      }),
+      signal: controller.signal,
+    });
+    armSilence();
 
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  // Trailing partial event across reads (network reads ignore SSE boundaries).
-  let buffer = "";
-
-  while (true) {
-    const { value, done } = await reader.read();
-    // Transport EOF — the abnormal-finish path; a clean stream exits via [DONE].
-    if (done) break;
-
-    // stream:true holds back a partial multi-byte UTF-8 sequence until the
-    // next read completes it.
-    buffer += decoder.decode(value, { stream: true });
-
-    const events = buffer.split("\n\n");
-    buffer = events.pop() ?? "";
-
-    for (const event of events) {
-      const parsed = parseStreamEvent(event);
-      if (parsed.type === "done") return;
-      // No reader.cancel(): the server ends the stream right after the frame.
-      if (parsed.type === "error") throw new ReplyFailedError(parsed.code);
-      if (parsed.type === "conversation")
-        handlers.onConversationId(parsed.conversationId);
-      if (parsed.type === "chunk") handlers.onChunk(parsed.content);
-      if (parsed.type === "status") handlers.onStatus?.(parsed.status);
-      if (parsed.type === "sources") handlers.onSources?.(parsed.sources);
+    if (await isDemoLimit(response)) throw new DemoLimitError();
+    if (response.status === 409) {
+      throw new TurnInProgressError(
+        await errorDetail(response, TURN_IN_PROGRESS),
+      );
     }
-  }
+    if (!response.ok) throw new Error(await errorDetail(response));
+    if (!response.body) {
+      throw new Error("Streaming response body is missing.");
+    }
 
-  // Salvage a trailing event if the server closed without a final "\n\n".
-  if (buffer.trim()) {
-    const parsed = parseStreamEvent(buffer);
-    if (parsed.type === "error") throw new ReplyFailedError(parsed.code);
-    if (parsed.type === "chunk") handlers.onChunk(parsed.content);
+    reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    // Trailing partial event across reads (network reads ignore SSE
+    // boundaries). Whatever is left in it at EOF is a cut event, never
+    // delivered, except an error frame: the server said the reply failed.
+    let buffer = "";
+
+    while (true) {
+      let chunk: ReadableStreamReadResult<Uint8Array>;
+      try {
+        chunk = await reader.read();
+      } catch {
+        throw new ConnectionLostError();
+      }
+      // EOF before [DONE] or an error frame, the silence limit's cancel
+      // included.
+      if (chunk.done) {
+        const tail = parseStreamEvent(buffer + decoder.decode());
+        if (tail.type === "error") throw new ReplyFailedError(tail.code);
+        throw new ConnectionLostError();
+      }
+      armSilence();
+
+      // stream:true holds back a partial multi-byte UTF-8 sequence until the
+      // next read completes it.
+      buffer += decoder.decode(chunk.value, { stream: true });
+
+      const events = buffer.split("\n\n");
+      buffer = events.pop() ?? "";
+
+      for (const event of events) {
+        const parsed = parseStreamEvent(event);
+        if (parsed.type === "done") return;
+        // No reader.cancel(): the server ends the stream right after the frame.
+        if (parsed.type === "error") throw new ReplyFailedError(parsed.code);
+        if (parsed.type === "conversation")
+          handlers.onConversationId(parsed.conversationId);
+        if (parsed.type === "chunk") handlers.onChunk(parsed.content);
+        if (parsed.type === "status") handlers.onStatus?.(parsed.status);
+        if (parsed.type === "sources") handlers.onSources?.(parsed.sources);
+      }
+    }
+  } finally {
+    clearTimeout(silence);
   }
 }

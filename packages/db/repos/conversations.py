@@ -17,9 +17,9 @@ from sqlalchemy.orm import selectinload
 
 from packages.db.models import Conversation, Message
 
-# A claim older than this counts as free: the claim is never refreshed, so the
-# window must outlast the longest normal reply, and it is all that unlocks a
-# conversation whose replying process died.
+# A claim older than this counts as free. A running turn refreshes its claim
+# well inside the window (refresh_turn), so the window bounds only how long a
+# conversation whose replying process died stays blocked.
 TURN_WINDOW = timedelta(minutes=2)
 
 
@@ -51,6 +51,31 @@ async def get_owned(
     return result.first()
 
 
+async def get_owned_detail(
+    session: AsyncSession, user_id: uuid.UUID, conversation_id: uuid.UUID
+) -> tuple[Conversation, bool] | None:
+    """The owned conversation with its messages, and whether a reply holds a
+    live claim on it; None on an ownership miss.
+
+    `replying` is read in the same SELECT as the conversation row, against
+    the database's now() (claim_turn's clock), and the messages load in a
+    later statement: a reply saved between the two reads shows up as
+    "replying" plus the reply, never as "free with no reply".
+    """
+    replying = func.coalesce(
+        Conversation.streaming_since > func.now() - TURN_WINDOW, False
+    )
+    result = await session.execute(
+        select(Conversation, replying)
+        .where(Conversation.id == conversation_id, Conversation.user_id == user_id)
+        .options(selectinload(Conversation.messages))
+    )
+    row = result.first()
+    if row is None:
+        return None
+    return row[0], bool(row[1])
+
+
 async def create(session: AsyncSession, user_id: uuid.UUID) -> Conversation:
     conversation = Conversation(user_id=user_id)
     session.add(conversation)
@@ -77,10 +102,17 @@ async def add_message(
     role: str,
     content: str,
     sources: list[dict] | None = None,
+    id: uuid.UUID | None = None,
 ) -> None:
+    """`id` None -> the database assigns one. A given id that already exists
+    fails the flush with a unique violation."""
     session.add(
         Message(
-            conversation_id=conversation_id, role=role, content=content, sources=sources
+            id=id,
+            conversation_id=conversation_id,
+            role=role,
+            content=content,
+            sources=sources,
         )
     )
 
@@ -192,3 +224,23 @@ async def release_turn(
         .values(streaming_since=None, updated_at=Conversation.updated_at)
         .execution_options(synchronize_session=False)
     )
+
+
+async def refresh_turn(
+    session: AsyncSession, conversation_id: uuid.UUID, claimed_at: datetime
+) -> datetime | None:
+    """Move the claim to the database's now() if it is still `claimed_at`;
+    the new value, which the turn MUST keep as its token (release_turn and the
+    next refresh compare against it), or None when the claim lapsed and is no
+    longer this turn's. The caller owns the commit."""
+    result = await session.execute(
+        update(Conversation)
+        .where(
+            Conversation.id == conversation_id,
+            Conversation.streaming_since == claimed_at,
+        )
+        .values(streaming_since=func.now(), updated_at=Conversation.updated_at)
+        .returning(Conversation.streaming_since)
+        .execution_options(synchronize_session=False)
+    )
+    return result.scalar_one_or_none()

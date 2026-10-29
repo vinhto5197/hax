@@ -13,6 +13,7 @@ from apps.api.chat_service import (
     release_claim,
 )
 from apps.api.demo import enforce_turn_cap, is_visitor
+from apps.api.turns import start_turn
 from packages.core.agent.harness import DEFAULT_MODEL, stream_completion_agentic
 from packages.core.agent.tools import ToolContext
 from packages.core.demo.prompt import DEMO_SYSTEM_PROMPT
@@ -71,7 +72,10 @@ def member_system(about: str | None) -> str:
     "",
     responses={
         403: {"description": "demo_limit: sign up to continue"},
-        409: {"description": "a reply is already in progress in this conversation"},
+        409: {
+            "description": "a reply is already in progress in this"
+            " conversation, or this message was already sent"
+        },
     },
 )
 async def chat(
@@ -89,10 +93,10 @@ async def chat(
     # Persist the user turn before streaming, so it survives an LLM error and we
     # have a conversation id for the SSE prelude.
     conversation_id, claimed_at = await persist_user_turn(
-        payload.prompt, payload.conversation_id, user.id
+        payload.prompt, payload.conversation_id, user.id, payload.message_id
     )
-    # Until the StreamingResponse exists, event_stream's finally cannot release
-    # the claim; any failure here releases it before propagating.
+    # Until start_turn hands the claim to the turn's task, nothing else can
+    # release it; any failure here releases it before propagating.
     try:
         # Replay prior turns. Retrieval is NOT injected here — the model invokes
         # the search_documents tool itself when the corpus looks relevant.
@@ -114,8 +118,11 @@ async def chat(
         with anyio.CancelScope(shield=True):
             await release_claim(conversation_id, claimed_at)
         raise
+    # Started before the response exists: a client that drops before the
+    # first byte still gets its reply saved.
+    turn = start_turn(event_fn, messages, conversation_id, user.id, claimed_at)
     return StreamingResponse(
-        event_stream(event_fn, messages, conversation_id, user.id, claimed_at),
+        event_stream(turn, conversation_id),
         media_type="text/event-stream",
         headers=SSE_HEADERS,
     )

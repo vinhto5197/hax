@@ -11,6 +11,7 @@ from apps.api.routers.conversations import router as conversations_router
 from apps.api.routers.documents import router as documents_router
 from apps.api.routers.internal_auth import router as internal_auth_router
 from apps.api.routers.profile import router as profile_router
+from apps.api.turns import drain_turns
 from packages.db.session import assert_rls_bound_role
 
 
@@ -20,6 +21,11 @@ async def lifespan(app: FastAPI):
     # silently bypasses RLS.
     await assert_rls_bound_role()
     yield
+    # Uvicorn reaches this only after its graceful-shutdown timeout has cut
+    # open listeners (compose.prod.yml); 1 s for that plus this 8 s drain fit
+    # inside compose's 10 s stop window. A turn still running after the drain
+    # is cancelled: it stores nothing and releases its claim.
+    await drain_turns(8)
 
 
 # Application logs go to stdout; the environment (terminal, docker logs, a log

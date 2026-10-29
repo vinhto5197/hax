@@ -117,7 +117,10 @@ async def current_user(request: Request) -> CurrentUser:
         )
     # Announce identity for this request's DB work (RLS). Each request runs in
     # its own asyncio task with its own context, so no cross-request bleed and
-    # no reset needed; the SSE stream + its finally run in this same task.
+    # no reset needed. A chat reply's save, release and heartbeat run in the
+    # turn task (apps/api/turns.start_turn), which inherits this identity only
+    # because asyncio.create_task copies the caller's context: it MUST be
+    # started from this request's context.
     current_user_id.set(claims.sub)
     return CurrentUser(id=claims.sub, email=claims.email)
 
