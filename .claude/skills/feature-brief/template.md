@@ -4,6 +4,9 @@
 One line: what a user can do afterwards that they cannot do now.
 Then three answers, one line each: who asked for this and how we know; what happens if it is never built; the narrowest version that still answers the demand.
 
+## Slices
+"One slice" when the reviewed lines (production code, test infrastructure, CI, infra, docs; not test files or generated types) are about 300 or fewer. Otherwise one line per slice, in build order: what a user or developer has after it merges, the files it changes, its reviewed-line estimate, and the path of its brief. Each slice merges and deploys on its own.
+
 ## UX
 Where it lives in the app (screen, route, entry point); every screen and state (empty, loading, error, done); copy, verbatim; a mockup or screenshot path whenever the change is visual.
 
@@ -29,7 +32,7 @@ Decisions only the maintainer can make, each with its options and a recommendati
 Journeys by name for every behaviour a browser can observe; unit tests by name for what only a test can stage (a race, an ordering, a mocked boundary); screenshots to capture (which screens, desktop and phone); the CI checks; what counts as evidence of done. A behaviour with neither is named here with the reason.
 
 ## Size and cost
-Estimated changed lines; tokens by phase (build, tests, reviews, fixes); wall time; the adversarial-review ceiling that approval pre-authorizes.
+Estimated changed lines, per file, split into reviewed lines (the slice limit counts these) and test lines; tokens by phase (build, tests, reviews, fixes); wall time; the adversarial-review ceiling that approval pre-authorizes.
 
 ## New to you
 Concepts in this brief not yet on the front-loading ledger, two lines each, with an offer to go deeper. "Nothing new" when none.

@@ -14,15 +14,25 @@ A brief is the complete design of one feature-lane item, written by the orchestr
   `{id, title, state, brief, briefSha256, artifactUrl, worktree, branch, pr, cost: {brief, build, tests, reviews, fixes, total}, updated}`
   with `state` one of `candidate | brief | approved | building | reviewing | blocked | pr | merged`. The orchestrator is the only writer; a chain never edits it.
 - The design reviewer's prompt: `design-reviewer.md` in this directory.
+- A sliced feature: `local/briefs/<id>/brief.md` is the whole design, with its Slices section; each slice has its own brief `local/briefs/<id>-<n>/brief.md` (the template, scoped to that slice, its Interface frozen for that slice alone) and its own ledger entry `<id>-<n>` with `parent: <id>`. One card for the feature, listing the slices. A feature that fits one slice has only `<id>`, as before.
+
+## Slices
+
+Every pull request the lane opens is one the maintainer can review whole. The slice limit: about **300 changed lines the maintainer reads**, meaning production code, test infrastructure (fakes, fixtures, config), CI, infra and docs. Test files (read by name) and generated types are not counted. The plan decides the slicing before the card, never after the build:
+- A feature estimated over the limit is cut into slices, each under it.
+- Each slice merges and deploys on its own, leaving main releasable. A slice that only makes sense with the next one is not a slice.
+- The order is the build order: slice n+1's chain starts from main after slice n has merged.
+- Each slice carries its own journeys and tests, and its own share of the testing map, the ADR and the docs.
+- Slice briefs are written with the feature brief and approved with its card. When a merged slice changes something a later slice's brief relies on, that brief is amended and its line on the card re-approved before its chain starts.
 
 ## Steps
 
 1. **Read.** The backlog item, the code it touches, the tests that cover that code, the ADRs it brushes. Decide the lane: a brief is for a medium item with a design to settle; a small item goes to the nightly queue.
-2. **Write** `local/briefs/<id>/brief.md` from the template. Every section present, in order, with the template's headings. Open decisions ideally empty: a decision the orchestrator can make with evidence is a call under Calls made, with the rejected alternative. The Interface section is frozen: it is what both the implementer and the test writer code against.
+2. **Write** `local/briefs/<id>/brief.md` from the template. Size it first, line by line per file, and slice it when it is over the limit (section Slices above); then write each slice's brief. Every section present, in order, with the template's headings. Open decisions ideally empty: a decision the orchestrator can make with evidence is a call under Calls made, with the rejected alternative. The Interface section is frozen: it is what both the implementer and the test writer code against.
 3. **Design review.** Dispatch a fresh general-purpose agent with `design-reviewer.md`. On `ready`, record the verdict under Calls made and keep any objections worth keeping as calls. On `revise`, check each objection against the code (an objection that does not hold is recorded as refuted, with the reason), change the brief for the ones that hold, record what changed, and dispatch a fresh reviewer on the new version. Repeat until a round returns `ready`: a round whose objections change nothing that gets built. A reviewer told to argue against a design always finds something, so the stop is "nothing that changes the build", not "nothing at all". Four rounds at most (about 85k tokens each); a fourth `revise` goes to the maintainer as an open decision.
 4. **Publish.** Write the card `<id>.md` from the brief (it states only what the brief decides) and publish it as a private artifact titled `<id>` (Markdown is the intended format for a card: this skill asks for it). The brief itself is never handed to the maintainer to read. Add or update the ledger entry: `state: brief`, `artifactUrl`, `briefSha256` from `shasum -a 256 local/briefs/<id>/brief.md`, `updated` now.
 5. **Hand over.** Tell the maintainer the brief is waiting, with the artifact URL and the count of open decisions. The morning digest lists briefs waiting.
-6. **Approval.** The maintainer comments on the artifact or replies in chat. A comment that asks for a change: revise the brief and the card, republish the card to the same URL, update `briefSha256`, answer the comment. "approved" (on the artifact or in chat): set `state: approved`; the chain may start (skill `feature-chain`). Approving the card approves the brief behind it; the hash in the ledger is the brief's version that was approved; the chain refuses a brief whose hash has changed since.
+6. **Approval.** The maintainer comments on the artifact or replies in chat. A comment that asks for a change: revise the brief and the card, republish the card to the same URL, update `briefSha256`, answer the comment. "approved" (on the artifact or in chat): set `state: approved`; the chain may start (skill `feature-chain`). Approving the card approves the brief behind it, and every slice brief; the hash in each ledger entry is the version that was approved; the chain refuses a brief whose hash has changed since.
 
 ## Rules
 
