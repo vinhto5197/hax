@@ -63,7 +63,7 @@ colima start
 # If using Docker Desktop, just open the app
 ```
 
-Start everything (Postgres, Redis, MinIO, Mailpit, FastAPI, Next.js):
+Start everything (Postgres, Redis, RustFS, Mailpit, FastAPI, Next.js):
 
 ```bash
 make dev
@@ -90,7 +90,7 @@ make dev-stop
 Other useful commands:
 
 ```bash
-make infra-logs      # tail Postgres + Redis + MinIO + Mailpit logs
+make infra-logs      # tail Postgres + Redis + RustFS + Mailpit logs
 make infra-clean     # tear down containers AND delete volumes (full reset)
 make infra-psql      # open a psql shell against postgres
 make infra-redis-cli # open a redis-cli shell against redis
@@ -104,11 +104,11 @@ The production box runs `infra/compose/compose.prod.yml` — Caddy in front of
 web + api on one origin, plus the two workers, Redis and a migrate one-shot. Running
 that exact topology on a laptop catches container, proxy and same-origin issues
 before they reach the box. `infra/compose/compose.prod.local.yml` swaps in local
-Postgres, MinIO and Mailpit for RDS, S3 and the SMTP relay.
+Postgres, RustFS and Mailpit for RDS, S3 and the SMTP relay.
 
 1. Create the env file (gitignored) from the template, with local values:
    `cp .env.prod.example infra/compose/.env.local`, then follow the "Local
-   production run" note at its top (postgres/minio/mailpit hostnames,
+   production run" note at its top (postgres/s3/mailpit hostnames,
    `SITE_ADDRESS=localhost`, `https://localhost` origins, fresh
    `openssl rand -base64 32` secrets, your model API keys).
 2. Build and start:
@@ -153,8 +153,8 @@ After a fresh clone, a Docker version bump, or anything else that touches the da
 **Shortcut:** `make infra-verify` runs the equivalent checks non-interactively via [infra/compose/verify.sh](infra/compose/verify.sh). The script uses `docker exec` directly instead of `make infra-psql` / `make infra-redis-cli`, because those open interactive shells (`-it`) which don't work from a script. Same coverage; the breakdown below is the human-friendly form for debugging a specific failure.
 
 1. `make infra-clean` — start from a known-empty state (deletes named volumes).
-2. `make infra-up` — bring the compose services up in the background (postgres, redis, minio, mailpit).
-3. `make infra-ps` — postgres, redis and minio should report `(healthy)` (~20s on cold start); mailpit declares no healthcheck.
+2. `make infra-up` — bring the compose services up in the background (postgres, redis, s3, mailpit).
+3. `make infra-ps` — postgres, redis and s3 should report `(healthy)` (~20s on cold start); mailpit declares no healthcheck.
 4. `make infra-psql`, then `SELECT * FROM pg_extension WHERE extname='vector';` — expect one row (confirms the `vector` extension is loaded). Exit with `\q`.
 5. `make infra-redis-cli`, then `PING` — expect `PONG`. Exit with `exit`.
 6. Confirm host-side connectivity as the owner role `hax` (the URL migrations use, `MIGRATIONS_DATABASE_URL`; the app itself connects as the least-privilege `hax_app`, see `DATABASE_URL` in `.env.example`). With `psql` on the host: `psql postgresql://hax:hax@localhost:5432/hax -c '\dx'`. Without `psql`, via the venv: `.venv/bin/python -c "from sqlalchemy import create_engine, text; print(create_engine('postgresql://hax:hax@localhost:5432/hax').connect().execute(text('SELECT 1')).scalar())"` (expect `1`).
@@ -267,7 +267,7 @@ Check what's running at any time with `make status` (a TCP probe of each service
 | Streaming  | SSE (FastAPI `StreamingResponse`) for chat                         |
 | Async      | Celery + Redis (broker + cache)                                    |
 | Data       | Postgres + pgvector (embeddings)                                   |
-| Storage    | Object storage for uploads — S3 in prod, MinIO in dev (boto3)      |
+| Storage    | Object storage for uploads — S3 in prod, RustFS in dev (boto3)     |
 | Email      | Transactional email — Mailpit (dev), real SMTP relay in prod       |
 | Types      | OpenAPI spec → generated TypeScript (e.g. openapi-typescript)      |
 | Infra      | Docker, Docker Compose                                             |

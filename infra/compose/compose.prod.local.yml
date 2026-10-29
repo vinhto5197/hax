@@ -1,5 +1,5 @@
 # Laptop override for compose.prod.yml: local stand-ins for what the box gets
-# from AWS (Postgres for RDS, MinIO for S3) plus a mail sink. Caddy serves
+# from AWS (Postgres for RDS, RustFS for S3) plus a mail sink. Caddy serves
 # https://localhost with its internal CA — no ACME for a localhost address.
 # Nothing here publishes a port the dev stack uses, so both can run at once.
 services:
@@ -20,11 +20,10 @@ services:
       timeout: 5s
       retries: 10
 
-  minio:
-    image: minio/minio
-    command: server /data --console-address ":9001"
-    environment: { MINIO_ROOT_USER: minioadmin, MINIO_ROOT_PASSWORD: minioadmin }
-    volumes: [prod_local_minio:/data]
+  s3:
+    image: rustfs/rustfs:1.0.1@sha256:1803faef57627e2d9c2e7d89d655d712ddded5389040054987163043fecb6a3c
+    environment: { RUSTFS_ACCESS_KEY: minioadmin, RUSTFS_SECRET_KEY: minioadmin }
+    volumes: [prod_local_s3:/data]
 
   mailpit:
     image: axllent/mailpit:v1.27.0
@@ -39,22 +38,22 @@ services:
     build: { context: ../.., dockerfile: infra/docker/python.Dockerfile }
     depends_on:
       postgres: { condition: service_healthy }
-      minio: { condition: service_started }
+      s3: { condition: service_started }
   worker:
     build: { context: ../.., dockerfile: infra/docker/python.Dockerfile }
     depends_on:
       postgres: { condition: service_healthy }
-      minio: { condition: service_started }
+      s3: { condition: service_started }
       mailpit: { condition: service_started }
   worker-fast:
     build: { context: ../.., dockerfile: infra/docker/python.Dockerfile }
     depends_on:
       postgres: { condition: service_healthy }
-      minio: { condition: service_started }
+      s3: { condition: service_started }
       mailpit: { condition: service_started }
   web:
     build: { context: ../.., dockerfile: infra/docker/web.Dockerfile }
 
 volumes:
   prod_local_pg: {}
-  prod_local_minio: {}
+  prod_local_s3: {}
