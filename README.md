@@ -189,6 +189,7 @@ make migrate-down              # roll back the most recent migration
 ```bash
 make test       # Python: pytest (needs the dev Postgres from `make infra-up`)
 make test-web   # Web: Vitest + React Testing Library, no services needed
+make coverage   # Line coverage: pytest over apps/ and packages/, then Vitest over the web
 make e2e        # Browser journeys: Playwright (Chromium) against an isolated stack
 ```
 
