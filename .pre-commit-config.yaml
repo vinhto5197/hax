@@ -49,3 +49,11 @@ repos:
         language: system
         files: ^apps/web/.*\.(ts|tsx|js|jsx|mjs|mts|json)$
         pass_filenames: false
+      # Screenshots, traces and recordings from test or browser runs are
+      # never committed (the repo is public); the repo tracks no image today.
+      # A deliberate asset gets an `exclude:` path here, reviewed.
+      - id: no-test-artifacts
+        name: no screenshots, traces or recordings
+        entry: test artifacts must not be committed
+        language: fail
+        files: \.(png|jpe?g|gif|webp|webm|mp4|zip|har)$
