@@ -10,7 +10,8 @@ import {
 
 const SLOW_TEXT = "slow: basics journey, the composer while streaming";
 const NO_CONVERSATIONS = "No conversations yet. Start one above.";
-// No worker runs, so every conversation here stays untitled.
+// The fake model refuses every title unless the first message starts with
+// "title:", so every conversation here stays untitled.
 const CONFIRM = `Delete "this conversation"? This can't be undone.`;
 // The non-default ids ModelSelect.tsx offers; the API's allowlist is ModelId
 // in packages/core/schemas/chat.py.
