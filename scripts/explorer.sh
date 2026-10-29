@@ -12,7 +12,7 @@
 #
 # The stack: web :3002, API :8002, database hax_explorer and Redis db 14
 # (both emptied by apps/web/e2e/prepare.py --target explorer), one worker for
-# both queues, dev MinIO (bucket hax-explorer) and dev Mailpit (inbox :8025,
+# both queues, dev S3 stand-in (bucket hax-explorer) and dev Mailpit (inbox :8025,
 # so the persona verifies its signup the way a person would). The model and
 # embedding keys reach the API and worker from the root .env and nothing else
 # does; the explorer agent never sees them.
@@ -60,7 +60,7 @@ check() {
   [[ -d "$root/apps/web/node_modules" ]] || { echo "no apps/web/node_modules (run make sync-web)"; return 1; }
   command -v claude >/dev/null || { echo "the claude CLI is not on PATH"; return 1; }
   local name port name_port
-  for name_port in Postgres:5432 Redis:6379 MinIO:9000 Mailpit:1025; do
+  for name_port in Postgres:5432 Redis:6379 S3:9000 Mailpit:1025; do
     name=${name_port%:*} port=${name_port#*:}
     listening "$port" || { echo "$name :$port is unreachable: start Docker and run make infra-up"; return 1; }
   done

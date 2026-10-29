@@ -206,7 +206,7 @@ this repo. Write prod-level comments only:
 │  └─ db/           Shared Postgres layer: session/engine, models, migrations, repos
 │
 ├─ infra/
-│  ├─ compose/      compose.dev.yml (Postgres, Redis, MinIO, Mailpit for local dev), compose.prod.yml (+ the laptop override), Caddyfile
+│  ├─ compose/      compose.dev.yml (Postgres, Redis, RustFS for S3, Mailpit for local dev), compose.prod.yml (+ the laptop override), Caddyfile
 │  ├─ docker/       python.Dockerfile (api, worker, migrate) and web.Dockerfile
 │  ├─ terraform/    EC2 box, RDS, S3, IAM, remote state (bootstrap/); rds-bootstrap.sql; runbook
 │  └─ deploy/       deploy.sh: build → push to GHCR by sha → roll the box over SSM; runbook

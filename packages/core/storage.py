@@ -1,6 +1,6 @@
-"""Object storage (S3 / MinIO) for raw uploaded files.
+"""Object storage (S3, or an S3-compatible stand-in in dev) for raw uploaded files.
 
-``S3_ENDPOINT_URL`` points at MinIO in dev and is unset in prod (real AWS S3) —
+``S3_ENDPOINT_URL`` points at the dev stand-in and is unset in prod (real AWS S3) —
 one code path, swapped endpoint. boto3 is synchronous: async callers must
 offload with ``asyncio.to_thread``.
 """
@@ -11,12 +11,12 @@ import boto3
 from botocore.exceptions import ClientError
 
 S3_BUCKET = os.getenv("S3_BUCKET", "hax-documents")
-# Unset in prod -> boto3 talks to real AWS S3; set to MinIO's URL in dev.
+# Unset in prod -> boto3 talks to real AWS S3; set to the dev stand-in's URL.
 _ENDPOINT_URL = os.getenv("S3_ENDPOINT_URL") or None
 _REGION = os.getenv("S3_REGION", "us-east-1")
-# Dev-only static keys (MinIO). Deliberately not the AWS_* names: those are
+# Dev-only static keys (the stand-in). Deliberately not the AWS_* names: those are
 # read by every AWS tool run from the repo's shell (Terraform, the CLI), and
-# MinIO's throwaway keys would shadow the real account. Unset in prod, so
+# the stand-in's throwaway keys would shadow the real account. Unset in prod, so
 # boto3 falls through to the instance role.
 _ACCESS_KEY = os.getenv("S3_ACCESS_KEY_ID") or None
 _SECRET_KEY = os.getenv("S3_SECRET_ACCESS_KEY") or None
@@ -51,7 +51,7 @@ def _get_client():
 
 
 def _ensure_bucket() -> None:
-    """Create the bucket if it's missing (idempotent), so dev/MinIO works with no
+    """Create the bucket if it's missing (idempotent), so the dev stand-in works with no
     manual provisioning. In prod the bucket is provisioned by Terraform, but the
     head-then-create is harmless (head succeeds → no-op)."""
     global _bucket_ready
@@ -64,9 +64,9 @@ def _ensure_bucket() -> None:
         # Only a 404 means "create it"; a 403 (bad creds) must propagate.
         if e.response["ResponseMetadata"]["HTTPStatusCode"] != 404:
             raise
-        # No CreateBucketConfiguration -> only valid for us-east-1/MinIO (other
-        # regions 400 without a LocationConstraint). Fine: prod buckets are
-        # Terraform-provisioned, so this create never runs there.
+        # No CreateBucketConfiguration -> only valid for us-east-1 and the
+        # stand-in (other regions 400 without a LocationConstraint). Fine: prod
+        # buckets are Terraform-provisioned, so this create never runs there.
         try:
             client.create_bucket(Bucket=S3_BUCKET)
         except ClientError as create_error:

@@ -149,3 +149,27 @@ Redis volume).
 - The web image build fetches three typefaces from Google Fonts at
   `next build` (ADR 0014), so a font-host outage fails a deploy at the build
   step; the fallback there is vendoring the files behind `next/font/local`.
+
+## Addendum (2026-10-29): RustFS replaces MinIO as the S3 stand-in
+
+- MinIO stopped publishing community images in October 2025, removed
+  `minio/minio` from Docker Hub in September 2026, and quay.io stopped
+  anonymous pulls the same month. A fresh clone could no longer start the
+  dev stack, and CI could not add object storage. The dev and laptop-prod
+  stand-in is now RustFS (Apache-2.0, S3-compatible), pinned by version and
+  digest in both compose files; production is unchanged (real S3).
+- Checked before the swap: `packages/core/storage.py` uses only head/create
+  bucket and put/get/delete object, and each works against RustFS 1.0.1,
+  including `StorageKeyNotFound` on a missing key and a refused wrong secret;
+  the upload journeys ingest end to end with it. One difference: creating a
+  bucket that already exists succeeds instead of answering
+  `BucketAlreadyOwnedByYou`, which `_ensure_bucket` already treats as done
+  (real S3 in us-east-1 does the same).
+- Rejected: Chainguard's maintained MinIO fork (a drop-in, but its free tier
+  publishes only `latest`, so the project would rest on one vendor's free
+  tier); the frozen last community build from a mirror (never patched, and a
+  mirror can vanish the same way); SeaweedFS and Garage (more setup: a
+  credentials file, or a bootstrap step after start).
+- The service is named `s3`, not after the product, so a future swap is an
+  image change. RustFS has its own web console (`:9001/rustfs/console/`,
+  behind `RUSTFS_CONSOLE_ENABLE`); dev leaves it off for now.

@@ -38,26 +38,26 @@ services:
       timeout: 3s
       retries: 5
 
-  minio:
-    # S3-compatible object storage for raw uploaded files. boto3
+  s3:
+    # S3-compatible object storage for raw uploaded files (RustFS). boto3
     # talks to this in dev and real AWS S3 in prod — same client, swapped
-    # endpoint (the Postgres↔RDS dev/prod-parity pattern).
-    image: minio/minio
-    container_name: hax-minio
+    # endpoint (the Postgres↔RDS dev/prod-parity pattern). Pinned by version
+    # and digest: MinIO's images vanished from the public registries in 2026
+    # (ADR 0013 addendum), so nothing here floats.
+    image: rustfs/rustfs:1.0.1@sha256:1803faef57627e2d9c2e7d89d655d712ddded5389040054987163043fecb6a3c
+    container_name: hax-s3
     environment:
       # Dev root creds — must match S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY in
-      # .env. MinIO requires the password to be >=8 chars.
-      MINIO_ROOT_USER: hax
-      MINIO_ROOT_PASSWORD: haxhaxhax
+      # .env.
+      RUSTFS_ACCESS_KEY: hax
+      RUSTFS_SECRET_KEY: haxhaxhax
     ports:
       # Loopback only — dev object storage, no LAN exposure.
       - "127.0.0.1:9000:9000" # S3 API
-      - "127.0.0.1:9001:9001" # web console (http://localhost:9001)
     volumes:
-      - minio_data:/data
-    command: server /data --console-address ":9001"
+      - s3_data:/data
     healthcheck:
-      test: ["CMD-SHELL", "mc ready local || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/health || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -73,9 +73,9 @@ services:
       - "127.0.0.1:1025:1025" # SMTP
       - "127.0.0.1:8025:8025" # web UI
 
-# Volume names predate the project name and are kept so existing dev data
-# survives; a fresh clone simply creates them under these names.
+# The first two names predate the project name and are kept so existing dev
+# data survives; a fresh clone simply creates them under these names.
 volumes:
   postgres_data: { name: docker-compose_postgres_data }
   redis_data: { name: docker-compose_redis_data }
-  minio_data: { name: docker-compose_minio_data }
+  s3_data: { name: hax_s3_data }
