@@ -111,3 +111,10 @@ crash.log
 
 # Playwright MCP screenshots and snapshots (the assistant's browser)
 .playwright-mcp/
+# A screenshot or trace saved by bare name lands in the repo root
+/*.png
+/*.jpg
+/*.jpeg
+/*.webm
+/*.zip
+/*.har
