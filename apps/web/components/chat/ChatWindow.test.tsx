@@ -6,6 +6,7 @@ import { ChatWindow } from "@/components/chat/ChatWindow";
 // Plain functions reading a mutable value, not vi.fn: the config's mockReset
 // would clear a queued return value before each test.
 let chatError: string | null = null;
+let restoreDraft: string | null = null;
 
 vi.mock("@/components/chat/ConversationsProvider", () => ({
   useConversations: () => ({
@@ -24,12 +25,15 @@ vi.mock("@/hooks/useChat", () => ({
     status: null,
     error: chatError,
     limited: false,
+    stillAnswering: false,
+    restoreDraft,
     send: async () => {},
   }),
 }));
 
 beforeEach(() => {
   chatError = null;
+  restoreDraft = null;
   // jsdom has no layout; auto-scroll calls must not throw.
   Element.prototype.scrollIntoView = () => {};
   Element.prototype.scrollTo = () => {};
@@ -45,5 +49,15 @@ describe("ChatWindow error", () => {
   it("renders no alert without an error", () => {
     render(<ChatWindow conversationId="c1" demo={false} />);
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+});
+
+describe("ChatWindow composer", () => {
+  it("puts the hook's restored draft back into the composer", () => {
+    restoreDraft = "my unsent question";
+    render(<ChatWindow conversationId="c1" demo={false} />);
+    expect(screen.getByRole("textbox", { name: "Message" })).toHaveValue(
+      "my unsent question",
+    );
   });
 });

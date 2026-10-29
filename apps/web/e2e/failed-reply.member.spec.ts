@@ -11,7 +11,7 @@ const BUSY = "A reply is already in progress in this conversation.";
 const DESKTOP = { width: 1280, height: 800 };
 const PHONE = { width: 390, height: 844 };
 
-test("A reply the model breaks off is dropped and reported as interrupted, the user's message stays after a reload, and the conversation takes the next message", async ({
+test("A reply the model breaks off is dropped and reported as interrupted, a reload keeps the user's message and still reports it interrupted, and the conversation takes the next message", async ({
   page,
 }, testInfo) => {
   await page.setViewportSize(DESKTOP);
@@ -50,7 +50,7 @@ test("A reply the model breaks off is dropped and reported as interrupted, the u
   await expect(main.getByText(FAIL_TEXT, { exact: true })).toBeVisible();
   await expect(main.getByText(/Failing reply/)).toHaveCount(0);
   await expect(main.getByText(REPLY, { exact: true })).toHaveCount(0);
-  await expect(interrupted).toHaveCount(0);
+  await expect(interrupted).toBeVisible();
 
   await send(page, RESEND_TEXT);
   await expect(main.getByText(RESEND_TEXT, { exact: true })).toBeVisible();

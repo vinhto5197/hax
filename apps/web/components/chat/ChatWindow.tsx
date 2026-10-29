@@ -90,6 +90,8 @@ function ChatSession({
     status,
     error,
     limited,
+    stillAnswering,
+    restoreDraft,
     send,
   } = useChat(
     conversationId,
@@ -146,6 +148,7 @@ function ChatSession({
         isLoading={isLoading}
         streamingContent={streamingContent}
         status={status}
+        stillAnswering={stillAnswering}
       />
 
       <div className="mx-auto w-full max-w-4xl px-4 pb-6 pt-2">
@@ -156,6 +159,7 @@ function ChatSession({
         ) : null}
         <ChatInput
           onSend={send}
+          draft={restoreDraft}
           disabled={isLoading || limited}
           model={demo ? undefined : model}
           onModelChange={demo ? undefined : setModel}

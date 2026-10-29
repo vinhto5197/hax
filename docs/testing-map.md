@@ -8,7 +8,7 @@ Lanes: **J** a Playwright journey in `apps/web/e2e/` can observe it; **U** only 
 
 What the e2e stack can stage today, and what it cannot:
 
-- The fake model (`apps/web/e2e/fake-model/server.mjs`) has one default reply, the `slow:` prefix, and the `fail:` prefix (a model failure mid-reply: three pieces, then the connection is cut). It emits no tool_use (so no sources), no table, and cannot drop the client's connection. Rows marked **J\*** need a new prefix.
+- The fake model (`apps/web/e2e/fake-model/server.mjs`) has one default reply, the `slow:` prefix, the `long:` prefix (twenty pieces over about ten seconds, long enough to reload, switch away or go offline mid-reply), and the `fail:` prefix (a model failure mid-reply: three pieces, then the connection is cut). It emits no tool_use (so no sources), no table, and cannot drop the client's connection. Rows marked **J\*** need a new prefix.
 - The e2e stack runs no worker and points S3 at an unreachable address, so a document never leaves `pending`. Rows marked **J†** need a worker or a scripted storage.
 
 ## Chat (member)
@@ -36,8 +36,9 @@ What the e2e stack can stage today, and what it cannot:
 | 19 | "Couldn't load this conversation." | useChat.test | – |
 | 20 | 409 "reply in progress": message, refused turn removed, retry works | guard, useChat.test, chatApi.test, py:test_turn_guard | – |
 | 21a | Model error mid-reply: "The reply was interrupted.", no partial, nothing stored, conversation free | `failed-reply.member`, useChat.test, chatApi.test, py:test_failed_reply, py:test_turn_guard | – |
-| 21b | Connection lost mid-reply: error shown, partial kept | useChat.test | J\* |
-| 22 | Stream ends without `[DONE]`: no error shown, partial reply looks complete (undecided behaviour) | chatApi.test (delivery), py:test_turn_guard (partial saved) | J\* |
+| 21b | Connection lost mid-reply (or silent for 45 s): no error, the partial replaced by "Still answering…", then the whole reply; a message that never arrived: "Your message wasn't sent…" and the text back in the composer | `still-answering.member` (offline), useChat.test, chatApi.test, py:test_server_turn | – |
+| 22 | Stream ends without `[DONE]`: a lost connection (row 21b); the reply finishes on the server and is stored whole, never partial | chatApi.test, useChat.test, py:test_server_turn, py:test_turn_guard | – |
+| 22a | Coming back mid-reply (reload, switching back): the question, "Still answering…" and a disabled composer, then the whole reply; a conversation left free with the user's message last shows "The reply was interrupted." | `still-answering.member` (reload, switch), useChat.test, py:test_server_turn | – |
 | 23 | Model picker has 4 options; the choice travels with the first turn | `chat-basics.member`, chatApi.test, py:test_demo_limits | – |
 | 24 | A 401 signs out to `/login` (or `/` on the landing page) | chatApi.test | – |
 | 25 | 20 000-character cap; composer grows on resize | ChatInput.test | – |

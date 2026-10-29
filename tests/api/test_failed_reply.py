@@ -11,15 +11,15 @@ Every test goes through POST /api/chat with the model scripted by conftest's
 import asyncio
 import json
 import logging
-import traceback
+from datetime import timedelta
 
-import httpx
 import pytest
 from sqlalchemy import text
 
 import apps.api.chat_service as chat_service
 from apps.api import enqueue
-from tests.api.conftest import bearer
+from packages.db.repos import conversations as conversations_repo
+from tests.api.conftest import bearer, wait_for_turns
 from tests.api.factories import make_conversation
 
 FIRST = "what did I upload last week?"
@@ -43,43 +43,6 @@ async def no_enqueue_outlives_its_test():
     yield
     await asyncio.gather(*enqueue._pending, return_exceptions=True)
     await asyncio.sleep(0)
-
-
-@pytest.fixture
-async def raw_client():
-    """A client that returns what the app sent before an exception escaped it,
-    instead of raising; yields (client, escaped) — the escaped exceptions."""
-    from apps.api.main import app
-
-    escaped: list[BaseException] = []
-
-    async def recording(scope, receive, send):
-        try:
-            await app(scope, receive, send)
-        except Exception as exc:
-            escaped.append(exc)
-            raise
-
-    transport = httpx.ASGITransport(app=recording, raise_app_exceptions=False)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
-        yield c, escaped
-
-
-def _saves(monkeypatch, *, failures: int) -> list[str]:
-    """Makes the assistant-turn save (which releases the claim) raise
-    DatabaseDown on its first `failures` calls, then save for real; returns
-    the content each call was given."""
-    calls: list[str] = []
-    real = chat_service.persist_assistant_turn
-
-    async def save(conversation_id, user_id, content, sources=None, *, claimed_at):
-        calls.append(content)
-        if len(calls) <= failures:
-            raise DatabaseDown()
-        await real(conversation_id, user_id, content, sources, claimed_at=claimed_at)
-
-    monkeypatch.setattr(chat_service, "persist_assistant_turn", save)
-    return calls
 
 
 def _frames(body: str) -> list[str]:
@@ -317,38 +280,34 @@ async def test_the_model_is_never_given_two_consecutive_turns_with_the_same_role
     assert _text(given[2]["content"]) == f"{SECOND}\n\n{THIRD}\n\nlast one"
 
 
-async def test_a_failed_release_after_a_model_error_sends_no_reply_failed_and_is_retried(  # noqa: E501 — the name is the behaviour line
-    raw_client, admin_engine, user_a, model_stream, monkeypatch
+async def test_a_failed_release_after_a_model_error_still_ends_with_reply_failed_and_the_claim_lapses_within_turn_window(  # noqa: E501 — the name is the behaviour line
+    client, admin_engine, user_a, model_stream, monkeypatch
 ):
-    client, escaped = raw_client
+    window = timedelta(seconds=1.5)
+    monkeypatch.setattr(conversations_repo, "TURN_WINDOW", window)
     conv = await make_conversation(admin_engine, user_a.id)
     model_stream({"content": "Hello "}, error=ProviderBlewUp(LEAK))
-    saves = _saves(monkeypatch, failures=2)
+    releases: list[object] = []
+
+    async def release(conversation_id, claimed_at):
+        releases.append(conversation_id)
+        raise DatabaseDown()
+
+    monkeypatch.setattr(chat_service, "release_claim", release)
 
     r = await _post(client, user_a, conv, FIRST)
+    await wait_for_turns()
 
     events = _events(r.text)
-    assert FAILED_FRAME not in events
+    assert events[-1] == FAILED_FRAME
     assert DONE not in events
-    assert saves == ["", ""]
-    assert [type(e) for e in escaped] == [DatabaseDown]
-    assert LEAK not in "".join(traceback.format_exception(escaped[0]))
+    assert releases == [conv]
     assert await _messages(admin_engine, conv) == [("user", FIRST)]
+    assert (await _post(client, user_a, conv, SECOND)).status_code == 409
 
+    await asyncio.sleep(window.total_seconds())
+    model_stream({"content": "ok"})
+    r = await _post(client, user_a, conv, SECOND)
 
-async def test_a_fault_saving_a_complete_reply_is_not_reported_as_reply_failed(
-    raw_client, admin_engine, user_a, model_stream, monkeypatch, caplog
-):
-    caplog.set_level(logging.DEBUG)
-    client, escaped = raw_client
-    conv = await make_conversation(admin_engine, user_a.id)
-    model_stream({"content": "Hello "}, {"content": "world."})
-    _saves(monkeypatch, failures=1)
-
-    r = await _post(client, user_a, conv, FIRST)
-
-    events = _events(r.text)
-    assert FAILED_FRAME not in events
-    assert DONE not in events
-    assert [type(e) for e in escaped] == [DatabaseDown]
-    assert "reply failed" not in caplog.text
+    assert r.status_code == 200
+    assert _events(r.text)[-1] == DONE

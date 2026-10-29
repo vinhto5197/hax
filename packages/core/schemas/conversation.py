@@ -40,3 +40,7 @@ class ConversationOut(BaseModel):
 
 class ConversationDetailOut(ConversationOut):
     messages: list[MessageOut]
+    # A reply holds a live claim on the conversation: derived on read from the
+    # claim, never stored. Read before the messages, so a reply saved between
+    # the two reads is already in `messages`.
+    replying: bool

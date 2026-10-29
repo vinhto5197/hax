@@ -2,7 +2,9 @@
 `conversations.streaming_since` with its user message, the reply's save
 clears it, a claim older than the window counts as free, and a second turn
 meanwhile is a 409 that persists nothing. Ownership still answers first: a
-foreign conversation is a 404 and leaves the owner's claim alone.
+foreign conversation is a 404 and leaves the owner's claim alone. The reply
+runs as a turn task (apps/api/turns.py) that owns the save and the release;
+the SSE stream only listens to it, so a listener that leaves ends nothing.
 
 Service calls run with identity announced as a request announces it (RLS is
 on for the app engine); seeds, clock moves and asserts go through
@@ -19,11 +21,11 @@ from sqlalchemy import text
 
 import apps.api.chat_service as chat_service
 import apps.api.routers.chat as chat_router
-from apps.api import enqueue
+from apps.api import enqueue, turns
 from packages.db.repos import conversations as conversations_repo
 from packages.db.session import AsyncSessionLocal
 from packages.db.user_context import current_user_id
-from tests.api.conftest import bearer
+from tests.api.conftest import bearer, wait_for_turns
 from tests.api.factories import make_conversation
 
 PROMPT = "what did I upload?"
@@ -34,6 +36,7 @@ REPLY_FAILED = 'data: {"error": "reply_failed"}\n\n'
 @pytest.fixture(autouse=True)
 async def no_enqueue_outlives_its_test():
     yield
+    await turns.drain_turns(5)
     await asyncio.gather(*enqueue._pending, return_exceptions=True)
     await asyncio.sleep(0)
 
@@ -62,7 +65,7 @@ async def _refused(user, conv) -> int:
 
 
 def _stream_of(*events, error: Exception | None = None):
-    async def stream_fn(messages):
+    async def stream_fn(messages, **kwargs):
         for event in events:
             yield event
         if error is not None:
@@ -71,15 +74,17 @@ def _stream_of(*events, error: Exception | None = None):
     return stream_fn
 
 
-async def _reply(user, conv, claimed_at, stream_fn) -> list[str]:
-    """Consume a whole reply as `user`."""
+def _start(user, conv, claimed_at, stream_fn):
+    """Start the reply's turn as `user`, as the route does."""
     with _identity(user):
-        return [
-            frame
-            async for frame in chat_service.event_stream(
-                stream_fn, [], conv, user.id, claimed_at=claimed_at
-            )
-        ]
+        return turns.start_turn(stream_fn, [], conv, user.id, claimed_at)
+
+
+async def _reply(user, conv, claimed_at, stream_fn) -> list[str]:
+    """Start a turn and consume its whole stream as `user`."""
+    turn = _start(user, conv, claimed_at, stream_fn)
+    with _identity(user):
+        return [frame async for frame in chat_service.event_stream(turn, conv)]
 
 
 async def _streaming_since(admin_engine, conv):
@@ -143,14 +148,9 @@ async def test_the_reply_is_saved_and_the_conversation_freed_before_done_is_sent
 ):
     conv = await make_conversation(admin_engine, user_a.id)
     _, claimed_at = await _turn(user_a, conv)
+    turn = _start(user_a, conv, claimed_at, _stream_of({"content": "done"}))
     with _identity(user_a):
-        gen = chat_service.event_stream(
-            _stream_of({"content": "done"}),
-            [],
-            conv,
-            user_a.id,
-            claimed_at=claimed_at,
-        )
+        gen = chat_service.event_stream(turn, conv)
         async for frame in gen:
             if frame == "data: [DONE]\n\n":
                 break
@@ -175,14 +175,11 @@ async def test_a_failed_reply_frees_the_conversation_and_stores_nothing_before_r
 ):
     conv = await make_conversation(admin_engine, user_a.id)
     _, claimed_at = await _turn(user_a, conv)
+    turn = _start(
+        user_a, conv, claimed_at, _stream_of({"content": "partial"}, error=_ModelDown())
+    )
     with _identity(user_a):
-        gen = chat_service.event_stream(
-            _stream_of({"content": "partial"}, error=_ModelDown()),
-            [],
-            conv,
-            user_a.id,
-            claimed_at=claimed_at,
-        )
+        gen = chat_service.event_stream(turn, conv)
         async for frame in gen:
             if frame == REPLY_FAILED:
                 break
@@ -211,27 +208,32 @@ async def test_a_new_turn_succeeds_after_the_reply_stream_fails(admin_engine, us
     await _turn(user_a, conv)
 
 
-async def test_client_disconnect_persists_the_partial_reply_and_frees_the_conversation(
+async def test_client_disconnect_the_reply_finishes_is_stored_whole_and_frees_the_conversation(  # noqa: E501 — the name is the behaviour line
     admin_engine, user_a
 ):
     conv = await make_conversation(admin_engine, user_a.id)
     _, claimed_at = await _turn(user_a, conv)
+    rest = asyncio.Event()
+
+    async def stream_fn(messages, **kwargs):
+        yield {"content": "he"}
+        await rest.wait()
+        yield {"content": "llo"}
+
+    turn = _start(user_a, conv, claimed_at, stream_fn)
     with _identity(user_a):
-        gen = chat_service.event_stream(
-            _stream_of({"content": "he"}, {"content": "llo"}),
-            [],
-            conv,
-            user_a.id,
-            claimed_at=claimed_at,
-        )
+        gen = chat_service.event_stream(turn, conv)
         async for frame in gen:
             if "he" in frame:
                 break
         await gen.aclose()
 
+    rest.set()
+    await wait_for_turns()
+
     assert await _messages(admin_engine, conv) == [
         ("user", PROMPT),
-        ("assistant", "he"),
+        ("assistant", "hello"),
     ]
     assert await _streaming_since(admin_engine, conv) is None
     await _turn(user_a, conv)

@@ -25,6 +25,7 @@ from sqlalchemy.pool import NullPool
 
 import apps.api.redis_client as redis_client
 import apps.api.routers.chat as chat_router
+from apps.api import turns
 from packages.db import engine
 from packages.db.session import to_async_url
 from packages.db.user_context import current_user_id
@@ -172,15 +173,33 @@ def reset_identity():
     current_user_id.reset(token)
 
 
+# Generous: a scripted turn ends in milliseconds, so reaching this is a hang.
+TURN_WAIT_SECONDS = 10
+
+
+async def wait_for_turns(timeout: float = TURN_WAIT_SECONDS) -> None:
+    """Awaits the end of every turn started so far (apps/api/turns.py), so a
+    test can assert on what a turn stored without sleeping. A turn still
+    running after `timeout` seconds is cancelled by the drain and fails the
+    test, instead of passing on whatever it had not yet written."""
+    loop = asyncio.get_running_loop()
+    started = loop.time()
+    await turns.drain_turns(timeout)
+    assert loop.time() - started < timeout, "a turn outlived wait_for_turns"
+
+
 @pytest.fixture
-def model_stream(monkeypatch):
+async def model_stream(monkeypatch):
     """Scripts the model behind POST /api/chat: `model_stream(*events,
     error=None)` makes the next turns yield `events` (harness events such as
     {"content": "..."}) and then raise `error`, if given. Returns the
     messages the model was given, one deep-copied list per call.
 
     The one place that knows where the route's model stream is patched: when
-    generation moves, this fixture changes and the tests using it do not."""
+    generation moves, this fixture changes and the tests using it do not.
+
+    A turn runs as a task that outlives its request; the teardown drains it
+    so none outlives this test's event loop (or the patched stream)."""
     calls: list[list] = []
 
     def script(*events, error: BaseException | None = None) -> list[list]:
@@ -194,7 +213,8 @@ def model_stream(monkeypatch):
         monkeypatch.setattr(chat_router, "stream_completion_agentic", fake)
         return calls
 
-    return script
+    yield script
+    await turns.drain_turns(TURN_WAIT_SECONDS)
 
 
 @pytest.fixture
