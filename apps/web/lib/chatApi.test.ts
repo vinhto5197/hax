@@ -991,7 +991,11 @@ describe("streamChat lost connection", () => {
 });
 
 describe("error detail from a FastAPI validation array", () => {
-  function failWith(body: string, status = 422, statusText = "Unprocessable Entity"): void {
+  function failWith(
+    body: string,
+    status = 422,
+    statusText = "Unprocessable Entity",
+  ): void {
     respondWith(
       () =>
         new Response(body, {
@@ -1005,27 +1009,43 @@ describe("error detail from a FastAPI validation array", () => {
   it("names the last loc element before the message", async () => {
     const api = await load();
     const detail = [
-      { loc: ["body", "message_id"], msg: "Input should be a valid UUID", type: "uuid_parsing" },
+      {
+        loc: ["body", "message_id"],
+        msg: "Input should be a valid UUID",
+        type: "uuid_parsing",
+      },
     ];
     failWith(JSON.stringify({ detail }));
     const err = await api.deleteConversation("c1").catch((e: unknown) => e);
-    expect((err as Error).message).toBe("message_id: Input should be a valid UUID");
+    expect((err as Error).message).toBe(
+      "message_id: Input should be a valid UUID",
+    );
   });
 
   it("joins several items with '; ' in order, a one-element loc giving the bare message", async () => {
     const api = await load();
     const detail = [
       { loc: ["body"], msg: "Field required", type: "missing" },
-      { loc: ["query", "limit"], msg: "Input should be a valid integer", type: "int_parsing" },
+      {
+        loc: ["query", "limit"],
+        msg: "Input should be a valid integer",
+        type: "int_parsing",
+      },
     ];
     failWith(JSON.stringify({ detail }));
     const err = await api.deleteDocument("d1").catch((e: unknown) => e);
-    expect((err as Error).message).toBe("Field required; limit: Input should be a valid integer");
+    expect((err as Error).message).toBe(
+      "Field required; limit: Input should be a valid integer",
+    );
   });
 
   it("keeps a string detail unchanged", async () => {
     const api = await load();
-    failWith(JSON.stringify({ detail: "Document is processing" }), 409, "Conflict");
+    failWith(
+      JSON.stringify({ detail: "Document is processing" }),
+      409,
+      "Conflict",
+    );
     const err = await api.deleteDocument("d1").catch((e: unknown) => e);
     expect((err as Error).message).toBe("Document is processing");
   });
