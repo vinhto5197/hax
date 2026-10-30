@@ -247,7 +247,7 @@ describe("uploadDocument", () => {
     );
   });
 
-  it("rejects with the status for a 422 validation array", async () => {
+  it("rejects with the field and message for a 422 validation array", async () => {
     const api = await load();
     respondWith(() =>
       jsonResponse(
@@ -256,7 +256,7 @@ describe("uploadDocument", () => {
       ),
     );
     await expect(api.uploadDocument(new File(["x"], "a.txt"))).rejects.toThrow(
-      "API 422",
+      "file: Field required",
     );
   });
 
@@ -615,7 +615,7 @@ describe("streamChat", () => {
     expect(err).not.toBeInstanceOf(api.TurnInProgressError);
   });
 
-  it("rejects a 422 validation array with the status and status text", async () => {
+  it("rejects a 422 validation array with the field and message", async () => {
     const api = await load();
     respondWith(
       () =>
@@ -634,7 +634,7 @@ describe("streamChat", () => {
       .streamChat("hi", null, handlers())
       .catch((e: unknown) => e);
     expect(err).toBeInstanceOf(Error);
-    expect((err as Error).message).toBe("API 422: Unprocessable Entity");
+    expect((err as Error).message).toBe("prompt: Field required");
     expect(err).not.toBeInstanceOf(api.TurnInProgressError);
   });
 });
@@ -987,5 +987,53 @@ describe("streamChat lost connection", () => {
       ["chunk", "late answer"],
     ]);
     expect(body.cancelled).not.toHaveBeenCalled();
+  });
+});
+
+describe("error detail from a FastAPI validation array", () => {
+  function failWith(body: string, status = 422, statusText = "Unprocessable Entity"): void {
+    respondWith(
+      () =>
+        new Response(body, {
+          status,
+          statusText,
+          headers: { "Content-Type": "application/json" },
+        }),
+    );
+  }
+
+  it("names the last loc element before the message", async () => {
+    const api = await load();
+    const detail = [
+      { loc: ["body", "message_id"], msg: "Input should be a valid UUID", type: "uuid_parsing" },
+    ];
+    failWith(JSON.stringify({ detail }));
+    const err = await api.deleteConversation("c1").catch((e: unknown) => e);
+    expect((err as Error).message).toBe("message_id: Input should be a valid UUID");
+  });
+
+  it("joins several items with '; ' in order, a one-element loc giving the bare message", async () => {
+    const api = await load();
+    const detail = [
+      { loc: ["body"], msg: "Field required", type: "missing" },
+      { loc: ["query", "limit"], msg: "Input should be a valid integer", type: "int_parsing" },
+    ];
+    failWith(JSON.stringify({ detail }));
+    const err = await api.deleteDocument("d1").catch((e: unknown) => e);
+    expect((err as Error).message).toBe("Field required; limit: Input should be a valid integer");
+  });
+
+  it("keeps a string detail unchanged", async () => {
+    const api = await load();
+    failWith(JSON.stringify({ detail: "Document is processing" }), 409, "Conflict");
+    const err = await api.deleteDocument("d1").catch((e: unknown) => e);
+    expect((err as Error).message).toBe("Document is processing");
+  });
+
+  it("falls back to the status and status text for a non-JSON body", async () => {
+    const api = await load();
+    failWith("<html>nope</html>");
+    const err = await api.deleteConversation("c1").catch((e: unknown) => e);
+    expect((err as Error).message).toBe("API 422: Unprocessable Entity");
   });
 });
