@@ -1,5 +1,12 @@
 import { expect, test, type JSHandle, type Page } from "@playwright/test";
-import { composer, REPLY, startConversation } from "./chat";
+import {
+  composer,
+  openNewChat,
+  REPLY,
+  send,
+  sidebarLink,
+  startConversation,
+} from "./chat";
 
 // A user bubble keeps its line breaks, so one tall turn makes the thread
 // scroll at the default desktop viewport.
@@ -95,4 +102,26 @@ test("the view follows a streaming reply, and scrolling up mid-stream stops it",
   expect(Math.abs(top - releasedAt)).toBeLessThan(3);
   const after = await distanceFromBottom(scroller);
   expect(after).toBeGreaterThan(STICK_THRESHOLD_PX);
+});
+
+test("Sending a message moves its conversation to the top of the sidebar while the reply is still streaming", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  const main = page.getByRole("main");
+  const firstRow = page.getByRole("navigation").getByRole("link").first();
+
+  await page.goto("/chat");
+  const older = await startConversation(page, "Thread journey: the older one");
+  await openNewChat(page);
+  const newer = await startConversation(page, "Thread journey: the newer one");
+  await expect(firstRow).toHaveAttribute("href", newer);
+
+  await sidebarLink(page, older).click();
+  await expect(page).toHaveURL(new RegExp(`${older}$`));
+  await send(page, "long: thread journey, the older one sent again");
+  await expect(main.getByText("Long reply, part 1.")).toBeVisible();
+
+  await expect(firstRow).toHaveAttribute("href", older);
+  await expect(main.getByText("Long reply, part 20.")).toHaveCount(0);
 });

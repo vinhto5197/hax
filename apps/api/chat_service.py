@@ -97,6 +97,10 @@ async def persist_user_turn(
             session, conversation_id, "user", prompt, id=message_id
         )
         try:
+            # Bumps the sidebar order now, not when the reply is saved. Inside
+            # the try: the UPDATE autoflushes the message, so a duplicate id
+            # can fail here as well as at the commit.
+            await conversations_repo.touch(session, conversation_id)
             await session.commit()
         except IntegrityError:
             # The user message is the transaction's only insert that can
