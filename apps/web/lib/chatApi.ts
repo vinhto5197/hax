@@ -76,10 +76,11 @@ export class TurnInProgressError extends Error {
   }
 }
 
-// FastAPI's string `detail`, else `fallback` (the status by default):
-// statusText is empty under HTTP/2 (any TLS-terminating proxy), so a bare
-// status is uninformative. `detail` is a string for HTTPException but an
-// array for 422 validation errors; the array case falls through to `fallback`.
+// FastAPI's `detail`, else `fallback` (the status by default): statusText is
+// empty under HTTP/2 (any TLS-terminating proxy), so a bare status is
+// uninformative. `detail` is a string for HTTPException but an array of
+// {loc, msg} for 422 validation errors, shown as "<field>: <msg>" joined by
+// "; "; an empty or malformed array falls through to `fallback`.
 async function errorDetail(
   response: Response,
   fallback = `API ${response.status}: ${response.statusText}`,
@@ -87,10 +88,23 @@ async function errorDetail(
   try {
     const body = (await response.json()) as { detail?: unknown };
     if (typeof body.detail === "string") return body.detail;
+    const messages = validationMessages(body.detail);
+    if (messages) return messages;
   } catch {
     // non-JSON error body — keep the fallback
   }
   return fallback;
+}
+
+function validationMessages(detail: unknown): string | null {
+  if (!Array.isArray(detail) || detail.length === 0) return null;
+  const parts: string[] = [];
+  for (const item of detail) {
+    const { loc, msg } = (item ?? {}) as { loc?: unknown; msg?: unknown };
+    if (typeof msg !== "string" || !Array.isArray(loc)) return null;
+    parts.push(loc.length > 1 ? `${String(loc[loc.length - 1])}: ${msg}` : msg);
+  }
+  return parts.join("; ");
 }
 
 async function isDemoLimit(response: Response): Promise<boolean> {
