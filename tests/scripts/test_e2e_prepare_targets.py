@@ -46,3 +46,10 @@ def test_an_unknown_target_is_refused():
     prepare = _load()
     with pytest.raises(SystemExit):
         prepare.parse_target(["--target", "hax"])
+
+
+def test_the_journey_stack_needs_mail_and_the_explorer_does_not():
+    prepare = _load()
+    assert prepare.TARGETS["e2e"].needs_mail is True
+    assert prepare.TARGETS["explorer"].needs_mail is False
+    assert prepare.Target.__dataclass_fields__["needs_mail"].default is False
