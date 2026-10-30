@@ -347,9 +347,9 @@ describe("AboutYouDialog focus", () => {
     expect(fireEvent.keyDown(saveButton(), { key: "Tab" })).toBe(false);
     expect(textarea()).toHaveFocus();
 
-    expect(
-      fireEvent.keyDown(textarea(), { key: "Tab", shiftKey: true }),
-    ).toBe(false);
+    expect(fireEvent.keyDown(textarea(), { key: "Tab", shiftKey: true })).toBe(
+      false,
+    );
     expect(saveButton()).toHaveFocus();
   });
 
@@ -361,9 +361,9 @@ describe("AboutYouDialog focus", () => {
     expect(fireEvent.keyDown(cancelButton(), { key: "Tab" })).toBe(false);
     expect(textarea()).toHaveFocus();
 
-    expect(
-      fireEvent.keyDown(textarea(), { key: "Tab", shiftKey: true }),
-    ).toBe(false);
+    expect(fireEvent.keyDown(textarea(), { key: "Tab", shiftKey: true })).toBe(
+      false,
+    );
     expect(cancelButton()).toHaveFocus();
   });
 
@@ -423,4 +423,3 @@ describe("AboutYouDialog focus", () => {
     });
   });
 });
-

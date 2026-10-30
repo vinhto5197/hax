@@ -45,8 +45,7 @@ export function AccountMenu({
   // Queried at key time: "About you" is present only for members.
   function menuItems(): HTMLElement[] {
     return Array.from(
-      menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ??
-        [],
+      menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [],
     );
   }
 
