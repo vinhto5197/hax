@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -126,5 +126,81 @@ describe("AccountMenu", () => {
     open();
     fireEvent.click(item("Sign out")!);
     expect(signOut).toHaveBeenCalledTimes(1);
+  });
+});
+
+function menuItems() {
+  return within(screen.getByRole("menu", { name: "Account" })).getAllByRole(
+    "menuitem",
+  );
+}
+
+describe("AccountMenu keyboard", () => {
+  it("opening by click focuses the first item, About you for a member", async () => {
+    renderMenu();
+    open();
+    const items = menuItems();
+    expect(items[0]).toHaveTextContent("About you");
+    await vi.waitFor(() => expect(items[0]).toHaveFocus());
+  });
+
+  it("opening by click focuses Privacy first when there is no About you", async () => {
+    aboutYou.current = null;
+    renderMenu();
+    open();
+    const items = menuItems();
+    expect(items[0]).toHaveTextContent("Privacy");
+    await vi.waitFor(() => expect(items[0]).toHaveFocus());
+  });
+
+  it("ArrowDown moves to the next item and wraps from last to first", async () => {
+    renderMenu();
+    open();
+    const items = menuItems();
+    await vi.waitFor(() => expect(items[0]).toHaveFocus());
+    fireEvent.keyDown(items[0]!, { key: "ArrowDown" });
+    expect(items[1]).toHaveFocus();
+    fireEvent.keyDown(items[1]!, { key: "ArrowDown" });
+    expect(items[2]).toHaveFocus();
+    fireEvent.keyDown(items[2]!, { key: "ArrowDown" });
+    expect(items[0]).toHaveFocus();
+  });
+
+  it("ArrowUp moves to the previous item and wraps from first to last", async () => {
+    renderMenu();
+    open();
+    const items = menuItems();
+    await vi.waitFor(() => expect(items[0]).toHaveFocus());
+    fireEvent.keyDown(items[0]!, { key: "ArrowUp" });
+    expect(items[2]).toHaveFocus();
+    fireEvent.keyDown(items[2]!, { key: "ArrowUp" });
+    expect(items[1]).toHaveFocus();
+    fireEvent.keyDown(items[1]!, { key: "ArrowUp" });
+    expect(items[0]).toHaveFocus();
+  });
+
+  it("Home focuses the first item and End the last", async () => {
+    renderMenu();
+    open();
+    const items = menuItems();
+    await vi.waitFor(() => expect(items[0]).toHaveFocus());
+    act(() => items[1]!.focus());
+    fireEvent.keyDown(items[1]!, { key: "End" });
+    expect(items[2]).toHaveFocus();
+    fireEvent.keyDown(items[2]!, { key: "Home" });
+    expect(items[0]).toHaveFocus();
+  });
+
+  it("Tab on an item closes the menu without preventing the default", async () => {
+    renderMenu();
+    open();
+    const items = menuItems();
+    await vi.waitFor(() => expect(items[0]).toHaveFocus());
+    act(() => items[1]!.focus());
+    const notPrevented = fireEvent.keyDown(items[1]!, { key: "Tab" });
+    expect(notPrevented).toBe(true);
+    expect(screen.queryByRole("menu")).toBeNull();
+    for (const text of ITEMS) expect(item(text)).toBeNull();
+    expect(accountButton()).toHaveAttribute("aria-expanded", "false");
   });
 });
