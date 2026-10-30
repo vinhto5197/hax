@@ -192,7 +192,7 @@ prod-psql:
 status:
 	@printf "%-14s %-6s %s\n" "service" "port" "status"
 	@printf "%-14s %-6s %s\n" "-------" "----" "------"
-	@for svc in "postgres 5432" "redis 6379" "s3 9000" "mailpit 8025" "api 8000" "web 3000"; do \
+	@for svc in "postgres 5432" "redis 6379" "s3 9000" "mailpit 8025" "mailpit-e2e 8026" "api 8000" "web 3000"; do \
 	  set -- $$svc; name=$$1; port=$$2; \
 	  if nc -z -w1 localhost $$port >/dev/null 2>&1; then st="UP"; else st="down"; fi; \
 	  printf "%-14s %-6s %s\n" "$$name" "$$port" "$$st"; \

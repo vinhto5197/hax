@@ -1,9 +1,9 @@
 import type { APIRequestContext } from "@playwright/test";
 
-// Dev Mailpit (a service container in CI), where the journey stack's
-// SMTP_PORT sends. The inbox is shared with dev mail and every journey that
-// sends, so a message is found by its recipient, never as "the latest".
-const MAILPIT_URL = "http://localhost:8025";
+// The journeys' own Mailpit (mailpit-e2e; a service container in CI), where
+// the journey stack's SMTP_PORT sends. Journeys run in parallel and share it,
+// so a message is found by its recipient, never as "the latest".
+const MAILPIT_URL = "http://localhost:8026";
 // The API builds links from APP_BASE_URL, which playwright.config.ts sets.
 const WEB_URL = "http://localhost:3001";
 const POLL_MS = 500;

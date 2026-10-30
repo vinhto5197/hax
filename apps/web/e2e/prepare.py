@@ -9,9 +9,9 @@ grants the app role, empties every table but the migration ledger, seeds one
 verified member, flushes the Redis db. The `e2e` target also requires the
 dev S3 stand-in (its uploads land in the stand-in's hax-e2e bucket) and never
 empties it: object keys are unique per document and the database is
-truncated, so a leftover object is never referenced. It also requires dev
-Mailpit and deletes every message From the journey stack's sender
-(e2e@example.com) there; dev mail is never touched.
+truncated, so a leftover object is never referenced. It also requires the
+journeys' own Mailpit (mailpit-e2e, :8026) and empties it; dev's inbox is a
+separate container.
 The connection targets are literals, never env: the dev shell exports the
 root .env (direnv), and this script must be unable to reach dev data.
 """
@@ -26,9 +26,7 @@ from pathlib import Path
 
 ADMIN_URL = "postgresql://hax:hax@localhost:5432/postgres"
 S3_HEALTH_URL = "http://localhost:9000/health"
-MAILPIT_URL = "http://localhost:8025"
-# The sender playwright.config.ts gives the journey stack (SMTP_FROM).
-E2E_MAIL_FROM = "e2e@example.com"
+MAILPIT_URL = "http://localhost:8026"
 
 
 @dataclass(frozen=True)
@@ -200,7 +198,6 @@ def check_storage() -> None:
 
 def check_and_clear_mail() -> None:
     import urllib.error
-    import urllib.parse
     import urllib.request
 
     try:
@@ -211,10 +208,7 @@ def check_and_clear_mail() -> None:
     if not ready:
         fail("Mailpit unreachable: run make infra-up")
 
-    query = urllib.parse.urlencode({"query": f"from:{E2E_MAIL_FROM}"})
-    request = urllib.request.Request(
-        f"{MAILPIT_URL}/api/v1/search?{query}", method="DELETE"
-    )
+    request = urllib.request.Request(f"{MAILPIT_URL}/api/v1/messages", method="DELETE")
     try:
         with urllib.request.urlopen(request, timeout=5) as response:
             status = response.status
@@ -224,7 +218,7 @@ def check_and_clear_mail() -> None:
         fail(f"Mailpit cleanup failed ({type(exc).__name__}): run make infra-up")
     if status != 200:
         fail(f"Mailpit cleanup failed ({status}): run make infra-up")
-    print(f"mailpit: cleared mail from {E2E_MAIL_FROM}")
+    print("mailpit-e2e: emptied")
 
 
 def main(argv: list[str]) -> None:
