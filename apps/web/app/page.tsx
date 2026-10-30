@@ -7,12 +7,13 @@ import { signIn } from "next-auth/react";
 import { ChatWindow } from "@/components/chat/ChatWindow";
 import { ConversationsProvider } from "@/components/chat/ConversationsProvider";
 import { NewChat } from "@/components/chat/NewChat";
+import { EvolvingNotice } from "@/components/EvolvingNotice";
 import { Wordmark } from "@/components/Wordmark";
 
 // Example prompts for the visitor; each is answerable from the guest prompt
 // alone (a visitor has no tools).
 const DEMO_CHIPS = [
-  "What database does hax use?",
+  "What database does Hax use?",
   "Can another user see my files?",
   "How are my documents searched?",
 ];
@@ -75,6 +76,7 @@ export default function Home() {
           </Link>
         </nav>
       </header>
+      <EvolvingNotice />
       <div className="grid flex-1">
         <NewChat
           name={null}

@@ -5,7 +5,10 @@ test("/chat with no session redirects to /login", async ({ page }) => {
   await page.goto("/chat");
 
   await expect(page).toHaveURL(/\/login$/);
-  const heading = page.getByRole("heading", { name: "Log in to hax" });
+  const heading = page.getByRole("heading", {
+    name: "Log in to Hax",
+    exact: true,
+  });
   await expect(heading).toBeVisible();
 });
 

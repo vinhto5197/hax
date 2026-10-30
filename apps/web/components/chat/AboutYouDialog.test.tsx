@@ -17,7 +17,7 @@ vi.mock("@/lib/profileApi", async () => {
 });
 
 const HELP =
-  "Tell hax about yourself: what you do, what you know, how you like answers. hax reads this in every conversation.";
+  "Tell Hax about yourself: what you do, what you know, how you like answers. Hax reads this in every conversation.";
 const LOAD_FAILED = "Couldn't load your note. Close and try again.";
 const SAVE_FAILED = "Couldn't save. Try again.";
 const SAVED = "I teach chemistry; keep answers short.";

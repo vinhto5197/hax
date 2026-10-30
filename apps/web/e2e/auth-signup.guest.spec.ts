@@ -50,7 +50,10 @@ test("signup with a short password is stopped before any request", async ({
   const tooShort = () =>
     password.evaluate((el) => (el as HTMLInputElement).validity.tooShort);
   await expect.poll(tooShort).toBe(true);
-  const form = page.getByRole("heading", { name: "Sign up for hax" });
+  const form = page.getByRole("heading", {
+    name: "Sign up for Hax",
+    exact: true,
+  });
   await expect(form).toBeVisible();
   expect(requests).toEqual([]);
 });

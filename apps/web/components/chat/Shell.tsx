@@ -175,7 +175,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <Link
             href="/chat"
             onClick={startNewChat}
-            aria-label="hax home"
+            aria-label="Hax home"
             className="text-ink"
           >
             <Wordmark height={20} />

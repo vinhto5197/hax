@@ -127,10 +127,10 @@ describe("ChatInput auto-grow on resize", () => {
 });
 
 describe("ChatInput placeholder by audience", () => {
-  it("asks a visitor what hax is", () => {
+  it("asks a visitor what Hax is", () => {
     render(<ChatInput onSend={async () => {}} disabled={false} visitor />);
     const textbox = screen.getByRole("textbox", { name: "Message" });
-    expect(textbox).toHaveAttribute("placeholder", "Ask what hax is…");
+    expect(textbox).toHaveAttribute("placeholder", "Ask what Hax is…");
   });
 
   it("asks a member about their documents when visitor is omitted", () => {

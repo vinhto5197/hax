@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ChatInput } from "@/components/chat/ChatInput";
 import { DemoLimitModal } from "@/components/chat/DemoLimitModal";
+import { EvolvingNotice } from "@/components/EvolvingNotice";
 import { useConversations } from "@/components/chat/ConversationsProvider";
 import { MessageList } from "@/components/chat/MessageList";
 import { useChat } from "@/hooks/useChat";
@@ -124,9 +125,10 @@ function ChatSession({
 
   return (
     <div className="flex h-full flex-col">
+      {demo ? <EvolvingNotice /> : null}
       {demo ? (
         <p className="mx-auto w-full max-w-4xl px-4 pt-4 text-small text-ink-3">
-          You&apos;re trying hax as a guest: a few turns, then{" "}
+          You&apos;re trying Hax as a guest: a few turns, then{" "}
           <Link
             href="/signup"
             className="text-accent underline underline-offset-2"

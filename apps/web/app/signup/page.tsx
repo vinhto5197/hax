@@ -98,7 +98,7 @@ export default function SignupPage() {
   }
 
   return (
-    <AuthCard title="Sign up for hax">
+    <AuthCard title="Sign up for Hax">
       <form onSubmit={handleSubmit} className="space-y-3">
         <input
           type="text"

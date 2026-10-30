@@ -1,6 +1,6 @@
 import { PublicHeader } from "@/components/PublicHeader";
 
-export const metadata = { title: "Privacy — hax" };
+export const metadata = { title: "Privacy — Hax" };
 
 // Public (proxy.ts PUBLIC_PREFIXES). Plain statements of what the service stores and who
 // processes it; keep it true when a provider or a data flow changes.
@@ -11,7 +11,7 @@ export default function Privacy() {
       <main className="mx-auto max-w-2xl space-y-6 p-6 text-body leading-relaxed">
         <h1 className="text-title font-semibold">Privacy</h1>
         <p>
-          hax is an open-source chat assistant that answers questions from the
+          Hax is an open-source chat assistant that answers questions from the
           documents you upload. This page says what it stores and who else
           touches that data.
         </p>
@@ -35,7 +35,7 @@ export default function Privacy() {
             cookies.
           </li>
           <li>
-            If you try hax without an account, a guest session cookie and the
+            If you try Hax without an account, a guest session cookie and the
             few messages of that demo, which are deleted after a few days.
           </li>
           <li>
@@ -60,7 +60,7 @@ export default function Privacy() {
           </li>
           <li>Resend delivers verification and password-reset emails.</li>
           <li>
-            Google provides sign-in if you choose it; hax receives only your
+            Google provides sign-in if you choose it; Hax receives only your
             email address, name and profile picture.
           </li>
         </ul>
