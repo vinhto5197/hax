@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AboutYouDialog } from "@/components/chat/AboutYouDialog";
 import type { ProfileOut } from "@/lib/profileApi";
@@ -336,3 +336,91 @@ describe("AboutYouDialog", () => {
     expect(pressEscape()).toBe(false);
   });
 });
+
+describe("AboutYouDialog focus", () => {
+  it("Tab from Save wraps to the textarea and Shift+Tab from the textarea wraps to Save", async () => {
+    await renderLoaded();
+    type(`${SAVED} more`);
+    expect(saveButton()).toBeEnabled();
+
+    act(() => saveButton().focus());
+    expect(fireEvent.keyDown(saveButton(), { key: "Tab" })).toBe(false);
+    expect(textarea()).toHaveFocus();
+
+    expect(
+      fireEvent.keyDown(textarea(), { key: "Tab", shiftKey: true }),
+    ).toBe(false);
+    expect(saveButton()).toHaveFocus();
+  });
+
+  it("skips a disabled Save, so Tab from Cancel wraps to the textarea", async () => {
+    await renderLoaded();
+    expect(saveButton()).toBeDisabled();
+
+    act(() => cancelButton().focus());
+    expect(fireEvent.keyDown(cancelButton(), { key: "Tab" })).toBe(false);
+    expect(textarea()).toHaveFocus();
+
+    expect(
+      fireEvent.keyDown(textarea(), { key: "Tab", shiftKey: true }),
+    ).toBe(false);
+    expect(cancelButton()).toHaveFocus();
+  });
+
+  describe("on close", () => {
+    let outside: HTMLElement[] = [];
+
+    function addAccountButton(visible: boolean) {
+      const button = document.createElement("button");
+      button.setAttribute("aria-label", "Account menu");
+      Object.defineProperty(button, "offsetParent", {
+        configurable: true,
+        get: () => (visible ? document.body : null),
+      });
+      document.body.appendChild(button);
+      outside.push(button);
+      return button;
+    }
+
+    function addMessageBox() {
+      const box = document.createElement("textarea");
+      box.setAttribute("aria-label", "Message");
+      document.body.appendChild(box);
+      outside.push(box);
+      return box;
+    }
+
+    afterEach(() => {
+      for (const el of outside) el.remove();
+      outside = [];
+    });
+
+    async function renderThenUnmount() {
+      getProfile.mockResolvedValueOnce({ about: SAVED });
+      const { unmount } = render(<AboutYouDialog onClose={vi.fn()} />);
+      await vi.waitFor(() => expect(textarea()).toBeEnabled());
+      unmount();
+    }
+
+    it("returns focus to a visible Account menu button", async () => {
+      const button = addAccountButton(true);
+      addMessageBox();
+      await renderThenUnmount();
+      await vi.waitFor(() => expect(document.activeElement).toBe(button));
+    });
+
+    it("falls back to the Message box when there is no Account menu button", async () => {
+      const box = addMessageBox();
+      await renderThenUnmount();
+      await vi.waitFor(() => expect(document.activeElement).toBe(box));
+    });
+
+    it("falls back to the Message box when the Account menu button is hidden", async () => {
+      addAccountButton(false);
+      const box = addMessageBox();
+      await renderThenUnmount();
+      await vi.waitFor(() => expect(document.activeElement).toBe(box));
+    });
+  });
+});
+

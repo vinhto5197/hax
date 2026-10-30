@@ -25,6 +25,7 @@ export function AccountMenu({
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const aboutYou = useAboutYou();
 
   useEffect(() => {
@@ -36,11 +37,44 @@ export function AccountMenu({
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [open]);
 
+  useEffect(() => {
+    if (open) menuItems()[0]?.focus();
+  }, [open]);
+
+  // Queried at key time: "About you" is present only for members.
+  function menuItems(): HTMLElement[] {
+    return Array.from(
+      menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ??
+        [],
+    );
+  }
+
   function onKeyDown(event: React.KeyboardEvent) {
-    if (event.key !== "Escape" || !open) return;
+    if (!open) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setOpen(false);
+      buttonRef.current?.focus();
+      return;
+    }
+    // Not prevented: focus moves on to the next control as usual.
+    if (event.key === "Tab") {
+      setOpen(false);
+      return;
+    }
+    if (!menuRef.current?.contains(event.target as Node)) return;
+    const items = menuItems();
+    if (items.length === 0) return;
+    const current = items.indexOf(document.activeElement as HTMLElement);
+    let next: number;
+    if (event.key === "ArrowDown") next = (current + 1) % items.length;
+    else if (event.key === "ArrowUp")
+      next = (current - 1 + items.length) % items.length;
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = items.length - 1;
+    else return;
     event.preventDefault();
-    setOpen(false);
-    buttonRef.current?.focus();
+    items[next].focus();
   }
 
   return (
@@ -51,6 +85,7 @@ export function AccountMenu({
     >
       {open ? (
         <div
+          ref={menuRef}
           role="menu"
           aria-label="Account"
           className="absolute inset-x-0 bottom-full mb-1 overflow-hidden rounded-card border border-border bg-surface-1 py-1 shadow-lg"
