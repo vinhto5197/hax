@@ -50,10 +50,10 @@ const SERVER_ENV = {
   S3_REGION: "us-east-1",
   S3_ACCESS_KEY_ID: "hax",
   S3_SECRET_ACCESS_KEY: "haxhaxhax",
-  // No journey reads mail: an unroutable port, so the fast worker's sends fail
-  // and retry in its log instead of reaching dev Mailpit.
+  // The journeys' own Mailpit (mailpit-e2e from `make infra-up`, a service
+  // container in CI), which prepare.py empties at the start of a run.
   SMTP_HOST: "localhost",
-  SMTP_PORT: "1",
+  SMTP_PORT: "1026",
   SMTP_FROM: "e2e@example.com",
   SMTP_USER: "",
   SMTP_PASSWORD: "",

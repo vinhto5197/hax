@@ -153,7 +153,7 @@ After a fresh clone, a Docker version bump, or anything else that touches the da
 **Shortcut:** `make infra-verify` runs the equivalent checks non-interactively via [infra/compose/verify.sh](infra/compose/verify.sh). The script uses `docker exec` directly instead of `make infra-psql` / `make infra-redis-cli`, because those open interactive shells (`-it`) which don't work from a script. Same coverage; the breakdown below is the human-friendly form for debugging a specific failure.
 
 1. `make infra-clean` — start from a known-empty state (deletes named volumes).
-2. `make infra-up` — bring the compose services up in the background (postgres, redis, s3, mailpit). The storage console is at http://localhost:9001/rustfs/console/index.html (sign in with `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` from `.env`).
+2. `make infra-up` — bring the compose services up in the background (postgres, redis, s3, mailpit, and mailpit-e2e for the browser journeys). The storage console is at http://localhost:9001/rustfs/console/index.html (sign in with `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` from `.env`).
 3. `make infra-ps` — postgres, redis and s3 should report `(healthy)` (~20s on cold start); mailpit declares no healthcheck.
 4. `make infra-psql`, then `SELECT * FROM pg_extension WHERE extname='vector';` — expect one row (confirms the `vector` extension is loaded). Exit with `\q`.
 5. `make infra-redis-cli`, then `PING` — expect `PONG`. Exit with `exit`.
