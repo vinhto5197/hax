@@ -84,13 +84,15 @@ type UseChatResult = {
 
 // Owns all chat state for the current conversation: transcript, streaming
 // buffer, tool status, loading/error, and send. Optional callbacks report
-// lazy-create and turn-completion so the hook stays decoupled from routing/
-// sidebar concerns. `model` null -> server default (env LLM_MODEL).
+// lazy-create, a saved user turn and turn-completion so the hook stays
+// decoupled from routing/sidebar concerns. `model` null -> server default
+// (env LLM_MODEL).
 export function useChat(
   conversationId: string | null,
   model: string | null,
   onConversationCreated?: (id: string) => void,
   onTurnComplete?: () => void,
+  onTurnStarted?: () => void,
 ): UseChatResult {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -295,6 +297,9 @@ export function useChat(
               setActiveId((current) => current ?? id);
               // Only fires on a new chat's first turn (activeId null only then).
               if (!activeId) onConversationCreated?.(id);
+              // The prelude follows the saved user turn, which moved an
+              // existing conversation to the top of the list.
+              else onTurnStarted?.();
             },
             onChunk: (chunk) => {
               fullContent += chunk;
@@ -392,6 +397,7 @@ export function useChat(
       activeId,
       onConversationCreated,
       onTurnComplete,
+      onTurnStarted,
       startPolling,
     ],
   );

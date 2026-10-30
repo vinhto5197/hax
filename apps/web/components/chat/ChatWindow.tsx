@@ -98,6 +98,7 @@ function ChatSession({
     model || null,
     handleConversationCreated,
     refresh,
+    refresh,
   );
 
   const titled = conversations.some((c) => c.id === createdId && c.title);
