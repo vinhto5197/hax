@@ -174,6 +174,40 @@ test("the sidebar never says No conversations yet while its list is loading", as
   ).toBeVisible();
 });
 
+// The listing is stubbed: this test is about geometry only, and the member's
+// real rows depend on what other files left behind.
+test("conversation delete targets are 44 px square and never overlap a neighbour", async ({
+  page,
+}) => {
+  const rows = [1, 2, 3].map((n) => ({
+    id: `00000000-0000-4000-8000-00000000000${n}`,
+    title: `Stubbed conversation ${n}`,
+    created_at: "2026-10-28T10:00:00Z",
+    updated_at: "2026-10-28T10:00:00Z",
+  }));
+  await page.route("**/api/conversations", (route) =>
+    route.request().method() === "GET"
+      ? route.fulfill({ json: rows })
+      : route.fallback(),
+  );
+  await page.goto("/chat");
+  const targets = page
+    .getByRole("navigation")
+    .getByRole("button", { name: /^Delete Stubbed conversation / });
+  await expect(targets).toHaveCount(3);
+  const boxes = [];
+  for (let i = 0; i < 3; i++) boxes.push(await targets.nth(i).boundingBox());
+  for (const box of boxes) {
+    expect(box!.width).toBeGreaterThanOrEqual(44);
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+  }
+  for (let i = 1; i < 3; i++) {
+    expect(boxes[i]!.y).toBeGreaterThanOrEqual(
+      boxes[i - 1]!.y + boxes[i - 1]!.height,
+    );
+  }
+});
+
 // Last in the file: it empties the member's sidebar, rows other files left
 // behind included.
 test("with every conversation deleted the sidebar says No conversations yet", async ({
