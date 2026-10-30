@@ -69,9 +69,10 @@ export function AboutYouDialog({
         button.focus();
         return;
       }
-      document
-        .querySelector<HTMLElement>('textarea[aria-label="Message"]')
-        ?.focus();
+      const composer = document.querySelector<HTMLElement>(
+        'textarea[aria-label="Message"]',
+      );
+      composer?.focus();
     };
   }, []);
 

@@ -38,7 +38,8 @@ export function AccountMenu({
   }, [open]);
 
   useEffect(() => {
-    if (open) menuItems()[0]?.focus();
+    if (!open) return;
+    menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
   }, [open]);
 
   // Queried at key time: "About you" is present only for members.
