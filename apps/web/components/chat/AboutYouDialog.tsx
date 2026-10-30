@@ -58,6 +58,24 @@ export function AboutYouDialog({
     if (load === "ready") textareaRef.current?.focus();
   }, [load]);
 
+  // Looked up on close, never stored on open: the phone drawer (and the
+  // account button with it) may have closed while the dialog was up.
+  useEffect(() => {
+    return () => {
+      const button = document.querySelector<HTMLElement>(
+        'button[aria-label="Account menu"]',
+      );
+      if (button && button.offsetParent !== null) {
+        button.focus();
+        return;
+      }
+      const composer = document.querySelector<HTMLElement>(
+        'textarea[aria-label="Message"]',
+      );
+      composer?.focus();
+    };
+  }, []);
+
   const trimmed = text.trim();
   const count = Array.from(trimmed).length;
   const canSave =
@@ -90,9 +108,36 @@ export function AboutYouDialog({
   // with it. Stopping propagation would not help: React's own listener sits
   // on the same node as Shell's.
   function onKeyDown(event: React.KeyboardEvent) {
+    if (event.key === "Tab") {
+      trapTab(event);
+      return;
+    }
     if (event.key !== "Escape") return;
     event.preventDefault();
     cancel();
+  }
+
+  // aria-modal does not stop Tab: keep focus cycling inside the panel.
+  function trapTab(event: React.KeyboardEvent) {
+    const focusable = Array.from(
+      panelRef.current?.querySelectorAll<HTMLElement>(
+        "button, textarea, input, select, a[href], [tabindex]:not([tabindex='-1'])",
+      ) ?? [],
+    ).filter((element) => !element.hasAttribute("disabled"));
+    if (focusable.length === 0) {
+      event.preventDefault();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    const active = document.activeElement;
+    if (event.shiftKey && (active === first || active === panelRef.current)) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && active === last) {
+      event.preventDefault();
+      first.focus();
+    }
   }
 
   return createPortal(

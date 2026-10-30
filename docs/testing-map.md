@@ -2,9 +2,9 @@
 
 Every user-visible behaviour of the web app, and the test that would go red if it regressed. A behaviour change edits this file in the same PR as its test: a new row, or a row's **Pinned by** column.
 
-Swept through: 0cc67f8 — the weekly journeys sweep (`docs/routines/journeys-prompt.md`) checks only the changes after this commit and moves the line in its PR.
+Swept through: 10af3c5 — the weekly journeys sweep (`docs/routines/journeys-prompt.md`) checks only the changes after this commit and moves the line in its PR.
 
-Lanes: **J** a Playwright journey in `apps/web/e2e/` can observe it; **U** only a unit test can stage it (a race, an ordering, a mocked boundary); **L** a person has to look. Journey short names: demo = `demo.guest`, newchat = `new-chat.member`, hist = `history.member`, switch = `switch-mid-stream.member`, guard = `turn-guard.member`, setup = `auth.setup`; the newer journeys go by file stem: `auth-login.guest`, `auth-signup.guest`, `demo-landing.guest`, `routing.guest` and `routing.member`, `chat-basics.member`, `chat-thread.member`, `drawer.member`, `documents-panel.member`, `failed-reply.member`, `still-answering.member`, `about-you.member`, `sources.member`, `rich-replies.member`, `documents-lifecycle.member`. `py:` is a pytest module under `tests/`. A gap is a behaviour no test in its lane pins; a row whose gap is `–` is covered. **Gap** holds only the lane(s) of the gap, or `–`; a note on partial coverage goes in **Pinned by**, in parentheses.
+Lanes: **J** a Playwright journey in `apps/web/e2e/` can observe it; **U** only a unit test can stage it (a race, an ordering, a mocked boundary); **L** a person has to look. Journey short names: demo = `demo.guest`, newchat = `new-chat.member`, hist = `history.member`, switch = `switch-mid-stream.member`, guard = `turn-guard.member`, setup = `auth.setup`; the newer journeys go by file stem: `auth-login.guest`, `auth-signup.guest`, `demo-landing.guest`, `routing.guest` and `routing.member`, `chat-basics.member`, `chat-thread.member`, `drawer.member`, `documents-panel.member`, `failed-reply.member`, `still-answering.member`, `about-you.member`, `sources.member`, `rich-replies.member`, `documents-lifecycle.member`, `model-hint.member`, `shell-short.member`, `google-button.guest`. `py:` is a pytest module under `tests/`. A gap is a behaviour no test in its lane pins; a row whose gap is `–` is covered. **Gap** holds only the lane(s) of the gap, or `–`; a note on partial coverage goes in **Pinned by**, in parentheses.
 
 What the e2e stack can stage today, and what it cannot:
 
@@ -44,7 +44,7 @@ What the e2e stack can stage today, and what it cannot:
 | 25 | 20 000-character cap; composer grows on resize | ChatInput.test | – |
 | 26 | Sidebar refresh keeps the latest list | ConversationsProvider.test | – |
 | 27 | Error line is `role=alert` | ChatWindow.test | – |
-| 67 | Each model option carries a one-line hint; the chosen option's hint shows beside the picker (a caption below it on a phone) | ModelSelect.test | J |
+| 67 | Each model option carries a one-line hint; the chosen option's hint shows beside the picker (a caption below it on a phone) | `model-hint.member`, ModelSelect.test | – |
 | 68 | Empty composer reads "What's up?" for a member and "Ask what hax is…" for a visitor | `new-chat.member`, `demo-landing.guest`, ChatInput.test | – |
 
 ## Demo and routing
@@ -77,20 +77,21 @@ What the e2e stack can stage today, and what it cannot:
 
 | # | Behaviour | Pinned by | Gap |
 |---|---|---|---|
-| 43 | Phone (<48 rem wide or ≤500 px tall): top bar with menu, logo, +; no fixed sidebar | `drawer.member` (narrow; short landscape: J) | – |
+| 43 | Phone (<48 rem wide or ≤500 px tall): top bar with menu, logo, +; no fixed sidebar | `drawer.member` (narrow), `shell-short.member` (short landscape) | – |
 | 44 | Drawer backdrop out of the Tab order; tapping it closes the drawer | Shell.test | – |
 | 45 | Drawer: Escape closes; focus moves in and back; page behind inert and unscrollable; closes on navigation | `drawer.member` | – |
 | 46 | Drawer closes when the window becomes desktop width | `drawer.member` | – |
 | 47 | "Show in panel" on a phone opens the drawer and reveals the row | `sources.member` | – |
 | 48 | Account name and email; Sign out goes to `/` | `routing.member` | – |
 | 49 | Active row highlight | none | L |
-| 77 | Sending a message moves its conversation to the top of the sidebar at once, while the reply streams; a refused (duplicate) send leaves the order alone | `chat-thread.member`, py:test_turn_guard | – |
+| 78 | Sending a message moves its conversation to the top of the sidebar at once, while the reply streams; a refused (duplicate) send leaves the order alone | `chat-thread.member`, py:test_turn_guard | – |
 | 70 | The account row is a button "Account menu" that opens About you, Privacy, Sign out (in that order); Escape or a click outside closes it; Privacy goes to `/privacy`, which names the note | `about-you.member`, AccountMenu.test | – |
 | 71 | About you dialog: help line, "N / 1000" counting code points of the trimmed text; Save disabled while unchanged or over 1000; saving closes it; clearing and saving removes the note | `about-you.member`, AboutYouDialog.test, py:test_profile | – |
 | 72 | Dialog errors: textarea and Save disabled until the note loads; the load-failure line; a failed save (a 422 included) keeps the dialog open with "Couldn't save. Try again."; a save in flight leaves Cancel and Escape inert | AboutYouDialog.test, py:test_profile (422) | – |
 | 73 | The saved note is in the dialog after a reload | `about-you.member`, py:test_profile | – |
 | 74 | Phone: the menu opens inside the drawer; the dialog fills the width less the gutter; Escape closes only the menu or the dialog; a backdrop tap does nothing and leaves focus in the dialog; saving keeps the drawer open | `about-you.member`, AboutYouDialog.test, Shell.test | – |
 | 75 | The dialog and its text survive a resize across the breakpoint and a remount of the sidebar; it closes when the signed-in member changes, and a save under another member's cookie does not go out | `about-you.member` (resize), AboutYouProvider.test, Shell.test (route change: no journey can open the dialog in time) | – |
+| 77 | Delete targets (conversation and document rows) are at least 44 px wide, conversation ones 44 px tall, and never overlap a neighbour; AA contrast at rest | `chat-basics.member`, `documents-panel.member` (the contrast: L) | – |
 
 ## Auth
 
@@ -105,7 +106,7 @@ What the e2e stack can stage today, and what it cannot:
 | 56 | Forgot password: same panel whatever the email; error messages | `auth-signup.guest`, py:test_password_reset | – |
 | 57 | Reset: "Checking your link…", invalid view, validation, success → `/chat` | `auth-signup.guest` (checking, invalid view), py:test_password_reset (validation, success; fixme: needs a real reset token) | J |
 | 58 | Reset succeeds but sign-in fails → `/login?reset=1` | none | U |
-| 59 | Google button shows "Redirecting…" | none (logo: L) | J |
+| 59 | Google button shows "Redirecting…" | `google-button.guest` (the logo's look: L) | – |
 | 60 | Password Show/Hide | `auth-login.guest` | – |
 | 61 | Resend status messages | `auth-login.guest` (sent), useResend.test, authApi.test | – |
 | 76 | A write signed in by the cookie from a page that is not hax's own is refused (403); hax's own pages write as before | py:test_cross_site_writes (every member journey writes through the check; a refusal needs a sibling-subdomain page, which the e2e stack cannot serve) | – |
@@ -124,4 +125,4 @@ What the e2e stack can stage today, and what it cannot:
 
 Produced by `python scripts/testing_map_counts.py` from the tables above; rerun it after editing a row and paste its output here.
 
-79 behaviours; 68 covered; 11 gaps: J 7 (J\* 2, J† 0), U 2, L 2.
+80 behaviours; 71 covered; 9 gaps: J 5 (J\* 2, J† 0), U 2, L 2.
