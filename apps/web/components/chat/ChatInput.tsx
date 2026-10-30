@@ -116,7 +116,7 @@ export function ChatInput({
         ref={inputRef}
         rows={1}
         className="block max-h-[40vh] w-full resize-none bg-transparent py-1.5 pr-1 pl-2 text-body text-ink outline-hidden"
-        placeholder={visitor ? "Ask what hax is…" : "What's up?"}
+        placeholder={visitor ? "Ask what Hax is…" : "What's up?"}
         aria-label="Message"
         maxLength={PROMPT_MAX_LENGTH}
         value={input}

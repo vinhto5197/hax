@@ -17,21 +17,21 @@ _IGNORE = "If you didn't request this, you can ignore this email."
 _TEMPLATES: dict[str, tuple[str, str, tuple[str, ...]]] = {
     # name: (subject, text body with {params}, required params)
     "verify_email": (
-        "Verify your hax email",
-        "Confirm this address to finish setting up your hax account:\n\n{link}\n\n"
-        "The link expires in 24 hours. If you didn't sign up for hax, don't "
+        "Verify your Hax email",
+        "Confirm this address to finish setting up your Hax account:\n\n{link}\n\n"
+        "The link expires in 24 hours. If you didn't sign up for Hax, don't "
         "confirm — someone may have entered your address by mistake. " + _IGNORE + "\n",
         ("link",),
     ),
     "reset_password": (
-        "Reset your hax password",
-        "Set a new password for your hax account:\n\n{link}\n\n"
+        "Reset your Hax password",
+        "Set a new password for your Hax account:\n\n{link}\n\n"
         "The link expires in 1 hour. " + _IGNORE + "\n",
         ("link",),
     ),
     "account_exists": (
-        "You already have a hax account",
-        "Someone tried to sign up for hax with this address, but an account "
+        "You already have a Hax account",
+        "Someone tried to sign up for Hax with this address, but an account "
         "already exists.\n\nLog in: {login_url}\nForgot your password, or signed "
         "up with Google and want to add one: {reset_url}\n\n" + _IGNORE + "\n",
         ("login_url", "reset_url"),

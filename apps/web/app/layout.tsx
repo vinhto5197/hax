@@ -30,7 +30,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "hax",
+  title: "Hax",
   description: "AI-first chat over your data",
 };
 

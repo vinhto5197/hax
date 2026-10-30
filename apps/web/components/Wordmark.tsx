@@ -11,7 +11,7 @@ export function Wordmark({
   return (
     <svg
       role="img"
-      aria-label="hax"
+      aria-label="Hax"
       viewBox="-6 -6 256 112"
       width={(height * 256) / 112}
       height={height}

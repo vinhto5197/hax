@@ -164,8 +164,8 @@ export function AboutYouDialog({
           About you
         </h2>
         <p className="text-body text-ink-2">
-          Tell hax about yourself: what you do, what you know, how you like
-          answers. hax reads this in every conversation.
+          Tell Hax about yourself: what you do, what you know, how you like
+          answers. Hax reads this in every conversation.
         </p>
         <textarea
           ref={textareaRef}

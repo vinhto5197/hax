@@ -48,18 +48,21 @@ export function NewChat({
 
   return (
     // Two equal halves: the greeting sits at the bottom of the upper one, so
-    // its baseline is the vertical centre whatever follows it.
+    // its baseline is the vertical centre whatever follows it. A visitor gets
+    // no greeting: the blurb under it is what tells them what Hax is.
     <div className="mx-auto flex h-full w-full max-w-4xl flex-col p-4">
       <div className="flex flex-1 flex-col justify-end pb-4">
-        <h1 className="text-center font-serif text-display text-ink">
-          {mounted ? greeting : "\u00a0"}
-        </h1>
+        {visitor ? null : (
+          <h1 className="text-center font-serif text-display text-ink">
+            {mounted ? greeting : "\u00a0"}
+          </h1>
+        )}
       </div>
       <div className="flex flex-1 flex-col gap-4">
         {visitor ? (
           <p className="text-center text-lead text-ink-2">
-            hax is a chat that answers from your own documents. Try it without
-            an account: ask about hax itself.
+            Hax is a chat that answers from your own documents. Try it without
+            an account: ask about Hax itself.
           </p>
         ) : null}
         {visitor ? (

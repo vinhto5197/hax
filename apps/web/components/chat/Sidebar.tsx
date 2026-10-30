@@ -68,7 +68,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             startNewChat();
             onNavigate?.();
           }}
-          aria-label="hax home"
+          aria-label="Hax home"
           className="text-ink"
         >
           <Wordmark />

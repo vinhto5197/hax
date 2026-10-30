@@ -45,13 +45,16 @@ What the e2e stack can stage today, and what it cannot:
 | 26 | Sidebar refresh keeps the latest list | ConversationsProvider.test | – |
 | 27 | Error line is `role=alert` | ChatWindow.test | – |
 | 67 | Each model option carries a one-line hint; the chosen option's hint shows beside the picker (a caption below it on a phone) | `model-hint.member`, ModelSelect.test | – |
-| 68 | Empty composer reads "What's up?" for a member and "Ask what hax is…" for a visitor | `new-chat.member`, `demo-landing.guest`, ChatInput.test | – |
+| 68 | Empty composer reads "What's up?" for a member and "Ask what Hax is…" for a visitor | `new-chat.member`, `demo-landing.guest`, ChatInput.test | – |
 
 ## Demo and routing
 
 | # | Behaviour | Pinned by | Gap |
 |---|---|---|---|
-| 28 | Landing: greeting, blurb, 3 chips, Log in / Sign up, Privacy | `demo-landing.guest` | – |
+| 28 | Landing: no greeting; blurb, 3 chips, Log in / Sign up, Privacy | `demo-landing.guest` | – |
+| 79 | "Hax is evolving. More specific capabilities coming soon." below the landing's top bar, and above the guest line in the demo chat | `demo-landing.guest` | – |
+| 80 | The product is named "Hax" in all copy (the drawn wordmark aside): pages, emails, both system prompts | `demo-landing.guest`, `routing.guest`, `auth-signup.guest`, `drawer.member`, `about-you.member`, Wordmark.test, py:test_email_templates, py:test_demo_prompt | – |
+| 81 | The guest prompt leads a "can it do X" answer with what needs an account | py:test_demo_prompt (the instruction is present; the model's compliance is an eval case) | – |
 | 29 | Demo runs in place; URL unchanged | demo, `demo-landing.guest` | – |
 | 30 | Clicking a chip sends it | `demo-landing.guest` | – |
 | 31 | Guest banner with links; no model picker | `demo-landing.guest` | – |
@@ -125,4 +128,4 @@ What the e2e stack can stage today, and what it cannot:
 
 Produced by `python scripts/testing_map_counts.py` from the tables above; rerun it after editing a row and paste its output here.
 
-80 behaviours; 71 covered; 9 gaps: J 5 (J\* 2, J† 0), U 2, L 2.
+83 behaviours; 74 covered; 9 gaps: J 5 (J\* 2, J† 0), U 2, L 2.

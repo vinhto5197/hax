@@ -95,7 +95,7 @@ function LoginForm() {
   }
 
   return (
-    <AuthCard title="Log in to hax">
+    <AuthCard title="Log in to Hax">
       {arrivalBanner && (
         <p className="text-small text-status-ready">{arrivalBanner}</p>
       )}
@@ -166,7 +166,7 @@ export default function LoginPage() {
   // useSearchParams requires a Suspense boundary for the build's static pass;
   // the fallback mirrors the real card so the prerendered page isn't blank.
   return (
-    <Suspense fallback={<AuthCard title="Log in to hax">{null}</AuthCard>}>
+    <Suspense fallback={<AuthCard title="Log in to Hax">{null}</AuthCard>}>
       <LoginForm />
     </Suspense>
   );

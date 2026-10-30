@@ -1,3 +1,5 @@
+import re
+
 import pytest
 
 from packages.core.email import templates
@@ -49,3 +51,16 @@ def test_html_escapes_params():
     r = templates.render("verify_email", {"link": "http://a/?t=<b>"})
     assert "<b>" not in r.html and "&lt;b&gt;" in r.html
     assert 'href="http://a/?t=&lt;b&gt;"' in r.html
+
+
+@pytest.mark.parametrize("name", ["verify_email", "reset_password", "account_exists"])
+def test_every_email_names_the_product_hax_capitalized(name):
+    params = {
+        "verify_email": {"link": "http://app/x"},
+        "reset_password": {"link": "http://app/x"},
+        "account_exists": {"login_url": "http://app/l", "reset_url": "http://app/r"},
+    }[name]
+    r = templates.render(name, params)
+    for part in (r.subject, r.text):
+        assert re.search(r"\bhax\b", part) is None
+        assert "Hax" in part

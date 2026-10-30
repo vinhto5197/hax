@@ -28,7 +28,9 @@ test("at phone width the top bar has the menu, the wordmark and +, and no sideba
   await page.goto("/chat");
 
   await expect(menuButton(page)).toBeVisible();
-  await expect(page.getByRole("link", { name: "hax home" })).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Hax home", exact: true }),
+  ).toBeVisible();
   const newChat = page.getByRole("link", { name: "New chat", exact: true });
   await expect(newChat).toBeVisible();
   await expect(page.getByRole("navigation")).toHaveCount(0);

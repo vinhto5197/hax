@@ -10,7 +10,9 @@ test("at 844x480 the top bar has the menu, the wordmark and +, and no sidebar", 
   await page.goto("/chat");
 
   await expect(page.getByRole("button", { name: "Open menu" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "hax home" })).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Hax home", exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByRole("link", { name: "New chat", exact: true }),
   ).toBeVisible();

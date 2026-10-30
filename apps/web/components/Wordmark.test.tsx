@@ -7,5 +7,5 @@ import { Wordmark } from "@/components/Wordmark";
 // transform, the `@/` alias and the jest-dom matchers together.
 it("renders the mark with the product's name as its accessible name", () => {
   render(<Wordmark />);
-  expect(screen.getByRole("img", { name: "hax" })).toBeInTheDocument();
+  expect(screen.getByRole("img", { name: "Hax" })).toBeInTheDocument();
 });

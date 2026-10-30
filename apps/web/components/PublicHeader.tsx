@@ -7,7 +7,7 @@ import { Wordmark } from "@/components/Wordmark";
 export function PublicHeader() {
   return (
     <header className="flex justify-center px-4 py-4">
-      <Link href="/" aria-label="hax home" className="text-ink">
+      <Link href="/" aria-label="Hax home" className="text-ink">
         <Wordmark />
       </Link>
     </header>

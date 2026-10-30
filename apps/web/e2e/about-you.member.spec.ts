@@ -9,7 +9,7 @@ const WEB_ORIGIN = "http://localhost:3001";
 const DESKTOP = { width: 1280, height: 800 };
 const PHONE = { width: 390, height: 844 };
 const HELP =
-  "Tell hax about yourself: what you do, what you know, how you like answers. hax reads this in every conversation.";
+  "Tell Hax about yourself: what you do, what you know, how you like answers. Hax reads this in every conversation.";
 const PRIVACY_NOTE_LINE = "Your note about yourself, if you write one.";
 
 test.beforeEach(async ({ page }) => {
