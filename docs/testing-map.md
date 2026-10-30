@@ -4,12 +4,12 @@ Every user-visible behaviour of the web app, and the test that would go red if i
 
 Swept through: 10af3c5 — the weekly journeys sweep (`docs/routines/journeys-prompt.md`) checks only the changes after this commit and moves the line in its PR.
 
-Lanes: **J** a Playwright journey in `apps/web/e2e/` can observe it; **U** only a unit test can stage it (a race, an ordering, a mocked boundary); **L** a person has to look. Journey short names: demo = `demo.guest`, newchat = `new-chat.member`, hist = `history.member`, switch = `switch-mid-stream.member`, guard = `turn-guard.member`, setup = `auth.setup`; the newer journeys go by file stem: `auth-login.guest`, `auth-signup.guest`, `demo-landing.guest`, `routing.guest` and `routing.member`, `chat-basics.member`, `chat-thread.member`, `drawer.member`, `documents-panel.member`, `failed-reply.member`, `still-answering.member`, `about-you.member`, `sources.member`, `rich-replies.member`, `documents-lifecycle.member`, `model-hint.member`, `shell-short.member`, `google-button.guest`. `py:` is a pytest module under `tests/`. A gap is a behaviour no test in its lane pins; a row whose gap is `–` is covered. **Gap** holds only the lane(s) of the gap, or `–`; a note on partial coverage goes in **Pinned by**, in parentheses.
+Lanes: **J** a Playwright journey in `apps/web/e2e/` can observe it; **U** only a unit test can stage it (a race, an ordering, a mocked boundary); **L** a person has to look. Journey short names: demo = `demo.guest`, newchat = `new-chat.member`, hist = `history.member`, switch = `switch-mid-stream.member`, guard = `turn-guard.member`, setup = `auth.setup`; the newer journeys go by file stem: `auth-login.guest`, `auth-signup.guest`, `demo-landing.guest`, `routing.guest` and `routing.member`, `chat-basics.member`, `chat-thread.member`, `drawer.member`, `documents-panel.member`, `failed-reply.member`, `still-answering.member`, `about-you.member`, `sources.member`, `rich-replies.member`, `documents-lifecycle.member`, `model-hint.member`, `shell-short.member`, `google-button.guest`, `auth-email.guest`. `py:` is a pytest module under `tests/`. A gap is a behaviour no test in its lane pins; a row whose gap is `–` is covered. **Gap** holds only the lane(s) of the gap, or `–`; a note on partial coverage goes in **Pinned by**, in parentheses.
 
 What the e2e stack can stage today, and what it cannot:
 
 - The fake model (`apps/web/e2e/fake-model/server.mjs`) has one default reply and the prefixes `slow:`, `long:` (twenty pieces over about ten seconds, long enough to reload, switch away or go offline mid-reply), `fail:` (a model failure mid-reply: three pieces, then the connection is cut), `search:` (a `search_documents` tool call, then a fixed reply, so sources), `table:` and `code:`; it titles a conversation only when its first message starts with `title:` (every other conversation stays "Untitled"), and it serves Voyage's embeddings (one identical vector for every text, so a search returns the member's chunks in no defined order; an input containing `slow-embed` waits 8 s). It cannot drop the client's connection. Rows marked **J\*** need a new prefix.
-- Two Celery workers (one per queue, solo pool, no beat) and the dev S3 stand-in (bucket `hax-e2e`; a RustFS service container in CI) run with the stack, so documents are ingested end to end; the fast worker's `send_email` sends fail against an unroutable SMTP port and retry in its log, which no journey reads. Uploads are capped at 5 accepted an hour for the one member: `documents-lifecycle.member` makes 3 and `sources.member` 2, each deletes its documents afterwards, and no other journey may make an accepted upload (a sixth is a 429).
+- Two Celery workers (one per queue, solo pool, no beat) and the dev S3 stand-in (bucket `hax-e2e`; a RustFS service container in CI) run with the stack, so documents are ingested end to end; the fast worker's `send_email` sends reach the journeys' own Mailpit (`mailpit-e2e` on :8026 locally, a service container in CI), which `prepare.py` empties at the start of a run, and journeys read the verification and reset links from it (`apps/web/e2e/mail.ts`, by recipient). Uploads are capped at 5 accepted an hour for the one member: `documents-lifecycle.member` makes 3 and `sources.member` 2, each deletes its documents afterwards, and no other journey may make an accepted upload (a sixth is a 429).
 
 ## Chat (member)
 
@@ -105,9 +105,9 @@ What the e2e stack can stage today, and what it cannot:
 | 52 | Unverified-email message and Resend button | `auth-login.guest`, py:test_login_gate, useResend.test | – |
 | 53 | `?error=` messages; `?verified` / `?reset` banners; email prefilled | `auth-login.guest` | – |
 | 54 | Signup: check-your-inbox panel, resend, validation, rate limit | `auth-signup.guest` (rate limit: py:test_signup_flow) | – |
-| 55 | Verify: no token → invalid view; verifies only on Confirm, then `/login?verified=1`; invalid link → resend form | `auth-signup.guest` (invalid paths), py:test_verify_email (the `/login?verified=1` hand-off needs a real token; fixme: tokens never reach a journey) | J |
+| 55 | Verify: no token → invalid view; verifies only on Confirm, then `/login?verified=1`; invalid link → resend form | `auth-signup.guest` (invalid paths), `auth-email.guest`, py:test_verify_email | – |
 | 56 | Forgot password: same panel whatever the email; error messages | `auth-signup.guest`, py:test_password_reset | – |
-| 57 | Reset: "Checking your link…", invalid view, validation, success → `/chat` | `auth-signup.guest` (checking, invalid view), py:test_password_reset (validation, success; fixme: needs a real reset token) | J |
+| 57 | Reset: "Checking your link…", invalid view, validation, success → `/chat` | `auth-signup.guest` (checking, invalid view), `auth-email.guest`, py:test_password_reset (validation) | – |
 | 58 | Reset succeeds but sign-in fails → `/login?reset=1` | none | U |
 | 59 | Google button shows "Redirecting…" | `google-button.guest` (the logo's look: L) | – |
 | 60 | Password Show/Hide | `auth-login.guest` | – |
@@ -128,4 +128,4 @@ What the e2e stack can stage today, and what it cannot:
 
 Produced by `python scripts/testing_map_counts.py` from the tables above; rerun it after editing a row and paste its output here.
 
-83 behaviours; 74 covered; 9 gaps: J 5 (J\* 2, J† 0), U 2, L 2.
+83 behaviours; 76 covered; 7 gaps: J 3 (J\* 2, J† 0), U 2, L 2.

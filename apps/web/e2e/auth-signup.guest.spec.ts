@@ -1,8 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 
 // Every accepted signup and reset request spends a shared per-IP budget (10
-// an hour each in apps/api/routers/auth.py); a 422 is refused before the
-// limiter runs.
+// an hour each in apps/api/routers/auth.py), shared with auth-login.guest and
+// auth-email.guest; a 422 is refused before the limiter runs.
 const INVALID_LINK = "This link is invalid or has expired.";
 const EMAIL_RULE = "Please enter a valid email address.";
 // Passes the browser's type=email check but not the API's EmailStr.
@@ -165,13 +165,3 @@ test("/reset-password with a bad token shows Checking your link, then the invali
   const save = page.getByRole("button", { name: "Save new password" });
   await expect(save).toHaveCount(0);
 });
-
-test.fixme(
-  "reset form validation and success → /chat: needs a real reset token, which never reaches a journey",
-  async () => {},
-);
-
-test.fixme(
-  "verify Confirm with a live token → /login?verified=1: needs a real verify token, which never reaches a journey",
-  async () => {},
-);
