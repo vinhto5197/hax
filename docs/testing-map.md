@@ -84,6 +84,7 @@ What the e2e stack can stage today, and what it cannot:
 | 47 | "Show in panel" on a phone opens the drawer and reveals the row | `sources.member` | – |
 | 48 | Account name and email; Sign out goes to `/` | `routing.member` | – |
 | 49 | Active row highlight | none | L |
+| 78 | Sending a message moves its conversation to the top of the sidebar at once, while the reply streams; a refused (duplicate) send leaves the order alone | `chat-thread.member`, py:test_turn_guard | – |
 | 70 | The account row is a button "Account menu" that opens About you, Privacy, Sign out (in that order); Escape or a click outside closes it; Privacy goes to `/privacy`, which names the note | `about-you.member`, AccountMenu.test | – |
 | 71 | About you dialog: help line, "N / 1000" counting code points of the trimmed text; Save disabled while unchanged or over 1000; saving closes it; clearing and saving removes the note | `about-you.member`, AboutYouDialog.test, py:test_profile | – |
 | 72 | Dialog errors: textarea and Save disabled until the note loads; the load-failure line; a failed save (a 422 included) keeps the dialog open with "Couldn't save. Try again."; a save in flight leaves Cancel and Escape inert | AboutYouDialog.test, py:test_profile (422) | – |
@@ -124,4 +125,4 @@ What the e2e stack can stage today, and what it cannot:
 
 Produced by `python scripts/testing_map_counts.py` from the tables above; rerun it after editing a row and paste its output here.
 
-79 behaviours; 70 covered; 9 gaps: J 5 (J\* 2, J† 0), U 2, L 2.
+80 behaviours; 71 covered; 9 gaps: J 5 (J\* 2, J† 0), U 2, L 2.

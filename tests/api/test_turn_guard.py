@@ -13,6 +13,7 @@ admin_engine. Publishes land in conftest's `published` recorder — no broker.
 
 import asyncio
 import contextlib
+import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -426,3 +427,44 @@ async def test_route_refuses_a_turn_while_a_claim_is_held_then_accepts_once_rele
     ok = await client.post("/api/chat", json=body, headers=bearer(user_a))
     assert ok.status_code == 200
     assert await _streaming_since(admin_engine, conv) is None
+
+
+async def test_a_user_turn_moves_its_conversation_to_the_top_before_any_reply(
+    admin_engine, user_a
+):
+    older = await make_conversation(admin_engine, user_a.id)
+    newer = await make_conversation(admin_engine, user_a.id)
+    await _set_updated_at(admin_engine, older, datetime(2020, 1, 1, tzinfo=UTC))
+    await _set_updated_at(admin_engine, newer, datetime(2020, 1, 2, tzinfo=UTC))
+
+    await _turn(user_a, older)
+
+    assert await _updated_at(admin_engine, older) > await _updated_at(
+        admin_engine, newer
+    )
+
+
+async def test_a_duplicate_send_is_refused_and_leaves_updated_at_unchanged(
+    admin_engine, user_a
+):
+    conv = await make_conversation(admin_engine, user_a.id)
+    message_id = uuid.uuid4()
+    with _identity(user_a):
+        _, claimed_at = await chat_service.persist_user_turn(
+            PROMPT, conv, user_a.id, message_id=message_id
+        )
+        await chat_service.release_claim(conv, claimed_at)
+    await _set_updated_at(admin_engine, conv, datetime(2020, 1, 1, tzinfo=UTC))
+    known = await _updated_at(admin_engine, conv)
+
+    with _identity(user_a), pytest.raises(HTTPException) as excinfo:
+        await chat_service.persist_user_turn(
+            PROMPT, conv, user_a.id, message_id=message_id
+        )
+
+    assert (excinfo.value.status_code, excinfo.value.detail) == (
+        BUSY,
+        chat_service.ALREADY_SENT,
+    )
+    assert await _updated_at(admin_engine, conv) == known
+    assert await _messages(admin_engine, conv) == [("user", PROMPT)]
