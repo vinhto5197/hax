@@ -30,3 +30,22 @@ test("the Google button reads Redirecting… and is disabled while sign-in is un
 
   release();
 });
+
+// Without it, Google signs the browser's only Google session straight back in
+// after a logout, and the user cannot switch accounts.
+test("Continue with Google asks Google to show its account chooser", async ({
+  page,
+}) => {
+  let googleUrl: URL | null = null;
+  await page.route(/accounts\.google\.com/, (route) => {
+    googleUrl = new URL(route.request().url());
+    return route.abort();
+  });
+
+  await page.goto("/login");
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+
+  await expect
+    .poll(() => googleUrl?.searchParams.get("prompt"))
+    .toBe("select_account");
+});
