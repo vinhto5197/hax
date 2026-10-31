@@ -33,7 +33,14 @@ export default function Home() {
   async function start(prompt: string) {
     setStarting(true);
     setError(null);
-    const result = await signIn("anonymous", { redirect: false });
+    // signIn rejects (rather than resolving with an error) when its request
+    // fails at the network level; that is a generic failure, not a limit.
+    let result: Awaited<ReturnType<typeof signIn>> | undefined;
+    try {
+      result = await signIn("anonymous", { redirect: false });
+    } catch {
+      result = undefined;
+    }
     if (!result || result.error) {
       setError(
         result?.code === "rate_limited"
