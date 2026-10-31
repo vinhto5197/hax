@@ -8,7 +8,7 @@ Lanes: **J** a Playwright journey in `apps/web/e2e/` can observe it; **U** only 
 
 What the e2e stack can stage today, and what it cannot:
 
-- The fake model (`apps/web/e2e/fake-model/server.mjs`) has one default reply and the prefixes `slow:`, `long:` (twenty pieces over about ten seconds, long enough to reload, switch away or go offline mid-reply), `fail:` (a model failure mid-reply: three pieces, then the connection is cut), `search:` (a `search_documents` tool call, then a fixed reply, so sources), `table:` and `code:`; it titles a conversation only when its first message starts with `title:` (every other conversation stays "Untitled"), and it serves Voyage's embeddings (one identical vector for every text, so a search returns the member's chunks in no defined order; an input containing `slow-embed` waits 8 s). It cannot drop the client's connection. Rows marked **J\*** need a new prefix.
+- The fake model (`apps/web/e2e/fake-model/server.mjs`) has one default reply and the prefixes `slow:`, `long:` (twenty pieces over about ten seconds, long enough to reload, switch away or go offline mid-reply), `fail:` (a model failure mid-reply: three pieces, then the connection is cut), `search:` (a `search_documents` tool call, then a fixed reply, so sources), `table:` and `code:`; it titles a conversation only when its first message starts with `title:` (every other conversation stays "Untitled"), and it serves Voyage's embeddings (one identical vector for every text, so a search returns the member's chunks in no defined order; an input containing `slow-embed` waits 8 s). It cannot drop the client's connection; a journey cuts the page's `/api/chat` stream instead (`apps/web/e2e/network.ts`). Rows marked **J\*** need a new prefix.
 - Two Celery workers (one per queue, solo pool, no beat) and the dev S3 stand-in (bucket `hax-e2e`; a RustFS service container in CI) run with the stack, so documents are ingested end to end; the fast worker's `send_email` sends reach the journeys' own Mailpit (`mailpit-e2e` on :8026 locally, a service container in CI), which `prepare.py` empties at the start of a run, and journeys read the verification and reset links from it (`apps/web/e2e/mail.ts`, by recipient). Uploads are capped at 5 accepted an hour for the one member: `documents-lifecycle.member` makes 3 and `sources.member` 2, each deletes its documents afterwards, and no other journey may make an accepted upload (a sixth is a 429).
 
 ## Chat (member)
@@ -36,8 +36,8 @@ What the e2e stack can stage today, and what it cannot:
 | 19 | "Couldn't load this conversation." | useChat.test | – |
 | 20 | 409 "reply in progress": message, refused turn removed, retry works | guard, useChat.test, chatApi.test, py:test_turn_guard | – |
 | 21a | Model error mid-reply: "The reply was interrupted.", no partial, nothing stored, conversation free | `failed-reply.member`, useChat.test, chatApi.test, py:test_failed_reply, py:test_turn_guard | – |
-| 21b | Connection lost mid-reply (or silent for 45 s): no error, the partial replaced by "Still answering…", then the whole reply; a message that never arrived: "Your message wasn't sent…" and the text back in the composer | useChat.test, chatApi.test, py:test_server_turn (`still-answering.member`'s offline journey is skipped: Chromium cannot cut a body already streaming) | J\* |
-| 22 | Stream ends without `[DONE]`: a lost connection (row 21b); the reply finishes on the server and is stored whole, never partial | chatApi.test, useChat.test, py:test_server_turn, py:test_turn_guard (no journey: the fake model cannot drop the client's connection) | J\* |
+| 21b | Connection lost mid-reply (or silent for 45 s): no error, the partial replaced by "Still answering…", then the whole reply; a message that never arrived: "Your message wasn't sent…" and the text back in the composer | `still-answering.member` (connection cut, never sent), useChat.test, chatApi.test (silence limit), py:test_server_turn | – |
+| 22 | Stream ends without `[DONE]`: a lost connection (row 21b); the reply finishes on the server and is stored whole, never partial | `still-answering.member` (connection cut, then reload), chatApi.test, useChat.test, py:test_server_turn, py:test_turn_guard | – |
 | 22a | Coming back mid-reply (reload, switching back): the question, "Still answering…" and a disabled composer, then the whole reply; a conversation left free with the user's message last shows "The reply was interrupted." | `still-answering.member` (reload, switch), useChat.test, py:test_server_turn | – |
 | 23 | Model picker has 4 options; the choice travels with the first turn | `chat-basics.member`, chatApi.test, py:test_demo_limits | – |
 | 24 | A 401 signs out to `/login` (or `/` on the landing page) | chatApi.test | – |
@@ -128,4 +128,4 @@ What the e2e stack can stage today, and what it cannot:
 
 Produced by `python scripts/testing_map_counts.py` from the tables above; rerun it after editing a row and paste its output here.
 
-83 behaviours; 77 covered; 6 gaps: J 2 (J\* 2, J† 0), U 2, L 2.
+83 behaviours; 79 covered; 4 gaps: J 0 (J\* 0, J† 0), U 2, L 2.
