@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type Route } from "@playwright/test";
 import {
   composer,
   openNewChat,
@@ -7,12 +7,16 @@ import {
   sidebarLink,
   startConversation,
 } from "./chat";
+import { cutStream, installStreamCut } from "./network";
 
 // The fake model streams twenty "Long reply, part N. " deltas 500 ms apart
 // for a "long:" prompt (fake-model/server.mjs), about ten seconds: the reply
-// is certainly still running when the page reloads, switches or goes offline.
+// is certainly still running when the page reloads, switches or loses the
+// connection.
 const STILL = "Still answering…";
 const INTERRUPTED = "The reply was interrupted.";
+const NOT_SENT =
+  "Your message wasn't sent. Check your connection and try again.";
 const LONG_REPLY = Array.from(
   { length: 20 },
   (_, i) => `Long reply, part ${i + 1}. `,
@@ -118,30 +122,72 @@ test("Switching to another conversation during a reply and back shows Still answ
   await expect(main.getByText(REPLY, { exact: true })).toHaveCount(1);
 });
 
-test("Losing the network during a reply shows Still answering without an error, then the whole reply once back online", async ({
+test("Losing the connection during a reply shows Still answering without an error, then the whole reply, and a reload shows it stored whole", async ({
   page,
-  context,
 }) => {
-  test.skip(
-    true,
-    "Chromium's offline emulation does not cut a response already streaming: probed 2026-10-27, an open fetch body kept delivering every chunk to EOF after context.setOffline(true), and only new requests failed. The lost connection cannot be staged this way; the unit suites cover it.",
-  );
   test.setTimeout(60_000);
-  const first = "Still answering journey: before going offline";
-  const text = "long: still answering journey, the network drops mid-reply";
+  const first = "Still answering journey: before the connection drops";
+  const text = "long: still answering journey, the connection drops mid-reply";
   const main = page.getByRole("main");
 
+  await installStreamCut(page);
   await page.goto("/chat");
   await startConversation(page, first);
   await send(page, text);
   await expect(main.getByText("Long reply, part 1.")).toBeVisible();
 
-  await context.setOffline(true);
+  await cutStream(page);
   await expectStillAnswering(page, text);
   await page.waitForTimeout(3_000);
   await expect(stillAnswering(page)).toBeVisible();
   await expect(noErrorLine(page)).toHaveCount(0);
 
-  await context.setOffline(false);
   await expectWholeReply(page, text);
+
+  // The partial at cut time varies, so only the stored whole is asserted.
+  await page.reload();
+  const stored = main.getByText(/Long reply, part/);
+  await expect(stored).toHaveCount(1, { timeout: REPLY_LANDS_MS });
+  await expect(stored).toHaveText(LONG_REPLY);
+});
+
+// The page polls the conversation for about four seconds before deciding a
+// message never arrived, so the NOT_SENT line gets a long timeout.
+test("A message that never reaches the server says it wasn't sent and puts the text back in the composer", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  const first = "Still answering journey: before a message is lost";
+  const text = "Still answering journey: this message never arrives";
+  const main = page.getByRole("main");
+
+  await page.goto("/chat");
+  await startConversation(page, first);
+
+  let markAborted = () => {};
+  const aborted = new Promise<void>((resolve) => (markAborted = resolve));
+  // POST only: a CORS preflight to the same URL must pass, not be the one
+  // aborted.
+  const handler = async (route: Route) => {
+    if (route.request().method() !== "POST") {
+      await route.continue();
+      return;
+    }
+    await route.abort("internetdisconnected");
+    await page.unroute("**/api/chat", handler);
+    markAborted();
+  };
+  await page.route("**/api/chat", handler);
+
+  await send(page, text);
+  await aborted;
+
+  await expect(main.getByText(NOT_SENT)).toBeVisible({ timeout: 10_000 });
+  await expect(composer(page)).toHaveValue(text);
+  await expect(stillAnswering(page)).toHaveCount(0);
+
+  await page.reload();
+  await expect(main.getByText(first, { exact: true })).toBeVisible();
+  await expect(main.getByText(REPLY, { exact: true })).toHaveCount(1);
+  await expect(main.getByText(text, { exact: true })).toHaveCount(0);
 });
