@@ -110,6 +110,7 @@ What the e2e stack can stage today, and what it cannot:
 | 57 | Reset: "Checking your link…", invalid view, validation, success → `/chat` | `auth-signup.guest` (checking, invalid view), `auth-email.guest`, py:test_password_reset (validation) | – |
 | 58 | Reset succeeds but sign-in fails → `/login?reset=1` | none | U |
 | 59 | Google button shows "Redirecting…" | `google-button.guest` (the logo's look: L) | – |
+| 82 | Continue with Google always asks Google for its account chooser (`prompt=select_account`), so a logged-out user can switch accounts | `google-button.guest` | – |
 | 60 | Password Show/Hide | `auth-login.guest` | – |
 | 61 | Resend status messages | `auth-login.guest` (sent), useResend.test, authApi.test | – |
 | 76 | A write signed in by the cookie from a page that is not hax's own is refused (403); hax's own pages write as before | py:test_cross_site_writes (every member journey writes through the check; a refusal needs a sibling-subdomain page, which the e2e stack cannot serve) | – |
@@ -128,4 +129,4 @@ What the e2e stack can stage today, and what it cannot:
 
 Produced by `python scripts/testing_map_counts.py` from the tables above; rerun it after editing a row and paste its output here.
 
-83 behaviours; 79 covered; 4 gaps: J 0 (J\* 0, J† 0), U 2, L 2.
+84 behaviours; 80 covered; 4 gaps: J 0 (J\* 0, J† 0), U 2, L 2.

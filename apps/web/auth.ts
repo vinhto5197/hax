@@ -98,7 +98,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         return { id, email: null, name: null };
       },
     }),
-    Google,
+    // Always the account chooser: with one Google session in the browser,
+    // Google would otherwise sign it straight back in after a logout.
+    Google({ authorization: { params: { prompt: "select_account" } } }),
   ],
   callbacks: {
     async signIn({ user, account, profile }) {
