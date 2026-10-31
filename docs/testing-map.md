@@ -4,7 +4,7 @@ Every user-visible behaviour of the web app, and the test that would go red if i
 
 Swept through: 10af3c5 — the weekly journeys sweep (`docs/routines/journeys-prompt.md`) checks only the changes after this commit and moves the line in its PR.
 
-Lanes: **J** a Playwright journey in `apps/web/e2e/` can observe it; **U** only a unit test can stage it (a race, an ordering, a mocked boundary); **L** a person has to look. Journey short names: demo = `demo.guest`, newchat = `new-chat.member`, hist = `history.member`, switch = `switch-mid-stream.member`, guard = `turn-guard.member`, setup = `auth.setup`; the newer journeys go by file stem: `auth-login.guest`, `auth-signup.guest`, `demo-landing.guest`, `routing.guest` and `routing.member`, `chat-basics.member`, `chat-thread.member`, `drawer.member`, `documents-panel.member`, `failed-reply.member`, `still-answering.member`, `about-you.member`, `sources.member`, `rich-replies.member`, `documents-lifecycle.member`, `model-hint.member`, `shell-short.member`, `google-button.guest`, `auth-email.guest`. `py:` is a pytest module under `tests/`. A gap is a behaviour no test in its lane pins; a row whose gap is `–` is covered. **Gap** holds only the lane(s) of the gap, or `–`; a note on partial coverage goes in **Pinned by**, in parentheses.
+Lanes: **J** a Playwright journey in `apps/web/e2e/` can observe it; **U** only a unit test can stage it (a race, an ordering, a mocked boundary); **L** a person has to look. Journey short names: demo = `demo.guest`, newchat = `new-chat.member`, hist = `history.member`, switch = `switch-mid-stream.member`, guard = `turn-guard.member`, setup = `auth.setup`; the newer journeys go by file stem: `auth-login.guest`, `auth-signup.guest`, `demo-landing.guest`, `demo-start.guest`, `routing.guest` and `routing.member`, `chat-basics.member`, `chat-thread.member`, `drawer.member`, `documents-panel.member`, `failed-reply.member`, `still-answering.member`, `about-you.member`, `sources.member`, `rich-replies.member`, `documents-lifecycle.member`, `model-hint.member`, `shell-short.member`, `google-button.guest`, `auth-email.guest`. `py:` is a pytest module under `tests/`. A gap is a behaviour no test in its lane pins; a row whose gap is `–` is covered. **Gap** holds only the lane(s) of the gap, or `–`; a note on partial coverage goes in **Pinned by**, in parentheses.
 
 What the e2e stack can stage today, and what it cannot:
 
@@ -59,7 +59,7 @@ What the e2e stack can stage today, and what it cannot:
 | 30 | Clicking a chip sends it | `demo-landing.guest` | – |
 | 31 | Guest banner with links; no model picker | `demo-landing.guest` | – |
 | 32 | Cap: "End of the demo" modal after 3 turns, turn removed, composer disabled | `demo-landing.guest`, useChat.test, chatApi.test, py:test_demo_limits | – |
-| 33 | Demo can't start / rate-limited message | py:test_anonymous_create | J |
+| 33 | Demo can't start / rate-limited message | `demo-start.guest`, py:test_anonymous_create | – |
 | 34 | Redirects: member at `/`, `/login`, `/signup` → `/chat`; guest at `/chat` → `/`; logged out → `/login` | `routing.member`, `routing.guest` | – |
 
 ## Documents
@@ -128,4 +128,4 @@ What the e2e stack can stage today, and what it cannot:
 
 Produced by `python scripts/testing_map_counts.py` from the tables above; rerun it after editing a row and paste its output here.
 
-83 behaviours; 76 covered; 7 gaps: J 3 (J\* 2, J† 0), U 2, L 2.
+83 behaviours; 77 covered; 6 gaps: J 2 (J\* 2, J† 0), U 2, L 2.
