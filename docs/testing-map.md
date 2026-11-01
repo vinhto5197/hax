@@ -108,7 +108,7 @@ What the e2e stack can stage today, and what it cannot:
 | 55 | Verify: no token → invalid view; verifies only on Confirm, then `/login?verified=1`; invalid link → resend form | `auth-signup.guest` (invalid paths), `auth-email.guest`, py:test_verify_email | – |
 | 56 | Forgot password: same panel whatever the email; error messages | `auth-signup.guest`, py:test_password_reset | – |
 | 57 | Reset: "Checking your link…", invalid view, validation, success → `/chat` | `auth-signup.guest` (checking, invalid view), `auth-email.guest`, py:test_password_reset (validation) | – |
-| 58 | Reset succeeds but sign-in fails → `/login?reset=1` | none | U |
+| 58 | Reset succeeds but sign-in fails → `/login?reset=1` | `auth-email.guest` | – |
 | 59 | Google button shows "Redirecting…" | `google-button.guest` (the logo's look: L) | – |
 | 82 | Continue with Google always asks Google for its account chooser (`prompt=select_account`), so a logged-out user can switch accounts | `google-button.guest` | – |
 | 60 | Password Show/Hide | `auth-login.guest` | – |
@@ -129,4 +129,4 @@ What the e2e stack can stage today, and what it cannot:
 
 Produced by `python scripts/testing_map_counts.py` from the tables above; rerun it after editing a row and paste its output here.
 
-84 behaviours; 80 covered; 4 gaps: J 0 (J\* 0, J† 0), U 2, L 2.
+84 behaviours; 81 covered; 3 gaps: J 0 (J\* 0, J† 0), U 1, L 2.
