@@ -1,4 +1,6 @@
+from datetime import datetime
 from functools import partial
+from uuid import UUID
 
 import anyio
 from fastapi import APIRouter, Depends
@@ -17,7 +19,7 @@ from apps.api.turns import start_turn
 from packages.core.agent.harness import DEFAULT_MODEL, stream_completion_agentic
 from packages.core.agent.tools import ToolContext
 from packages.core.demo.prompt import DEMO_SYSTEM_PROMPT
-from packages.core.schemas.chat import ChatRequest
+from packages.core.schemas.chat import ChatRequest, ModelId
 from packages.db import AsyncSessionLocal
 from packages.db.repos import profiles as profiles_repo
 
@@ -68,35 +70,31 @@ def member_system(about: str | None) -> str:
     )
 
 
-@router.post(
-    "",
-    responses={
-        403: {"description": "demo_limit: sign up to continue"},
-        409: {
-            "description": "a reply is already in progress in this"
-            " conversation, or this message was already sent"
-        },
-    },
-)
-async def chat(
-    payload: ChatRequest, user: CurrentUser = Depends(current_user)
+async def read_about(user: CurrentUser) -> str | None:
+    """The member's note; None for a visitor, who never carries one. Callers
+    read it before claiming the turn, so a failed read fails the request with
+    nothing persisted and no claim held."""
+    if is_visitor(user):
+        return None
+    async with AsyncSessionLocal() as session:
+        return await profiles_repo.get_about(session, user.id)
+
+
+async def start_reply(
+    conversation_id: UUID,
+    claimed_at: datetime,
+    user: CurrentUser,
+    about: str | None,
+    model: ModelId | None,
 ) -> StreamingResponse:
-    # Before anything is persisted: a refused turn leaves no trace.
-    await enforce_turn_cap(user)
+    """Start the reply to the conversation's last (user) message under the
+    claim `claimed_at`, and return its SSE response. Shared by a send and a
+    retry, so both build the reply alike. Owns the claim from here on: until
+    start_turn hands it to the turn's task, any failure releases it.
+
+    stream_completion_agentic is looked up here, in this module: tests patch
+    it on routers.chat."""
     visitor = is_visitor(user)
-    # Read before the claim, so a failed read fails the request with nothing
-    # persisted and no claim held. A visitor never carries a note.
-    about = None
-    if not visitor:
-        async with AsyncSessionLocal() as session:
-            about = await profiles_repo.get_about(session, user.id)
-    # Persist the user turn before streaming, so it survives an LLM error and we
-    # have a conversation id for the SSE prelude.
-    conversation_id, claimed_at = await persist_user_turn(
-        payload.prompt, payload.conversation_id, user.id, payload.message_id
-    )
-    # Until start_turn hands the claim to the turn's task, nothing else can
-    # release it; any failure here releases it before propagating.
     try:
         # Replay prior turns. Retrieval is NOT injected here — the model invokes
         # the search_documents tool itself when the corpus looks relevant.
@@ -104,12 +102,11 @@ async def chat(
         # A visitor gets the guest prompt (the demo text rides in it), no tools,
         # and the default model whatever the request asked for (spend control);
         # a member gets the agentic prompt, the registry and their model choice,
-        # from ChatRequest's allowlist.
-        model = DEFAULT_MODEL if visitor else (payload.model or DEFAULT_MODEL)
+        # from the request's allowlist.
         event_fn = partial(
             stream_completion_agentic,
             system=DEMO_SYSTEM_PROMPT if visitor else member_system(about),
-            model=model,
+            model=DEFAULT_MODEL if visitor else (model or DEFAULT_MODEL),
             ctx=ToolContext(user_id=user.id),
             tools=not visitor,
         )
@@ -126,3 +123,27 @@ async def chat(
         media_type="text/event-stream",
         headers=SSE_HEADERS,
     )
+
+
+@router.post(
+    "",
+    responses={
+        403: {"description": "demo_limit: sign up to continue"},
+        409: {
+            "description": "a reply is already in progress in this"
+            " conversation, or this message was already sent"
+        },
+    },
+)
+async def chat(
+    payload: ChatRequest, user: CurrentUser = Depends(current_user)
+) -> StreamingResponse:
+    # Before anything is persisted: a refused turn leaves no trace.
+    await enforce_turn_cap(user)
+    about = await read_about(user)
+    # Persist the user turn before streaming, so it survives an LLM error and we
+    # have a conversation id for the SSE prelude.
+    conversation_id, claimed_at = await persist_user_turn(
+        payload.prompt, payload.conversation_id, user.id, payload.message_id
+    )
+    return await start_reply(conversation_id, claimed_at, user, about, payload.model)

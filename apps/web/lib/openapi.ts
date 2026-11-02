@@ -175,6 +175,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/conversations/{conversation_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry Reply */
+        post: operations["retry_reply_api_conversations__conversation_id__retry_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/documents": {
         parameters: {
             query?: never;
@@ -524,6 +541,25 @@ export interface components {
             token: string;
             /** Password */
             password: string;
+        };
+        /**
+         * RetryRequest
+         * @description The body of POST /api/conversations/{id}/retry: write a new reply to a
+         *     stored user message, without sending it again.
+         */
+        RetryRequest: {
+            /**
+             * After
+             * Format: uuid
+             */
+            after: string;
+            /**
+             * Replace
+             * @default false
+             */
+            replace: boolean;
+            /** Model */
+            model?: ("claude-haiku-4-5" | "claude-sonnet-4-6" | "claude-opus-4-8") | null;
         };
         /** SignupIn */
         SignupIn: {
@@ -952,6 +988,55 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_reply_api_conversations__conversation_id__retry_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetryRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description demo_limit: sign up to continue */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description a reply is already in progress in this conversation, or nothing_to_retry / already_answered: the conversation no longer ends where the page saw it end */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

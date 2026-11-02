@@ -115,14 +115,68 @@ async def persist_user_turn(
     return conversation_id, claimed_at
 
 
+# The 409 details when a retry's `after` no longer matches the conversation's
+# end; the web client tells them apart by these exact strings.
+NOTHING_TO_RETRY = "nothing_to_retry"
+ALREADY_ANSWERED = "already_answered"
+
+
+async def claim_for_retry(
+    conversation_id: UUID, user_id: UUID, after: UUID, replace: bool = False
+) -> datetime:
+    """Claim the caller's conversation for a new reply to the stored user
+    message `after`, and return claimed_at. Stores no message and queues no
+    title; the caller has the same duty as persist_user_turn's (start_turn or
+    release_claim).
+
+    The claim comes first and the last two messages are read only under it:
+    a reply another page saved before the claim is then visible, so the reply
+    deleted is always the one stored last. The conversation must end with
+    `after`, or with an assistant reply directly after it — deleted (its
+    sources ride on the row) only when `replace` says the page shows that
+    reply; otherwise 409 already_answered, since another page answered it.
+    Anything else is 409 nothing_to_retry. 404 / 409 TURN_IN_PROGRESS as
+    persist_user_turn. Every refusal rolls back, so the claim stays free and
+    nothing is deleted; a delete commits with the claim.
+    """
+    async with AsyncSessionLocal() as session:
+        claimed_at = await conversations_repo.claim_turn(
+            session, user_id, conversation_id
+        )
+        if claimed_at is None:
+            if (
+                await conversations_repo.get_owned(session, user_id, conversation_id)
+                is None
+            ):
+                raise HTTPException(status_code=404, detail="conversation not found")
+            raise HTTPException(status_code=409, detail=TURN_IN_PROGRESS)
+
+        last = await conversations_repo.last_messages(session, conversation_id, n=2)
+        answered = (
+            len(last) == 2
+            and last[0].role == "assistant"
+            and last[1].role == "user"
+            and last[1].id == after
+        )
+        if answered:
+            if not replace:
+                raise HTTPException(status_code=409, detail=ALREADY_ANSWERED)
+            await conversations_repo.delete_message(session, last[0].id)
+        elif not (last and last[0].role == "user" and last[0].id == after):
+            raise HTTPException(status_code=409, detail=NOTHING_TO_RETRY)
+        await session.commit()
+    return claimed_at
+
+
 async def load_history(conversation_id: UUID, user_id: UUID) -> list[MessageParam]:
     """Replay the conversation's persisted turns as Anthropic `messages`.
 
-    Called after persist_user_turn (which owns the ownership check), so the
-    just-sent user message lands last. Consecutive same-role turns (a failed
-    reply stores no assistant turn, so a resend follows its own question) are
-    merged here, joined by a blank line, so the history alternates for any
-    provider. Full history every turn — no windowing in v0.
+    Called after persist_user_turn or claim_for_retry (which own the
+    ownership check), so the user message being answered lands last.
+    Consecutive same-role turns (a failed reply stores no assistant turn, so a
+    resend follows its own question) are merged here, joined by a blank line,
+    so the history alternates for any provider. Full history every turn — no
+    windowing in v0.
     """
     async with AsyncSessionLocal() as session:
         rows = await conversations_repo.load_history(session, user_id, conversation_id)
@@ -149,9 +203,11 @@ async def persist_assistant_turn(
 
     Called only by the turn's task (apps/api/turns.py), on a clean finish
     or a Stop with text: a stored reply is complete, or cut short by its user's
-    Stop. The claim is always released; the
-    message is written only if something streamed — sources alone are not a
-    turn. `claimed_at` is the claim's latest value, after any refresh.
+    Stop. The message is written only if this call released the turn's own
+    claim (a lapsed turn whose claim another turn or a retry took stores
+    nothing: that turn read the conversation's end under its claim) and only
+    if something streamed — sources alone are not a turn. `claimed_at` is the
+    claim's latest value, after any refresh.
     `sources` is the deduplicated provenance from the turn's searches; it is
     stored for the client and never replayed to the model.
 
@@ -162,8 +218,10 @@ async def persist_assistant_turn(
     """
     untitled = False
     async with AsyncSessionLocal() as session:
-        await conversations_repo.release_turn(session, conversation_id, claimed_at)
-        if content:
+        released = await conversations_repo.release_turn(
+            session, conversation_id, claimed_at
+        )
+        if released and content:
             await conversations_repo.add_message(
                 session, conversation_id, "assistant", content, sources=sources or None
             )

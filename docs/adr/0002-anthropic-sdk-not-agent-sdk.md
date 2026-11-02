@@ -303,3 +303,37 @@ listener). The registry lives in the process that runs the turn, which is
 enough with one API process; with several, a stop must reach the right one
 (a Redis signal the turn listens for), and until then a stop that lands
 elsewhere finds no turn and the reply runs to its end.
+
+## Addendum (2026-11-02) — Try again regenerates the last reply
+
+`POST /api/conversations/{id}/retry` with `{after, replace, model}` writes a
+new reply to a stored user message without storing the question again, and
+answers with the same SSE stream as `/api/chat`. `after` is the id of the
+user message the page shows as the one to answer; `replace` says whether the
+page shows a reply to it. The route claims the turn as a send does, and only
+then, under the claim's row lock, reads the last two messages: a reply
+another page saved before the claim is visible, so the rule decides on what
+is stored last. The conversation ending with `after` gets a reply. Ending
+with a reply right after `after`: with `replace` that reply (its row, with
+its sources) is deleted in the claim's transaction and a new one written;
+without it the retry is refused with 409 `already_answered` (another page
+answered meanwhile). Anything else is 409 `nothing_to_retry`, and the page
+re-reads the conversation. Every refusal rolls back, so a page showing an
+old state never deletes a reply it did not show. Deleting before writing
+means a regenerate that fails leaves the question unanswered, never two
+replies. The reply itself is built by the same helper as a send's (history,
+prompt, tools and model by member or visitor), so the model sees the
+question once.
+
+A retry counts as a demo turn: the cap is a spend guard and a retry costs a
+full reply. It is counted per request before the claim, so a retry refused
+with either 409 still spends a visitor's turn, as a refused send does.
+
+Rejected: a flag on `/api/chat` (its prompt is required; a retry has none);
+checking the last message before claiming (another page could answer in
+between and the question would be answered twice); 422 for a moved-on
+conversation (the request is valid, the state moved); keeping both versions
+(a versioned message model); a stored "stopped" marker so only stopped
+replies could be regenerated (a migration for a line that matters only right
+after the Stop). Left open: a page that stopped a reply, while another page
+regenerated it, deletes that regenerated reply on its own Try again.
