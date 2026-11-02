@@ -2,16 +2,17 @@
 
 Repo-layer contract: every user-facing query REQUIRES the caller's user_id;
 an ownership miss returns None/False/[] and routes map it to 404 (never 403 —
-don't confirm existence). add_message/touch take no user_id: messages are only
-ever reached through a conversation the caller proved they own earlier in the
-same request, and RLS re-checks at the DB.
+don't confirm existence). add_message, touch, last_messages and
+delete_message take no user_id: messages are only ever reached through a
+conversation the caller proved they own earlier in the same request, and RLS
+re-checks at the DB.
 """
 
 import uuid
 from collections.abc import Sequence
 from datetime import datetime, timedelta
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -117,6 +118,28 @@ async def add_message(
     )
 
 
+async def last_messages(
+    session: AsyncSession, conversation_id: uuid.UUID, n: int = 2
+) -> list[Message]:
+    """The conversation's last `n` messages, newest first. No user_id, like
+    add_message: called only under the caller's claim, whose UPDATE filtered
+    on the owner in the same transaction; RLS `messages_owner` re-checks."""
+    result = await session.scalars(
+        select(Message)
+        .where(Message.conversation_id == conversation_id)
+        .order_by(Message.created_at.desc(), Message.id.desc())
+        .limit(n)
+    )
+    return list(result.all())
+
+
+async def delete_message(session: AsyncSession, message_id: uuid.UUID) -> None:
+    """Delete one message (its sources live on the row). No user_id: same rule
+    as last_messages — only under the caller's claim; RLS re-checks. The
+    caller owns the commit."""
+    await session.execute(delete(Message).where(Message.id == message_id))
+
+
 async def touch(session: AsyncSession, conversation_id: uuid.UUID) -> None:
     """Bump updated_at (drives sidebar ordering) — a child insert doesn't
     touch the parent row."""
@@ -211,19 +234,22 @@ async def claim_turn(
 
 async def release_turn(
     session: AsyncSession, conversation_id: uuid.UUID, claimed_at: datetime
-) -> None:
+) -> bool:
     """Clear the claim only if it is still `claimed_at`: a turn whose claim
-    lapsed and was re-claimed must not free the newer turn. The caller owns
-    the commit."""
-    await session.execute(
+    lapsed and was re-claimed must not free the newer turn. True when this
+    call cleared it, False when the claim was no longer this turn's. The
+    caller owns the commit."""
+    result = await session.execute(
         update(Conversation)
         .where(
             Conversation.id == conversation_id,
             Conversation.streaming_since == claimed_at,
         )
         .values(streaming_since=None, updated_at=Conversation.updated_at)
+        .returning(Conversation.id)
         .execution_options(synchronize_session=False)
     )
+    return result.scalar_one_or_none() is not None
 
 
 async def refresh_turn(

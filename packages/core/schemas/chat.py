@@ -1,4 +1,5 @@
-"""Chat REQUEST (input) schema — the body POST /api/chat parses."""
+"""Chat REQUEST (input) schemas — the bodies POST /api/chat and the retry
+route parse."""
 
 from typing import Annotated, Literal
 from uuid import UUID
@@ -33,3 +34,18 @@ class ChatRequest(BaseModel):
     # this send reached the server. An id already stored is a duplicate send
     # (409). None -> the database assigns one.
     message_id: UUID | None = None
+
+
+class RetryRequest(BaseModel):
+    """The body of POST /api/conversations/{id}/retry: write a new reply to a
+    stored user message, without sending it again."""
+
+    # The user message whose reply is being rewritten. The server acts only
+    # if the conversation still ends where the page saw it end (ADR 0002).
+    after: UUID
+    # True when the page shows a reply to `after` and asks to replace it;
+    # False when it shows none, so a reply found there was written by another
+    # page and is never deleted.
+    replace: bool = False
+    # The same allowlist as ChatRequest.model.
+    model: ModelId | None = None
