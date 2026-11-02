@@ -86,7 +86,7 @@ What the e2e stack can stage today, and what it cannot:
 | 46 | Drawer closes when the window becomes desktop width | `drawer.member` | – |
 | 47 | "Show in panel" on a phone opens the drawer and reveals the row | `sources.member` | – |
 | 48 | Account name and email; Sign out goes to `/` | `routing.member` | – |
-| 49 | Active row highlight | none | L |
+| 49 | Active row highlight | none (accepted 2026-10-31: a person looks; only a CSS class marks it) | L |
 | 78 | Sending a message moves its conversation to the top of the sidebar at once, while the reply streams; a refused (duplicate) send leaves the order alone | `chat-thread.member`, py:test_turn_guard | – |
 | 70 | The account row is a button "Account menu" that opens About you, Privacy, Sign out (in that order); Escape or a click outside closes it; Privacy goes to `/privacy`, which names the note | `about-you.member`, AccountMenu.test | – |
 | 71 | About you dialog: help line, "N / 1000" counting code points of the trimmed text; Save disabled while unchanged or over 1000; saving closes it; clearing and saving removes the note | `about-you.member`, AboutYouDialog.test, py:test_profile | – |
@@ -123,7 +123,7 @@ What the e2e stack can stage today, and what it cannot:
 | 63 | Greeting by time of day and name; weekday; names shown as typed | greeting.test | – |
 | 64 | Greeting blank until hydrated | `NewChat.test` | – |
 | 65 | Wordmark accessible name | Wordmark.test | – |
-| 66 | Fonts and dark-mode look | none | L |
+| 66 | Fonts and dark-mode look | none (accepted 2026-10-31: a person looks) | L |
 
 ## Counts
 
