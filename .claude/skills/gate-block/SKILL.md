@@ -31,7 +31,7 @@ Every hand-off that waits for the maintainer (an Ask PR or bite, a feature PR, a
 5. Code worth raising, only when there is some: `file:line` and why a human should read it (a security boundary, a choice the maintainer might make differently, a surprising pattern); otherwise "no code to read".
 6. The word that ends the review ("merge", "commit", "approved").
 Ship and Show need none: the controller merges them and the digest lists them.
-Enforced, not remembered: a Stop hook (`.claude/hooks/review_gate.sh`) refuses to end a turn whose final message asks for a review word without this section; the message is already on screen by then, so the answer to it is the missing section alone, never a repeat.
+Enforced, not remembered: a Stop hook (`.claude/hooks/review_gate.sh`) refuses to end a turn whose final message is a hand-off (it names a PR, a brief card's link or a gate block) and asks for a review word without this section; a plain ask (a status answer, "say commit" for a small edit) needs none; the message is already on screen by then, so the answer to it is the missing section alone, never a repeat.
 
 ## Provenance, per bite
 
