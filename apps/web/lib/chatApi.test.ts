@@ -109,6 +109,12 @@ const everyCall: Array<
     (api) => api.deleteConversation("c1"),
   ],
   [
+    "stopReply",
+    "POST",
+    "/api/conversations/c1/stop",
+    (api) => api.stopReply("c1"),
+  ],
+  [
     "streamChat",
     "POST",
     "/api/chat",
@@ -1055,5 +1061,58 @@ describe("error detail from a FastAPI validation array", () => {
     failWith("<html>nope</html>");
     const err = await api.deleteConversation("c1").catch((e: unknown) => e);
     expect((err as Error).message).toBe("API 422: Unprocessable Entity");
+  });
+});
+
+describe("stopReply", () => {
+  it("posts to the conversation's stop route and resolves on 204", async () => {
+    const api = await load();
+    respondWith(() => new Response(null, { status: 204 }));
+    await expect(api.stopReply("c1")).resolves.toBeUndefined();
+    const sent = call();
+    expect(sent.url).toBe("/api/conversations/c1/stop");
+    expect((sent.init.method ?? "GET").toUpperCase()).toBe("POST");
+  });
+
+  it("rejects on a 5xx", async () => {
+    const api = await load();
+    respondWith(() => new Response(null, { status: 503 }));
+    await expect(api.stopReply("c1")).rejects.toThrow();
+  });
+
+  it("rejects on a 404: a stop is not a delete, the server did not stop anything", async () => {
+    const api = await load();
+    respondWith(() => jsonResponse({ detail: "conversation not found" }, 404));
+    await expect(api.stopReply("c1")).rejects.toThrow();
+  });
+
+  it("rejects on a network failure", async () => {
+    const api = await load();
+    fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
+    await expect(api.stopReply("c1")).rejects.toThrow();
+  });
+
+  it("is bounded by a 10 second timeout signal and rejects when it fires", async () => {
+    const api = await load();
+    const controller = new AbortController();
+    const timeout = vi
+      .spyOn(AbortSignal, "timeout")
+      .mockReturnValue(controller.signal);
+    fetchMock.mockImplementation(
+      (_input, init) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () =>
+            reject(new DOMException("timed out", "TimeoutError")),
+          );
+        }),
+    );
+    try {
+      const stopping = api.stopReply("c1");
+      expect(timeout).toHaveBeenCalledWith(10_000);
+      controller.abort();
+      await expect(stopping).rejects.toThrow();
+    } finally {
+      timeout.mockRestore();
+    }
   });
 });

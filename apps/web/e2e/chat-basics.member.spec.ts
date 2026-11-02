@@ -63,7 +63,7 @@ test("Shift+Enter adds a line without sending; Enter then sends both lines", asy
   await expect(main.getByText(REPLY, { exact: true })).toBeVisible();
 });
 
-test("Send is disabled when empty; composer and picker lock while a reply streams, focus returns after", async ({
+test("Send is disabled when empty; composer and picker lock and Stop replaces Send while a reply streams, focus returns after", async ({
   page,
 }) => {
   await page.goto("/chat");
@@ -76,7 +76,8 @@ test("Send is disabled when empty; composer and picker lock while a reply stream
   await expect(main.getByText("Slowly streaming reply, part 1.")).toBeVisible();
   await expect(composer(page)).toBeDisabled();
   await expect(page.getByRole("combobox")).toBeDisabled();
-  await expect(sendButton(page)).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Stop" })).toBeVisible();
+  await expect(sendButton(page)).toHaveCount(0);
 
   await expect(
     main.getByText("Slowly streaming reply, part 10."),

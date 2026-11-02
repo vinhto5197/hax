@@ -275,3 +275,31 @@ message. Matching by text was rejected: a lost repeat of an earlier
 identical message would read as delivered. A save that fails still releases
 the claim (best effort), so the conversation is free at once instead of
 after the window.
+
+## Addendum (2026-11-02) — Stop keeps what was written
+
+A stored reply is complete, or cut short by its user's Stop. While a page
+reads a reply's stream it offers Stop, which posts
+`POST /api/conversations/{id}/stop` (204, idempotent; 404 for a conversation
+that is not the caller's, checked before the registry is consulted). The
+API's turn registry, keyed by conversation, cancels the task that consumes the
+model stream, not the turn's task: the model call and its HTTP stream end at
+once, and the turn's own save still runs. The text so far is saved through
+the normal path and the stream ends with `[DONE]`; a blank partial stores
+nothing (the model API rejects a whitespace-only text block, so it would break
+every later turn) and ends with `reply_failed`. A drain at shutdown or the
+deadline still stores nothing, and a drain wins over a Stop that lands with it.
+
+The page shows Stop only once this send's prelude has arrived (the turn is
+registered by then) and never while "Still answering…": without the stream,
+a 204 cannot say whether the stop took effect. The composer stays busy until
+the stop request settles (bounded at 10 s), so a late stop never lands on the
+next turn.
+
+Rejected: a new `stopped` terminal event (the success path already commits
+what streamed, which equals what was saved); storing an empty reply; closing
+the stream as the stop (the server owns the turn; closing only detaches the
+listener). The registry lives in the process that runs the turn, which is
+enough with one API process; with several, a stop must reach the right one
+(a Redis signal the turn listens for), and until then a stop that lands
+elsewhere finds no turn and the reply runs to its end.

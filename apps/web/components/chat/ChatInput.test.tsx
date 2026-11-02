@@ -147,3 +147,99 @@ describe("ChatInput placeholder by audience", () => {
     expect(textbox).toHaveAttribute("placeholder", "What's up?");
   });
 });
+
+describe("ChatInput Stop", () => {
+  const send = async () => {};
+  const sendButton = () => screen.queryByRole("button", { name: "Send" });
+  const stopButton = () => screen.queryByRole("button", { name: "Stop" });
+
+  it("replaces Send with Stop while waiting, in a non-submit button", () => {
+    render(
+      <ChatInput onSend={send} disabled waiting onStop={() => {}} canStop />,
+    );
+    expect(sendButton()).not.toBeInTheDocument();
+    expect(stopButton()).toBeInTheDocument();
+    expect(stopButton()).toHaveAttribute("type", "button");
+  });
+
+  it("calls onStop when Stop is pressed, and sends nothing", () => {
+    const onStop = vi.fn();
+    const onSend = vi.fn(async () => {});
+    render(
+      <ChatInput onSend={onSend} disabled waiting onStop={onStop} canStop />,
+    );
+    fireEvent.click(stopButton()!);
+    expect(onStop).toHaveBeenCalledTimes(1);
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it("Stop is enabled exactly when canStop is true", () => {
+    const { rerender } = render(
+      <ChatInput
+        onSend={send}
+        disabled
+        waiting
+        onStop={() => {}}
+        canStop={false}
+      />,
+    );
+    expect(stopButton()).toBeDisabled();
+
+    rerender(
+      <ChatInput onSend={send} disabled waiting onStop={() => {}} canStop />,
+    );
+    expect(stopButton()).toBeEnabled();
+  });
+
+  it("a disabled Stop does not call onStop when pressed", () => {
+    const onStop = vi.fn();
+    render(
+      <ChatInput
+        onSend={send}
+        disabled
+        waiting
+        onStop={onStop}
+        canStop={false}
+      />,
+    );
+    fireEvent.click(stopButton()!);
+    expect(onStop).not.toHaveBeenCalled();
+  });
+
+  it("disabled but not waiting shows Send, disabled, and no Stop (a visitor at the turn cap)", () => {
+    render(
+      <ChatInput
+        onSend={send}
+        disabled
+        waiting={false}
+        onStop={() => {}}
+        canStop
+      />,
+    );
+    expect(stopButton()).not.toBeInTheDocument();
+    expect(sendButton()).toBeDisabled();
+  });
+
+  it("waiting without onStop shows Send, disabled, and no Stop", () => {
+    render(<ChatInput onSend={send} disabled waiting canStop />);
+    expect(stopButton()).not.toBeInTheDocument();
+    expect(sendButton()).toBeDisabled();
+  });
+
+  it("Send comes back once the reply is no longer waited on", () => {
+    const { rerender } = render(
+      <ChatInput onSend={send} disabled waiting onStop={() => {}} canStop />,
+    );
+    rerender(
+      <ChatInput
+        onSend={send}
+        disabled={false}
+        waiting={false}
+        onStop={() => {}}
+        canStop={false}
+      />,
+    );
+    expect(stopButton()).not.toBeInTheDocument();
+    expect(sendButton()).toBeInTheDocument();
+  });
+});
