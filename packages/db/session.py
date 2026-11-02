@@ -31,8 +31,12 @@ MIGRATIONS_DATABASE_URL_ASYNC = to_async_url(
 # any individual log-call tweak.
 # pool_pre_ping: a pooled connection the server already dropped (restart,
 # failover, idle reaper) is replaced at checkout instead of surfacing as a 500.
+# pool_recycle: a connection older than 30 minutes is replaced at its next
+# checkout, at the cost of one fresh connect. Pool sizes are SQLAlchemy's
+# defaults on purpose: wrong sizes against RDS's connection limit queue
+# requests, which looks like a hang (backlog 12).
 engine = create_async_engine(
-    DATABASE_URL_ASYNC, hide_parameters=True, pool_pre_ping=True
+    DATABASE_URL_ASYNC, hide_parameters=True, pool_pre_ping=True, pool_recycle=1800
 )
 # expire_on_commit=False: the default's post-commit lazy reload isn't awaited in
 # async and raises MissingGreenlet. Trade-off: objects keep pre-commit values,
