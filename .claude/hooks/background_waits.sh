@@ -3,7 +3,7 @@
 # session (CI checks, a GitHub run, the journey suite) must run with
 # run_in_background, which re-invokes the session when it ends. In the
 # foreground it would hold every other answer in the maintainer's message until
-# it finished (Vinh, 2026-11-02: "nothing waits that doesn't have to";
+# it finished (the maintainer, 2026-11-02: "nothing waits that doesn't have to";
 # backlog 107 (e)). A one-shot look (`gh pr checks 72`, `gh run view`) passes.
 # Any failure: silent, exit 0.
 set -u

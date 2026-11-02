@@ -5,7 +5,7 @@ description: The hand-off format for a finished change, what the maintainer read
 
 # Gate block
 
-The maintainer reviews a finished change from one block, not from the diff. The block is complete before it is sent: evidence, reviews, test names, flags, what is new to them, and cost. A chain writes the feature block; the controller writes the main-lane block and, for both, adds "New to you" and cost.
+The maintainer reviews a finished change from one block, not from the diff. The block is complete before it is sent: evidence, reviews, test names, flags and cost. A chain writes the feature block; the controller writes the main-lane block and, for both, adds cost. New concepts are front-loaded in the brief ("New to you", skill feature-brief), before the build, never at the hand-off.
 
 ## Opening, always
 
@@ -39,11 +39,11 @@ One line each: who wrote it (the controller, an implementer agent, a chain stage
 
 ## The feature gate block
 
-Filled by the feature chain from `feature.md` in this directory into `local/briefs/<id>/gate.md`; the controller appends **New to you** (concepts absent from `local/FRONTLOADED.local.md`) and **Cost** (from the chain's `chain.json`), delivers it in chat, and records cost in `local/features.json`.
+Filled by the feature chain from `feature.md` in this directory into `local/briefs/<id>/gate.md`; the controller appends **Cost** (from the chain's `chain.json`), delivers it in chat, and records cost in `local/features.json`.
 
 Rules:
 - A `DEVIATION` line in Conformance must point at a stop-and-report the maintainer answered; one that does not is a chain bug and is reported as such, not as a deviation.
-- The PR body is `pr-body.md`, the public part only: never review findings, cost or "new to you" (the repository is public).
+- The PR body is `pr-body.md`, the public part only: never review findings or cost (the repository is public).
 - Test names, never bodies; flag any test that pins a behaviour the controller is unsure is intended.
 
 ## The main-lane gate block
@@ -55,9 +55,8 @@ One block per slice, never a message per task. In order:
 4. Glance list: the glance-only files, and the glance line ranges inside the deep-read files, so the reader knows which lines to skip. Glance = mechanics, generated types, migrations matching the model, docstring hunks, boilerplate.
 5. Open decisions, each with options and a recommendation.
 6. Test names, grouped by file, flagged where unsure.
-7. New to you.
-8. Cost: tokens by phase and wall time; the session's own share is an estimate and says so.
-9. The commit message the controller would use. The controller commits only on the maintainer's word.
+7. Cost: tokens by phase and wall time; the session's own share is an estimate and says so.
+8. The commit message the controller would use. The controller commits only on the maintainer's word.
 
 ## Walks
 

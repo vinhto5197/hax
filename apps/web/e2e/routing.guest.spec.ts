@@ -33,4 +33,8 @@ test("the privacy page renders without a session and has a mailto link", async (
   const contact = page.locator('a[href^="mailto:"]');
   await expect(contact).toHaveCount(1);
   await expect(contact).toBeVisible();
+  await expect(contact).toHaveAttribute(
+    "href",
+    "mailto:hercules.vto@gmail.com",
+  );
 });

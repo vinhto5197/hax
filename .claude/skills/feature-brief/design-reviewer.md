@@ -14,6 +14,10 @@ rule: do not object on those grounds; list any such point at the end under
 "Deferred: accessibility", one line each, and it goes to a later queue.
 
 Argue against the brief. Look for:
+- what it collides with: every brief in `local/features.json` not
+  `merged` that changes the same mechanism (name it, and which
+  supersedes which), and every existing test of a mechanism this brief
+  replaces, by name, with keep / rewrite / retire;
 - what breaks: a race, a lost update, a state the UX section does not cover,
   a boundary the backend section crosses without a guard, an interface
   bullet that cannot be implemented as written;

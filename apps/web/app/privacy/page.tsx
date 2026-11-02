@@ -79,9 +79,9 @@ export default function Privacy() {
         <p>
           <a
             className="text-accent hover:underline"
-            href="mailto:vinhto5197@gmail.com"
+            href="mailto:hercules.vto@gmail.com"
           >
-            vinhto5197@gmail.com
+            hercules.vto@gmail.com
           </a>
         </p>
       </main>

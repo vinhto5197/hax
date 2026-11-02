@@ -18,9 +18,6 @@ Every new or changed test, by name, grouped by file; any test that pins a behavi
 ## Flags
 Anything the maintainer might decide differently; tests whose meaning changed; follow-ups recorded in the backlog.
 
-## New to you
-Concepts in this change not yet on the front-loading ledger, two lines each, with an offer to go deeper. "Nothing new" when none.
-
 ## Cost
 Size first: reviewed lines (production code, test infrastructure, CI, infra, docs) and test lines from `git diff --numstat` against main, beside the brief's estimate; more than 1.5× the estimate, or over the 300-line slice limit, is flagged and also named in Your review's first line. Then tokens by phase (build, tests, reviews, fixes) and total, wall time, against the brief's estimate.
 

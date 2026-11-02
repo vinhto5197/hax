@@ -37,6 +37,14 @@ repos:
   # so it picks up eslint-config-next and all its plugins correctly.
   - repo: local
     hooks:
+      # The repo is public: no added line may carry the maintainer's name or
+      # email (denylist in the gitignored local/personal-denylist.txt).
+      - id: personal-info
+        name: no personal details in added lines
+        entry: scripts/check_personal.sh --staged
+        language: system
+        pass_filenames: false
+        always_run: true
       - id: eslint
         name: eslint (apps/web)
         entry: bash -c 'cd apps/web && npm run lint'

@@ -22,7 +22,8 @@ verified here.
 - Never add a dependency. Never open issues. Never comment on other PRs.
 - One item = one branch = one PR. Do not combine items unless the queue
   entry names two ids on one branch.
-- Abandon an item (no push) if its diff exceeds ~150 changed lines.
+- Abandon an item (no push) if its diff exceeds ~150 changed lines, ignoring
+  whitespace (`git diff -w --numstat`).
 - GitHub: use the GitHub MCP tools (mcp__github__*) for pull requests and
   checks. The `gh` CLI is not authenticated here. Plain `git push` works.
 - Do not run the project's checks in this sandbox (no lint, tests, builds or

@@ -15,7 +15,7 @@ case "$path" in */.claude/projects/*/memory/*.md) ;; *) exit 0 ;; esac
 
 # Body = everything after the closing frontmatter fence.
 lines=$(awk 'f>=2 && NF {n++} /^---$/ {f++} END {print n+0}' "$path")
-note="[one home] You wrote memory $(basename "$path"). A memory holds only how Vinh wants to be worked with: the why and a pointer to the rule's one home. If the rule's format or steps live in a skill, CLAUDE.md or the Makefile, this memory must not restate them; local/rules-inventory.md lists each rule's home, and a new rule gets its line there."
+note="[one home] You wrote memory $(basename "$path"). A memory holds only how the maintainer wants to be worked with: the why and a pointer to the rule's one home. If the rule's format or steps live in a skill, CLAUDE.md or the Makefile, this memory must not restate them."
 [ "$lines" -gt 10 ] && note="$note This body has $lines lines: check it is not restating a rule."
 jq -n --arg c "$note" '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext: $c}}'
 exit 0
