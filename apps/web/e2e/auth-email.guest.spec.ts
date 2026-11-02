@@ -7,6 +7,7 @@ import { mailLink } from "./mail";
 // sessions every member journey runs on.
 const INVALID_LINK = "This link is invalid or has expired.";
 const VERIFIED_BANNER = "Email verified — log in to continue.";
+const RESET_BANNER = "Password updated — log in to continue.";
 
 function uniqueEmail(label: string) {
   return `mail-${label}-${Date.now()}@example.com`;
@@ -87,4 +88,48 @@ test("row 57: a reset link from the email opens the new-password form; saving a 
   await expect(
     page.getByRole("button", { name: "Save new password" }),
   ).toHaveCount(0);
+});
+
+test("row 58: when the reset succeeds but the sign-in after it fails, the page lands on /login?reset=1 with the email and the password-updated banner, never /chat", async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(60_000);
+  const email = uniqueEmail("reset-signin-fails");
+  await signUp(page, email, "mail-reset-old-password");
+
+  await page.goto("/forgot-password");
+  await page.getByPlaceholder("Email").fill(email);
+  await page.getByRole("button", { name: "Send reset link" }).click();
+  const inbox = page.getByRole("heading", { name: "Check your inbox" });
+  await expect(inbox).toBeVisible();
+
+  const link = await mailLink(request, email, "/reset-password");
+  await page.goto(link);
+  await expect(page.getByText("Choose a new password")).toBeVisible();
+
+  // next-auth's signIn for a credentials provider POSTs here and reads
+  // `error` from the response's `url`; the reset call itself is untouched.
+  await page.route("**/auth/callback/credentials**", (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        url: new URL("/auth/signin?error=CredentialsSignin", page.url()).href,
+      }),
+    });
+  });
+
+  await page
+    .getByPlaceholder("New password (8+ characters)")
+    .fill("mail-reset-new-password");
+  await page.getByRole("button", { name: "Save new password" }).click();
+
+  await expect(page).toHaveURL(/\/login\?reset=1&email=/);
+  const landed = new URL(page.url());
+  expect(landed.pathname).toBe("/login");
+  expect(landed.searchParams.get("reset")).toBe("1");
+  expect(landed.searchParams.get("email")).toBe(email);
+  await expect(page.getByText(RESET_BANNER)).toBeVisible();
 });
