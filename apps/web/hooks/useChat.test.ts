@@ -150,16 +150,50 @@ describe("useChat loading", () => {
     await waitFor(() => expect(result.current.messages).toHaveLength(2));
     expect(getConversation).toHaveBeenCalledExactlyOnceWith("c1");
     expect(result.current.messages[0]).toEqual({
+      id: "m1",
       role: "user",
       content: "question",
       created_at: "2026-10-01T00:00:01Z",
     });
     expect(result.current.messages[1]).toEqual({
+      id: "m2",
       role: "assistant",
       content: "answer",
       created_at: "2026-10-01T00:00:02Z",
       sources: [source("d1", 0)],
     });
+  });
+
+  it("loaded messages keep the server's message ids, in order", async () => {
+    getConversation.mockResolvedValue(
+      detail("c1", [
+        {
+          id: "u-1",
+          role: "user",
+          content: "first question",
+          created_at: "2026-10-01T00:00:01Z",
+        },
+        {
+          id: "a-1",
+          role: "assistant",
+          content: "first answer",
+          created_at: "2026-10-01T00:00:02Z",
+        },
+        {
+          id: "u-2",
+          role: "user",
+          content: "second question",
+          created_at: "2026-10-01T00:00:03Z",
+        },
+      ]),
+    );
+    const { result } = renderHook(() => useChat("c1", null));
+    await waitFor(() => expect(result.current.messages).toHaveLength(3));
+    expect(result.current.messages.map((m) => m.id)).toEqual([
+      "u-1",
+      "a-1",
+      "u-2",
+    ]);
   });
 
   it("a failed load shows the load error", async () => {
@@ -231,6 +265,7 @@ describe("useChat sending", () => {
     expect(result.current.isLoading).toBe(true);
     expect(result.current.error).toBeNull();
     expect(result.current.messages.at(-1)).toEqual({
+      id: expect.any(String),
       role: "user",
       content: "second",
       created_at: expect.any(String),
@@ -260,6 +295,39 @@ describe("useChat sending", () => {
       expect.any(Object),
       model,
       expect.any(String),
+    );
+  });
+
+  it("the optimistic user turn carries the same id the send passes as its message id", async () => {
+    const turn = holdTurn();
+    const { result } = renderHook(() => useChat(null, null));
+    const { settled } = await start(result, "hi");
+    const sentId = streamChat.mock.calls[0][4];
+    expect(sentId).toEqual(expect.any(String));
+    expect(result.current.messages).toHaveLength(1);
+    expect(result.current.messages[0].id).toBe(sentId);
+    await settle(settled, () => turn.end());
+    expect(result.current.messages[0].id).toBe(sentId);
+  });
+
+  it("two sends give their user turns different ids", async () => {
+    const { result } = renderHook(() => useChat(null, null));
+    for (const text of ["one", "two"]) {
+      const turn = holdTurn();
+      const { settled } = await start(result, text);
+      act(() => {
+        turn.handlers.onConversationId("c1");
+        turn.handlers.onChunk(`reply to ${text}`);
+      });
+      await settle(settled, () => turn.end());
+    }
+    const users = result.current.messages.filter((m) => m.role === "user");
+    expect(users).toHaveLength(2);
+    expect(users[0].id).toEqual(expect.any(String));
+    expect(users[1].id).toEqual(expect.any(String));
+    expect(users[0].id).not.toBe(users[1].id);
+    expect(users.map((m) => m.id)).toEqual(
+      streamChat.mock.calls.map((call) => call[4]),
     );
   });
 

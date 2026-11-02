@@ -39,6 +39,7 @@ function toChatMessages(conv: ConversationDetail): ChatMessage[] {
   // role is `string` in the generated type but constrained to user/assistant
   // by a DB CHECK; safe to narrow.
   return conv.messages.map((m) => ({
+    id: m.id,
     role: m.role as ChatMessage["role"],
     content: m.content,
     // null (user rows, sourceless turns) and undefined both mean no footer.
@@ -245,10 +246,11 @@ export function useChat(
 
   const busy = isLoading || stopping;
 
-  const send = useCallback(
-    async (text: string): Promise<void> => {
-      const prompt = text.trim();
-      if (!prompt || busy) return;
+  // One turn's request and its outcome, from the optimistic user turn to the
+  // settle (stream handlers, refusals, failures, the poll after a lost
+  // connection, the final commit). Every turn this page streams runs here.
+  const runTurn = useCallback(
+    async (prompt: string): Promise<void> => {
       sendingRef.current = true;
       stoppedRef.current = false;
       const generation = generationRef.current;
@@ -260,6 +262,7 @@ export function useChat(
       // Kept by identity: a refusal removes exactly this turn, never "the last
       // message" — a history load landing mid-send replaces the list.
       const optimistic: ChatMessage = {
+        id: messageId,
         role: "user",
         content: prompt,
         created_at: new Date().toISOString(),
@@ -426,7 +429,6 @@ export function useChat(
       }
     },
     [
-      busy,
       model,
       activeId,
       onConversationCreated,
@@ -434,6 +436,15 @@ export function useChat(
       onTurnStarted,
       startPolling,
     ],
+  );
+
+  const send = useCallback(
+    async (text: string): Promise<void> => {
+      const prompt = text.trim();
+      if (!prompt || busy) return;
+      await runTurn(prompt);
+    },
+    [busy, runTurn],
   );
 
   const canStop = streaming && !stopping && !stillAnswering;

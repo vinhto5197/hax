@@ -5,6 +5,9 @@ import type { components } from "@/lib/openapi";
 type ChatRole = "user" | "assistant";
 
 export type ChatMessage = {
+  // The server's message id; the optimistic user turn carries the id its send
+  // chose. Absent on a reply committed from the stream.
+  id?: string;
   role: ChatRole;
   content: string;
   // Present only on assistant turns that searched and found something.
@@ -340,6 +343,28 @@ export async function streamChat(
   // the send reached the server; null -> the server assigns one.
   messageId: string | null = null,
 ): Promise<void> {
+  // Field names must match ChatRequest (hand-built body, not typed).
+  // model null -> server default.
+  await readReplyStream(
+    `${API_BASE}/api/chat`,
+    {
+      prompt,
+      conversation_id: conversationId,
+      model,
+      ...(messageId ? { message_id: messageId } : {}),
+    },
+    handlers,
+  );
+}
+
+// POSTs `body` as JSON to a route that answers with a reply's SSE stream and
+// reads it to the end: status mapping, the SSE reader and the silence limit
+// for every such route. Errors as documented on streamChat.
+async function readReplyStream(
+  url: string,
+  body: unknown,
+  handlers: StreamHandlers,
+): Promise<void> {
   const controller = new AbortController();
   let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   let silence: ReturnType<typeof setTimeout> | undefined;
@@ -353,17 +378,10 @@ export async function streamChat(
 
   armSilence();
   try {
-    const response = await apiFetch(`${API_BASE}/api/chat`, {
+    const response = await apiFetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      // Field names must match ChatRequest (hand-built body, not typed).
-      // model null -> server default.
-      body: JSON.stringify({
-        prompt,
-        conversation_id: conversationId,
-        model,
-        ...(messageId ? { message_id: messageId } : {}),
-      }),
+      body: JSON.stringify(body),
       signal: controller.signal,
     });
     armSilence();
