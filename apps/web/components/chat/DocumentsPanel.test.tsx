@@ -1,8 +1,12 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DocumentsPanel } from "@/components/chat/DocumentsPanel";
-import { listDocuments, type DocumentSummary } from "@/lib/chatApi";
+import {
+  listDocuments,
+  uploadDocument,
+  type DocumentSummary,
+} from "@/lib/chatApi";
 
 vi.mock("@/lib/chatApi", () => ({
   listDocuments: vi.fn(),
@@ -81,5 +85,91 @@ describe("DocumentsPanel status labels", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "failed" }));
     expect(await screen.findByText(reason)).toBeVisible();
+  });
+});
+
+const EMPTY =
+  "No documents yet. Upload a .txt, .md, .pdf or .docx to chat over it.";
+
+function summaryOf(container: HTMLElement) {
+  return container.querySelector("summary") as HTMLElement;
+}
+
+// The count is the summary's only all-digit text.
+function countIn(container: HTMLElement) {
+  return within(summaryOf(container)).queryByText(/^\d+$/);
+}
+
+function skeletonIn(container: HTMLElement) {
+  return container.querySelector('details [data-skeleton="documents"]');
+}
+
+describe("DocumentsPanel loading", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("while the first list is in flight it shows the skeleton, no count and no empty line", async () => {
+    vi.mocked(listDocuments).mockReturnValue(new Promise(() => {}));
+    const { container } = render(<DocumentsPanel />);
+    await act(async () => {});
+
+    const skeleton = skeletonIn(container);
+    expect(skeleton).not.toBeNull();
+    expect(skeleton!.querySelectorAll("[data-skeleton-row]")).toHaveLength(3);
+    expect(countIn(container)).toBeNull();
+    expect(screen.queryByText(EMPTY)).toBeNull();
+  });
+
+  it("a failed first list shows no skeleton, no count and no empty line", async () => {
+    vi.mocked(listDocuments).mockRejectedValue(new Error("API 500"));
+    const { container } = render(<DocumentsPanel />);
+    await act(async () => {});
+    await act(async () => {});
+
+    expect(skeletonIn(container)).toBeNull();
+    expect(countIn(container)).toBeNull();
+    expect(screen.queryByText(EMPTY)).toBeNull();
+    expect(screen.getByText("+ Upload")).toBeInTheDocument();
+  });
+
+  it("a poll's list after a failed first list shows the count", async () => {
+    vi.useFakeTimers();
+    const pending = doc({ filename: "pending.txt", status: "pending" });
+    const ready = doc({ filename: "pending.txt", status: "ready" });
+    vi.mocked(listDocuments)
+      .mockRejectedValueOnce(new Error("API 500"))
+      .mockResolvedValue([ready]);
+    vi.mocked(uploadDocument).mockResolvedValue(pending);
+
+    const { container } = render(<DocumentsPanel />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(skeletonIn(container)).toBeNull();
+    expect(countIn(container)).toBeNull();
+
+    const input = container.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
+    const file = new File(["hello"], "pending.txt", { type: "text/plain" });
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [file] } });
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(uploadDocument).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("pending.txt")).toBeInTheDocument();
+    // An upload is not a list: the count waits for one.
+    expect(countIn(container)).toBeNull();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+    });
+    expect(vi.mocked(listDocuments).mock.calls.length).toBeGreaterThanOrEqual(
+      2,
+    );
+    expect(
+      within(summaryOf(container)).getByText("1", { exact: true }),
+    ).toBeInTheDocument();
   });
 });

@@ -37,6 +37,64 @@ test("the documents panel shows its empty state, help text and count, and collap
   await expect(page.getByText(EMPTY)).toBeVisible();
 });
 
+function documentsSkeleton(page: Page) {
+  return panel(page).locator('[data-skeleton="documents"]');
+}
+
+// The list request is held open until the assertions have run, so "while
+// loading" is a state the test controls, not a race it hopes to win.
+test("the documents panel shows skeleton rows, no count and no empty line while its list loads", async ({
+  page,
+}) => {
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route("**/api/documents", async (route) => {
+    if (route.request().method() === "GET") await held;
+    await route.fallback();
+  });
+  const requested = page.waitForRequest(
+    (r) => r.method() === "GET" && r.url().endsWith("/api/documents"),
+  );
+
+  await page.goto("/chat");
+  await requested;
+  const summary = panel(page).locator("summary");
+  const skeleton = documentsSkeleton(page);
+  await expect(skeleton).toBeVisible();
+  await expect(skeleton.locator("[data-skeleton-row]")).toHaveCount(3);
+  await expect(summary.getByText("0", { exact: true })).toHaveCount(0);
+  await expect(page.getByText(EMPTY)).toHaveCount(0);
+
+  release();
+  await expect(skeleton).toHaveCount(0);
+  await expect(page.getByText(EMPTY)).toBeVisible();
+  await expect(summary.getByText("0", { exact: true })).toBeVisible();
+});
+
+test("a failed documents list clears the skeleton and shows neither a count nor the empty line", async ({
+  page,
+}) => {
+  await page.route("**/api/documents", (route) =>
+    route.request().method() === "GET"
+      ? route.fulfill({ status: 500, json: { detail: "boom" } })
+      : route.fallback(),
+  );
+  const failed = page.waitForResponse(
+    (r) =>
+      r.request().method() === "GET" &&
+      r.url().endsWith("/api/documents") &&
+      r.status() === 500,
+  );
+
+  await page.goto("/chat");
+  await failed;
+  const summary = panel(page).locator("summary");
+  await expect(documentsSkeleton(page)).toHaveCount(0);
+  await expect(page.getByText(EMPTY)).toHaveCount(0);
+  await expect(summary.getByText("0", { exact: true })).toHaveCount(0);
+  await expect(summary.getByRole("button", { name: "+ Upload" })).toBeVisible();
+});
+
 test.describe("on a short screen", () => {
   test.use({ viewport: { width: 1280, height: 480 } });
 

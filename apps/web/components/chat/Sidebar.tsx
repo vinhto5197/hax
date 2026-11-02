@@ -8,12 +8,14 @@ import { useSession } from "next-auth/react";
 import { AccountMenu } from "@/components/chat/AccountMenu";
 import { useConversations } from "@/components/chat/ConversationsProvider";
 import { DocumentsPanel } from "@/components/chat/DocumentsPanel";
+import { SkeletonRows } from "@/components/chat/SkeletonRows";
 import { Wordmark } from "@/components/Wordmark";
 import { type ConversationSummary, deleteConversation } from "@/lib/chatApi";
 import { formatRelative } from "@/lib/time";
 
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
-  const { conversations, loaded, startNewChat, refresh } = useConversations();
+  const { conversations, loaded, loadFailed, startNewChat, refresh } =
+    useConversations();
   const { data: session } = useSession();
   const pathname = usePathname();
   const router = useRouter();
@@ -88,6 +90,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       {error && <p className="px-1 text-small text-status-failed">{error}</p>}
 
       <nav className="flex flex-1 flex-col gap-1 overflow-y-auto">
+        {conversations.length === 0 && !loaded && !loadFailed && (
+          <SkeletonRows kind="conversations" />
+        )}
         {conversations.length === 0
           ? loaded && (
               <p className="px-1 py-2 text-body text-ink-3">
