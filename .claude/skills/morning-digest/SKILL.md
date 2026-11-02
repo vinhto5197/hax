@@ -24,17 +24,16 @@ description: The one message that opens a day: nightly PRs reviewed, feature-lan
 4. **Explorer findings** worth promoting (each: what, evidence path, proposed lane) and the count dropped.
 5. **Spillover decisions**, each with options and a recommendation.
 6. **Yesterday's cost** by lane, tokens and window share; the main lane marked estimate.
-7. **New to you.**
 
 Then the main item.
 
 ## After the maintainer's merges
 
-Cross off merged items in `local/DEV_BACKLOG.local.md` (PR number beside each), note why for closed ones, update the marker's `last_reported_run`. Refill the routine's queue from the backlog's `[R]` items with full context per item. An item that guards against a failure nobody has seen ("this could happen") is queued only with evidence that it can: a reproduction, the source line that produces it, or an incident; without one it becomes `[H:verify]` and goes to the maintainer as a question, never to the routine (the queue text lives in `local/routine-queue.md` and fills the template `docs/routines/nightly-prompt.md`; at most ten items; the routine opens no new PR while ten are open), pulling any item a feature in flight would collide with; then clear the routine's connectors, which the service re-attaches by default. If every `[R]` item has a PR in some state, pause the routine (`enabled: false`) and re-enable it at the next refill.
+Cross off merged items in `local/DEV_BACKLOG.local.md` (PR number beside each), note why for closed ones, update the marker's `last_reported_run`. Refill the routine's queue from the backlog's `[R]` items with full context per item; an item estimated over ~120 changed lines is split before it is queued. An item that guards against a failure nobody has seen ("this could happen") is queued only with evidence that it can: a reproduction, the source line that produces it, or an incident; without one it becomes `[H:verify]` and goes to the maintainer as a question, never to the routine (the queue text lives in `local/routine-queue.md` and fills the template `docs/routines/nightly-prompt.md`; at most ten items; the routine opens no new PR while ten are open), pulling any item a feature in flight would collide with; then clear the routine's connectors, which the service re-attaches by default. If every `[R]` item has a PR in some state, pause the routine (`enabled: false`) and re-enable it at the next refill.
 
 ## The week file
 
-`local/retro/<ISO week>.md` is the retro's memory across sessions and compactions. One line per occurrence: `- YYYY-MM-DD [category] what happened → the structure that would absorb it`, categories from: forgot, yes-man, wrong-design, overclaim, scope-creep, tool-quirk, routine-abandon, ci-red, flake, review-miss, process. The hook counts them on Friday; two or more in a category is recurring. Three sources write to it, so no single one has to be reliable:
+`local/retro/<ISO week>.md` is the retro's memory across sessions and compactions. One line per occurrence: `- YYYY-MM-DD [category] what happened`, with no proposed fix (a fix proposed per line is how the process grew a piece per mistake; 107, 2026-11-02), categories from: forgot, yes-man, wrong-design, overclaim, scope-creep, tool-quirk, routine-abandon, ci-red, flake, review-miss, process. The hook counts them on Friday; two or more in a category is recurring. Three sources write to it, so no single one has to be reliable:
 
 1. **On the spot**, by the controller: a correction from the maintainer, a refused tool call, a mistake repeated, a process decision.
 2. **Each digest**, from the hard sources: an abandoned routine item, a PR red after three attempts, a `fixme` journey, a reviewer's HOLD, an explorer run that stopped on a failure.
@@ -42,4 +41,4 @@ Cross off merged items in `local/DEV_BACKLOG.local.md` (PR number beside each), 
 
 ## Friday
 
-After the digest, the retro: read the hook's tally, run source 3, then write at most fifteen lines: the week's recurring mistakes and the structure that absorbs each (a lint rule, a CI check, a test, a skill edit; a memory note only when nothing structural fits); cost by lane for the week against the previous one; changes to the brief template or the chain the week's gate blocks argue for.
+After the digest, the retro: read the hook's tally, run source 3, then write at most fifteen lines: the week's recurring mistakes and, for each, first what can be deleted or simplified, and only then the smallest change that absorbs it (a line in an existing skill, CLAUDE.md or memory index; a new script, hook or skill only when it retires one); the index sweep: a fresh agent compares every `MEMORY.md` line with its memory file and every drift is fixed, since only the index survives a compaction; cost by lane for the week against the previous one; changes to the brief template or the chain the week's gate blocks argue for.

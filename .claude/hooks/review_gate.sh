@@ -6,7 +6,7 @@
 # Ask"); without one the stop is refused and the reason sent back, so the
 # hand-off is fixed before anyone reads it. A plain ask with no hand-off (a
 # status answer, "say commit" for a small edit) passes: the section is for
-# real hand-offs only (Vinh, 2026-11-02, backlog 107 (c)).
+# real hand-offs only (the maintainer, 2026-11-02, backlog 107 (c)).
 # The final message is `last_assistant_message` when the input has it, else
 # the assistant text after the transcript's last user or tool-result entry. A
 # second stop in a row (stop_hook_active) always passes, so the hook can never

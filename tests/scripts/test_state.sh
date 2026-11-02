@@ -39,7 +39,7 @@ cat > "$p/local/DEV_BACKLOG.local.md" <<'EOF'
 
 ## START HERE
 
-### Next (Vinh's order)
+### Next (the maintainer's order)
 1. server-turn: approve the card.
 2. About you: write the brief.
 

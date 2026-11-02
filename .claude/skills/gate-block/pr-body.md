@@ -16,4 +16,4 @@ What else could be affected: callers, shared state, config, migrations, the depl
 ## Verification
 Test names (new and changed), journeys, screenshots attached, "CI is the gate."
 
-<!-- shape after pstack's opening-a-pr (MIT). Never in a PR body: review findings, cost, "new to you". -->
+<!-- shape after pstack's opening-a-pr (MIT). Never in a PR body: review findings, cost. -->

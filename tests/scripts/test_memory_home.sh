@@ -23,9 +23,9 @@ mkdir -p "$mem" "$work/repo"
 run() { jq -cn --arg p "$1" '{hook_event_name:"PostToolUse", tool_name:"Write", tool_input:{file_path:$p}}' | "$hook"; }
 context() { echo "$1" | jq -r '.hookSpecificOutput.additionalContext // empty' 2>/dev/null; }
 
-printf -- '---\nname: short\n---\n\nVinh wants X.\n\n**Why:** Vinh said so.\n\nPointer: skill gate-block.\n' > "$mem/feedback_short.md"
+printf -- '---\nname: short\n---\n\nThe maintainer wants X.\n\n**Why:** the maintainer said so.\n\nPointer: skill gate-block.\n' > "$mem/feedback_short.md"
 out=$(context "$(run "$mem/feedback_short.md")")
-case "$out" in *"one home"*"rules-inventory"*) report PASS "a memory write gets the one-home reminder" ;; *) report FAIL "short memory: '$out'" ;; esac
+case "$out" in *"one home"*"must not restate"*) report PASS "a memory write gets the one-home reminder" ;; *) report FAIL "short memory: '$out'" ;; esac
 case "$out" in *"lines"*) report FAIL "a short body was flagged as long" ;; *) report PASS "a short body is not flagged" ;; esac
 
 { printf -- '---\nname: long\n---\n\n'; for i in $(seq 1 14); do echo "Rule line $i."; done; } > "$mem/feedback_long.md"
