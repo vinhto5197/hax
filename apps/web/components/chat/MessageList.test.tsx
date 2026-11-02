@@ -1,7 +1,10 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import type { ComponentProps } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MessageList } from "@/components/chat/MessageList";
+import type { ChatMessage } from "@/lib/chatApi";
+import { REDUCED_MOTION } from "@/lib/media";
 
 beforeEach(() => {
   // jsdom has no layout; auto-scroll calls must not throw.
@@ -147,5 +150,140 @@ describe("MessageList stick-to-bottom on scroller resize", () => {
     unmount();
 
     expect(observers[0].disconnected).toBe(true);
+  });
+});
+
+const JUMP = { name: "Jump to latest" };
+
+// jsdom has no matchMedia; only the reduced-motion query is ever asked here.
+function stubReducedMotion(reduce: boolean) {
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    matches: reduce && query === REDUCED_MOTION,
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  }));
+}
+
+const BASE_MESSAGES: ChatMessage[] = [
+  { role: "user", content: "First question" },
+  { role: "assistant", content: "First answer" },
+];
+
+function listProps(overrides: Partial<ComponentProps<typeof MessageList>>) {
+  return {
+    messages: BASE_MESSAGES,
+    isLoading: false,
+    streamingContent: "",
+    status: null,
+    ...overrides,
+  };
+}
+
+function renderThread() {
+  const result = render(<MessageList {...listProps({})} />);
+  const el = result.container.firstElementChild as HTMLElement;
+  return { ...result, el };
+}
+
+// At the bottom of a 1000 px thread in a 400 px view, then 500 px up: an
+// upward scroll that leaves the bottom by more than 64 px.
+function scrollUpAndRelease(el: HTMLElement) {
+  setGeometry(el, 1000, 400);
+  el.scrollTop = 600;
+  fireEvent.scroll(el);
+  el.scrollTop = 100;
+  fireEvent.scroll(el);
+}
+
+describe("MessageList Jump to latest", () => {
+  beforeEach(() => {
+    stubResizeObserver();
+    stubReducedMotion(false);
+  });
+
+  it("The button is absent at first, present after an upward scroll past 64 px, absent after scrolling back within 64 px", () => {
+    const { el } = renderThread();
+    expect(screen.queryByRole("button", JUMP)).toBeNull();
+
+    scrollUpAndRelease(el);
+    expect(screen.queryByRole("button", JUMP)).not.toBeNull();
+
+    el.scrollTop = 560;
+    fireEvent.scroll(el);
+    expect(screen.queryByRole("button", JUMP)).toBeNull();
+  });
+
+  it("Jump to latest scrolls smoothly when reduced motion is not asked for", () => {
+    const { el } = renderThread();
+    const scrollTo = vi.fn();
+    el.scrollTo = scrollTo as unknown as HTMLElement["scrollTo"];
+    scrollUpAndRelease(el);
+
+    fireEvent.click(screen.getByRole("button", JUMP));
+
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    expect(scrollTo).toHaveBeenCalledWith({ top: 1000, behavior: "smooth" });
+    expect(screen.queryByRole("button", JUMP)).toBeNull();
+  });
+
+  it("Jump to latest scrolls instantly when reduced motion is asked for", () => {
+    stubReducedMotion(true);
+    const { el } = renderThread();
+    const scrollTo = vi.fn();
+    el.scrollTo = scrollTo as unknown as HTMLElement["scrollTo"];
+    scrollUpAndRelease(el);
+
+    fireEvent.click(screen.getByRole("button", JUMP));
+
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    expect(scrollTo).toHaveBeenCalledWith({ top: 1000, behavior: "auto" });
+  });
+
+  it("After Jump to latest the next content change pins the view to the bottom", () => {
+    const { el, rerender } = renderThread();
+    scrollUpAndRelease(el);
+
+    // The stubbed scrollTo moves nothing: only the re-engaged follow can.
+    fireEvent.click(screen.getByRole("button", JUMP));
+    expect(el.scrollTop).toBe(100);
+
+    setGeometry(el, 1400, 400);
+    rerender(
+      <MessageList
+        {...listProps({ isLoading: true, streamingContent: "A new piece" })}
+      />,
+    );
+
+    expect(el.scrollTop).toBe(1400);
+    expect(screen.queryByRole("button", JUMP)).toBeNull();
+  });
+
+  it("A new user turn re-engages the follow after the user scrolled up", () => {
+    const { el, rerender } = renderThread();
+    scrollUpAndRelease(el);
+
+    // An assistant message is not a send: the view stays where the user is.
+    const withReply: ChatMessage[] = [
+      ...BASE_MESSAGES,
+      { role: "assistant", content: "Another answer" },
+    ];
+    setGeometry(el, 1200, 400);
+    rerender(<MessageList {...listProps({ messages: withReply })} />);
+    expect(el.scrollTop).toBe(100);
+    expect(screen.queryByRole("button", JUMP)).not.toBeNull();
+
+    const withQuestion: ChatMessage[] = [
+      ...withReply,
+      { role: "user", content: "A new question" },
+    ];
+    setGeometry(el, 1400, 400);
+    rerender(<MessageList {...listProps({ messages: withQuestion })} />);
+    expect(el.scrollTop).toBe(1400);
+    expect(screen.queryByRole("button", JUMP)).toBeNull();
   });
 });

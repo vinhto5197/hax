@@ -1,11 +1,13 @@
-import { expect, test, type JSHandle, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import {
   composer,
+  distanceFromBottom,
   openNewChat,
   REPLY,
   send,
   sidebarLink,
   startConversation,
+  threadScroller,
 } from "./chat";
 
 // A user bubble keeps its line breaks, so one tall turn makes the thread
@@ -15,21 +17,6 @@ const TALL_TEXT = `Thread journey: a tall turn\n${TALL_LINES.join("\n")}`;
 const SLOW_TEXT = "slow: thread journey, the reply the view follows";
 // Mirrors STICK_THRESHOLD_PX in components/chat/MessageList.tsx.
 const STICK_THRESHOLD_PX = 64;
-
-// The thread's scroll container has no role or label: it is the first
-// scrollable element in main, ahead of the composer.
-async function threadScroller(page: Page) {
-  return page.getByRole("main").evaluateHandle((main) => {
-    const divs = Array.from(main.querySelectorAll("div"));
-    return divs.find((el) => getComputedStyle(el).overflowY === "auto")!;
-  });
-}
-
-function distanceFromBottom(scroller: JSHandle<HTMLDivElement>) {
-  return scroller.evaluate((el) => {
-    return el.scrollHeight - el.scrollTop - el.clientHeight;
-  });
-}
 
 test("hovering a reply shows its time, and Copy puts the reply on the clipboard", async ({
   page,
