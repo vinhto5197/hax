@@ -6,6 +6,7 @@ import { useSyncExternalStore } from "react";
 // globals.css, in the unit each is declared in there (rem and px).
 export const DESKTOP = "(min-width: 48rem)";
 export const SHORT = "(max-height: 500px)";
+export const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
 
 type Subscribe = (onChange: () => void) => () => void;
 

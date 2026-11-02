@@ -1,4 +1,4 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type JSHandle, type Page } from "@playwright/test";
 
 export const REPLY = "Hello from the fake model.";
 export const SLOW_REPLY = "Slowly streaming reply";
@@ -34,4 +34,19 @@ export async function startConversation(page: Page, text: string) {
 export async function openNewChat(page: Page) {
   await page.getByRole("link", { name: "+ New chat", exact: true }).click();
   await expect(page).toHaveURL(/\/chat$/);
+}
+
+// The thread's scroll container has no role or label: it is the first
+// scrollable element in main, ahead of the composer.
+export async function threadScroller(page: Page) {
+  return page.getByRole("main").evaluateHandle((main) => {
+    const divs = Array.from(main.querySelectorAll("div"));
+    return divs.find((el) => getComputedStyle(el).overflowY === "auto")!;
+  });
+}
+
+export function distanceFromBottom(scroller: JSHandle<HTMLDivElement>) {
+  return scroller.evaluate((el) => {
+    return el.scrollHeight - el.scrollTop - el.clientHeight;
+  });
 }
