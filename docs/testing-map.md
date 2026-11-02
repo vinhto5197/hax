@@ -33,7 +33,7 @@ What the e2e stack can stage today, and what it cannot:
 | 15 | New chat during a reply keeps that reply out of the new chat | switch | – |
 | 16 | Switch via the sidebar; reload, back and forward | hist | – |
 | 17 | Delete conversation: confirm or cancel; deleting the open one goes to `/chat`; error line | `chat-basics.member`, py:test_authz_conversations (error line: no journey can fail a delete) | – |
-| 18 | Empty sidebar shows "No conversations yet", only once the list has loaded (never while it loads) | `chat-basics.member` | – |
+| 18 | Sidebar while loading: skeleton rows, never "No conversations yet"; a failed first list clears them; empty sidebar shows "No conversations yet" once loaded | `chat-basics.member`, ConversationsProvider.test | – |
 | 19 | "Couldn't load this conversation." | useChat.test | – |
 | 20 | 409 "reply in progress": message, refused turn removed, retry works | guard, useChat.test, chatApi.test, py:test_turn_guard | – |
 | 21a | Model error mid-reply: "The reply was interrupted." with Try again (row 22c), no partial, nothing stored, conversation free | `failed-reply.member`, useChat.test, chatApi.test, py:test_failed_reply, py:test_turn_guard | – |
@@ -76,7 +76,7 @@ What the e2e stack can stage today, and what it cannot:
 | 39 | Upload refusals (type, 5 MB, 256 KB, hourly and daily caps) shown | `documents-panel.member` (type, 5 MB, 256 KB), chatApi.test, py:test_upload_limits (caps), py:test_authz_documents | – |
 | 40 | Delete with confirm; a 404 counts as success | `documents-lifecycle.member`, chatApi.test, py:test_authz_documents | – |
 | 41 | Download by clicking the filename (labelled "Download <filename>", ↓ after the name); download error message | `documents-lifecycle.member`, DocumentsPanel.test, chatApi.test, py:test_authz_documents | – |
-| 42 | Empty state, count, help text, collapse; closed by default on short screens | `documents-panel.member` | – |
+| 42 | Empty state, count, help text, collapse; closed by default on short screens; skeleton rows and no count while loading; a failed first list shows neither | `documents-panel.member`, DocumentsPanel.test | – |
 | 69 | An in-flight document reads "Processing…" with a spinner, a hint and aria-busy | `documents-lifecycle.member`, DocumentsPanel.test | – |
 
 ## Sidebar, drawer, phone
@@ -98,6 +98,7 @@ What the e2e stack can stage today, and what it cannot:
 | 74 | Phone: the menu opens inside the drawer; the dialog fills the width less the gutter; Escape closes only the menu or the dialog; a backdrop tap does nothing and leaves focus in the dialog; saving keeps the drawer open | `about-you.member`, AboutYouDialog.test, Shell.test | – |
 | 75 | The dialog and its text survive a resize across the breakpoint and a remount of the sidebar; it closes when the signed-in member changes, and a save under another member's cookie does not go out | `about-you.member` (resize), AboutYouProvider.test, Shell.test (route change: no journey can open the dialog in time) | – |
 | 77 | Delete targets (conversation and document rows) are at least 44 px wide, conversation ones 44 px tall, and never overlap a neighbour; AA contrast at rest | `chat-basics.member`, `documents-panel.member` (the contrast: L) | – |
+| 83 | Skeleton rows match the real rows' height and spacing; still under reduced motion | `chat-basics.member` (the documents geometry and the look: L) | – |
 
 ## Auth
 

@@ -150,29 +150,146 @@ test("deleting the open conversation lands on a fresh /chat", async ({
 
 // The list request is held open until the assertion has run, so "while
 // loading" is a state the test controls, not a race it hopes to win.
-test("the sidebar never says No conversations yet while its list is loading", async ({
-  page,
-}) => {
+async function holdConversationList(page: Page, rows?: unknown[]) {
   let release = () => {};
   const held = new Promise<void>((resolve) => (release = resolve));
   await page.route("**/api/conversations", async (route) => {
-    if (route.request().method() === "GET") await held;
-    await route.fallback();
+    if (route.request().method() !== "GET") return route.fallback();
+    await held;
+    if (rows) await route.fulfill({ json: rows });
+    else await route.fallback();
   });
-  const listRequested = page.waitForRequest(
+  const requested = page.waitForRequest(
     (r) => r.method() === "GET" && r.url().endsWith("/api/conversations"),
+  );
+  return { release, requested };
+}
+
+function conversationSkeleton(page: Page) {
+  return page
+    .getByRole("navigation")
+    .locator('[data-skeleton="conversations"]');
+}
+
+test("the sidebar shows skeleton rows, never No conversations yet, while its list is loading", async ({
+  page,
+}) => {
+  const list = await holdConversationList(page);
+
+  await page.goto("/chat");
+  await list.requested;
+  await expect(composer(page)).toBeVisible();
+  const nav = page.getByRole("navigation");
+  const skeleton = conversationSkeleton(page);
+  await expect(skeleton).toBeVisible();
+  await expect(skeleton.locator("[data-skeleton-row]")).toHaveCount(5);
+  await expect(nav.getByText(NO_CONVERSATIONS)).toHaveCount(0);
+
+  list.release();
+  await expect(skeleton).toHaveCount(0);
+  await expect(
+    nav
+      .locator('a[href^="/chat/"]')
+      .first()
+      .or(nav.getByText(NO_CONVERSATIONS)),
+  ).toBeVisible();
+});
+
+test("a conversation skeleton row is as tall and as far apart as a real row", async ({
+  page,
+}) => {
+  const rows = [1, 2, 3].map((n) => ({
+    id: `00000000-0000-4000-8000-00000000000${n}`,
+    title: `Stubbed conversation ${n}`,
+    created_at: "2026-10-28T10:00:00Z",
+    updated_at: "2026-10-28T10:00:00Z",
+  }));
+  const list = await holdConversationList(page, rows);
+
+  await page.goto("/chat");
+  await list.requested;
+  const skeletonRows = conversationSkeleton(page).locator(
+    "[data-skeleton-row]",
+  );
+  await expect(skeletonRows.first()).toBeVisible();
+  const skeleton = [
+    await skeletonRows.nth(0).boundingBox(),
+    await skeletonRows.nth(1).boundingBox(),
+  ];
+
+  list.release();
+  const nav = page.getByRole("navigation");
+  // The row is the innermost div holding the conversation's link.
+  const realRow = (id: string) =>
+    nav
+      .locator("div")
+      .filter({ has: page.locator(`a[href="/chat/${id}"]`) })
+      .last();
+  await expect(realRow(rows[1].id)).toBeVisible();
+  const real = [
+    await realRow(rows[0].id).boundingBox(),
+    await realRow(rows[1].id).boundingBox(),
+  ];
+
+  expect(Math.abs(skeleton[0]!.height - real[0]!.height)).toBeLessThanOrEqual(
+    1,
+  );
+  expect(Math.abs(skeleton[1]!.height - real[1]!.height)).toBeLessThanOrEqual(
+    1,
+  );
+  const skeletonPitch = skeleton[1]!.y - skeleton[0]!.y;
+  const realPitch = real[1]!.y - real[0]!.y;
+  expect(Math.abs(skeletonPitch - realPitch)).toBeLessThanOrEqual(1);
+});
+
+test("a failed conversation list clears the skeleton and never says No conversations yet", async ({
+  page,
+}) => {
+  await page.route("**/api/conversations", (route) =>
+    route.request().method() === "GET"
+      ? route.fulfill({ status: 500, json: { detail: "boom" } })
+      : route.fallback(),
+  );
+  const failed = page.waitForResponse(
+    (r) =>
+      r.request().method() === "GET" &&
+      r.url().endsWith("/api/conversations") &&
+      r.status() === 500,
   );
 
   await page.goto("/chat");
-  await listRequested;
-  await expect(composer(page)).toBeVisible();
+  await failed;
   const nav = page.getByRole("navigation");
+  await expect(conversationSkeleton(page)).toHaveCount(0);
   await expect(nav.getByText(NO_CONVERSATIONS)).toHaveCount(0);
 
-  release();
-  await expect(
-    nav.getByRole("link").first().or(nav.getByText(NO_CONVERSATIONS)),
-  ).toBeVisible();
+  await composer(page).fill("Basics journey: still usable");
+  await expect(sendButton(page)).toBeEnabled();
+});
+
+test("with reduced motion the skeleton does not pulse", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const list = await holdConversationList(page);
+
+  await page.goto("/chat");
+  await list.requested;
+  const skeleton = conversationSkeleton(page);
+  await expect(skeleton).toBeVisible();
+  const animation = await skeleton.evaluate((el) => {
+    const style = getComputedStyle(el);
+    return {
+      name: style.animationName,
+      duration: style.animationDuration,
+      iterations: style.animationIterationCount,
+    };
+  });
+  expect(animation).toEqual({
+    name: "pulse",
+    duration: "1e-05s",
+    iterations: "1",
+  });
+
+  list.release();
 });
 
 // The listing is stubbed: this test is about geometry only, and the member's
