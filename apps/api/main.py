@@ -12,6 +12,7 @@ from apps.api.routers.documents import router as documents_router
 from apps.api.routers.internal_auth import router as internal_auth_router
 from apps.api.routers.profile import router as profile_router
 from apps.api.turns import drain_turns
+from apps.api.watchdog import SlowRequestWatchdog
 from packages.db.session import assert_rls_bound_role
 
 
@@ -49,6 +50,9 @@ if _cors_origins:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+# Added last, so it is outermost and times every request, CORS included.
+app.add_middleware(SlowRequestWatchdog)
 
 # /api prefix lets the reverse proxy route by path without colliding with
 # Next's pages (Next's /chat page vs this /api/chat endpoint).
