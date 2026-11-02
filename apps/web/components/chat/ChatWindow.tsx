@@ -96,6 +96,9 @@ function ChatSession({
     send,
     stop,
     canStop,
+    stoppedNotice,
+    retry,
+    canRetry,
   } = useChat(
     conversationId,
     model || null,
@@ -170,8 +173,27 @@ function ChatSession({
 
       <div className="mx-auto w-full max-w-4xl px-4 pb-6 pt-2">
         {error ? (
-          <p role="alert" className="mb-2 text-small text-status-failed">
-            {error}
+          <p className="mb-2 text-small">
+            <span role="alert" className="text-status-failed">
+              {error}
+            </span>
+            {canRetry ? (
+              <>
+                {" "}
+                <TryAgain onClick={retry} />
+              </>
+            ) : null}
+          </p>
+        ) : null}
+        {stoppedNotice ? (
+          <p className="mb-2 text-small text-ink-3">
+            You stopped this reply.
+            {canRetry ? (
+              <>
+                {" "}
+                <TryAgain onClick={retry} />
+              </>
+            ) : null}
           </p>
         ) : null}
         <ChatInput
@@ -189,5 +211,17 @@ function ChatSession({
 
       {limited ? <DemoLimitModal /> : null}
     </div>
+  );
+}
+
+function TryAgain({ onClick }: { onClick: () => Promise<void> }) {
+  return (
+    <button
+      type="button"
+      onClick={() => void onClick()}
+      className="text-accent underline underline-offset-2"
+    >
+      Try again
+    </button>
   );
 }
