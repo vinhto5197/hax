@@ -7,33 +7,44 @@ import type {
   Source,
   StreamHandlers,
   streamChat as StreamChatFn,
+  streamRetry as StreamRetryFn,
 } from "@/lib/chatApi";
 import {
+  AlreadyAnsweredError,
   ConnectionLostError,
+  NothingToRetryError,
   ReplyFailedError,
+  ReplyRefusedError,
   TurnInProgressError,
 } from "@/lib/chatApi";
 import { useChat } from "@/hooks/useChat";
 
-const { getConversation, streamChat, DemoLimitError } = vi.hoisted(() => ({
-  getConversation: vi.fn<typeof GetConversationFn>(),
-  streamChat: vi.fn<typeof StreamChatFn>(),
-  DemoLimitError: class DemoLimitError extends Error {
-    constructor() {
-      super("demo_limit");
-      this.name = "DemoLimitError";
-    }
-  },
-}));
+const { getConversation, streamChat, streamRetry, DemoLimitError } = vi.hoisted(
+  () => ({
+    getConversation: vi.fn<typeof GetConversationFn>(),
+    streamChat: vi.fn<typeof StreamChatFn>(),
+    streamRetry: vi.fn<typeof StreamRetryFn>(),
+    DemoLimitError: class DemoLimitError extends Error {
+      constructor() {
+        super("demo_limit");
+        this.name = "DemoLimitError";
+      }
+    },
+  }),
+);
 vi.mock("@/lib/chatApi", async () => {
   const actual =
     await vi.importActual<typeof import("@/lib/chatApi")>("@/lib/chatApi");
   return {
     getConversation,
     streamChat,
+    streamRetry,
     DemoLimitError,
     TurnInProgressError: actual.TurnInProgressError,
+    NothingToRetryError: actual.NothingToRetryError,
+    AlreadyAnsweredError: actual.AlreadyAnsweredError,
     ReplyFailedError: actual.ReplyFailedError,
+    ReplyRefusedError: actual.ReplyRefusedError,
     ConnectionLostError: actual.ConnectionLostError,
     // The real request over a stubbed fetch: the hook tells an HTTP failure
     // from a network one by what stopReply rejects with.
@@ -1768,5 +1779,863 @@ describe("useChat stop", () => {
     );
 
     expect(result.current.error).toBe(INTERRUPTED);
+  });
+});
+
+describe("useChat try again", () => {
+  const INTERRUPTED = "The reply was interrupted.";
+  const POLL_MS = 2_000;
+  const fetchMock = vi.fn<typeof fetch>();
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    // stopReply's request: a 204 unless a test holds or fails it.
+    vi.stubGlobal("fetch", fetchMock);
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+  });
+
+  afterEach(() => {
+    fetchMock.mockReset();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  type Message = ConversationDetail["messages"][number];
+
+  function msg(
+    role: "user" | "assistant",
+    content: string,
+    id: string,
+  ): Message {
+    return {
+      id,
+      role,
+      content,
+      created_at: "2026-10-01T10:00:00Z",
+      sources: null,
+    };
+  }
+
+  function conv(messages: Message[], replying = false): ConversationDetail {
+    return { ...detail("c1", messages), replying };
+  }
+
+  const EARLIER = [
+    msg("user", "earlier", "u0"),
+    msg("assistant", "answer", "a0"),
+  ];
+
+  function serve(answer: () => ConversationDetail | Error) {
+    getConversation.mockImplementation(async () => {
+      const a = answer();
+      if (a instanceof Error) throw a;
+      return a;
+    });
+  }
+
+  async function tick(ms: number) {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ms);
+    });
+  }
+
+  function transcript(result: { current: ReturnType<typeof useChat> }) {
+    return result.current.messages.map((m) => [m.role, m.content]);
+  }
+
+  // The id the hook chose for its latest send, as streamChat received it.
+  function sentId(): string {
+    const id = streamChat.mock.calls.at(-1)?.[4];
+    if (!id) throw new Error("no message id was sent");
+    return id;
+  }
+
+  type Retry = {
+    handlers: StreamHandlers;
+    end: () => void;
+    fail: (reason: unknown) => void;
+  };
+
+  // The next streamRetry call stays in flight until the test ends or fails it.
+  function holdRetry(): Retry {
+    const retry = {} as Retry;
+    streamRetry.mockImplementationOnce(
+      (_conversationId, _after, _replace, handlers) =>
+        new Promise<void>((resolve, reject) => {
+          retry.handlers = handlers;
+          retry.end = () => resolve();
+          retry.fail = reject;
+        }),
+    );
+    return retry;
+  }
+
+  // The retry's own promise is never awaited: on some outcomes it settles
+  // only after polling.
+  async function pressRetry(result: { current: ReturnType<typeof useChat> }) {
+    await act(async () => {
+      Promise.resolve(result.current.retry()).catch(() => {});
+      await vi.advanceTimersByTimeAsync(0);
+    });
+  }
+
+  async function finish(fn: () => void) {
+    await act(async () => {
+      fn();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+  }
+
+  type Callbacks = {
+    onConversationCreated?: (id: string) => void;
+    onTurnComplete?: () => void;
+    onTurnStarted?: () => void;
+  };
+
+  async function loaded(
+    first: ConversationDetail | Error,
+    model: string | null = null,
+    callbacks: Callbacks = {},
+  ) {
+    serve(() => first);
+    const hook = renderHook(() =>
+      useChat(
+        "c1",
+        model,
+        callbacks.onConversationCreated,
+        callbacks.onTurnComplete,
+        callbacks.onTurnStarted,
+      ),
+    );
+    await tick(0);
+    return hook;
+  }
+
+  // A loaded conversation whose last message is the user's: the interrupted
+  // line.
+  async function interrupted(
+    model: string | null = null,
+    callbacks: Callbacks = {},
+  ) {
+    const hook = await loaded(conv([msg("user", "q", "u1")]), model, callbacks);
+    expect(hook.result.current.error).toBe(INTERRUPTED);
+    return hook;
+  }
+
+  // A send in a loaded conversation whose reply is stopped after `kept` was
+  // written (nothing when empty), the stop answered 204 and the stream ended
+  // with [DONE].
+  async function stopped(kept: string) {
+    const hook = await loaded(conv(EARLIER));
+    const turn = holdTurn();
+    const { settled } = await start(hook.result, "hi");
+    act(() => {
+      turn.handlers.onConversationId("c1");
+      if (kept) turn.handlers.onChunk(kept);
+    });
+    await act(async () => {
+      await hook.result.current.stop();
+    });
+    await act(async () => {
+      turn.end();
+      await settled;
+    });
+    return hook;
+  }
+
+  describe("canRetry", () => {
+    it("is true on the interrupted line of a loaded conversation whose last message is the user's", async () => {
+      const { result } = await interrupted();
+      expect(result.current.canRetry).toBe(true);
+    });
+
+    it("is false when the conversation loads with a reply last", async () => {
+      const { result } = await loaded(conv(EARLIER));
+      expect(result.current.error).toBeNull();
+      expect(result.current.canRetry).toBe(false);
+    });
+
+    it("is false on a failed load", async () => {
+      const { result } = await loaded(new Error("boom"));
+      expect(result.current.error).not.toBeNull();
+      expect(result.current.error).not.toBe(INTERRUPTED);
+      expect(result.current.canRetry).toBe(false);
+    });
+
+    it("is true after a reply failure once the prelude gave the conversation an id", async () => {
+      const turn = holdTurn();
+      const { result } = renderHook(() => useChat(null, null));
+      const { settled } = await start(result, "hi");
+      act(() => {
+        turn.handlers.onConversationId("c9");
+        turn.handlers.onChunk("Failing");
+      });
+      await act(async () => {
+        turn.fail(new ReplyFailedError("reply_failed"));
+        await settled.catch(() => {});
+      });
+      expect(result.current.error).toBe(INTERRUPTED);
+      expect(result.current.canRetry).toBe(true);
+    });
+
+    it("is false for a first turn cut before its prelude: no conversation id yet", async () => {
+      const turn = holdTurn();
+      const { result } = renderHook(() => useChat(null, null));
+      const { settled } = await start(result, "hi");
+      await act(async () => {
+        turn.fail(new ReplyFailedError("reply_failed"));
+        await settled.catch(() => {});
+      });
+      expect(result.current.canRetry).toBe(false);
+    });
+
+    it("is false on a reply already in progress", async () => {
+      const { result } = await loaded(conv(EARLIER));
+      streamChat.mockRejectedValueOnce(
+        new TurnInProgressError(
+          "A reply is already in progress in this conversation.",
+        ),
+      );
+      await start(result, "hi");
+      await tick(0);
+      expect(result.current.error).not.toBe(INTERRUPTED);
+      expect(result.current.canRetry).toBe(false);
+    });
+
+    it("is false while a retry runs", async () => {
+      const { result } = await interrupted();
+      holdRetry();
+      await pressRetry(result);
+      expect(result.current.isLoading).toBe(true);
+      expect(result.current.canRetry).toBe(false);
+    });
+  });
+
+  describe("after a failed reply", () => {
+    it("retry asks the server to rewrite the reply to the last user message, with the composer's model and replace false", async () => {
+      const { result } = await interrupted("claude-sonnet");
+      holdRetry();
+      await pressRetry(result);
+      expect(streamRetry).toHaveBeenCalledTimes(1);
+      const [conversationId, after, replace, , model] =
+        streamRetry.mock.calls[0];
+      expect(conversationId).toBe("c1");
+      expect(after).toBe("u1");
+      expect(replace).toBe(false);
+      expect(model).toBe("claude-sonnet");
+      expect(streamChat).not.toHaveBeenCalled();
+    });
+
+    it("retry clears the interrupted line at once, adds no user message, and streams the reply into the thread", async () => {
+      const { result } = await interrupted();
+      const retry = holdRetry();
+      await pressRetry(result);
+      expect(result.current.error).toBeNull();
+      expect(transcript(result)).toEqual([["user", "q"]]);
+
+      act(() => {
+        retry.handlers.onConversationId("c1");
+        retry.handlers.onStatus?.("Searching your documents");
+      });
+      expect(result.current.status).toBe("Searching your documents");
+      act(() => retry.handlers.onChunk("Recovered"));
+      expect(result.current.streamingContent).toBe("Recovered");
+      expect(transcript(result)).toEqual([["user", "q"]]);
+    });
+
+    it("Stop is offered during a retry once its prelude has arrived", async () => {
+      const { result } = await interrupted();
+      const retry = holdRetry();
+      await pressRetry(result);
+      expect(result.current.canStop).toBe(false);
+      act(() => retry.handlers.onConversationId("c1"));
+      expect(result.current.canStop).toBe(true);
+    });
+
+    it("a successful retry shows the conversation as the server holds it after [DONE] and calls onTurnComplete once, never onConversationCreated or onTurnStarted", async () => {
+      const onConversationCreated = vi.fn();
+      const onTurnComplete = vi.fn();
+      const onTurnStarted = vi.fn();
+      const { result } = await interrupted(null, {
+        onConversationCreated,
+        onTurnComplete,
+        onTurnStarted,
+      });
+      const retry = holdRetry();
+      await pressRetry(result);
+      act(() => {
+        retry.handlers.onConversationId("c1");
+        retry.handlers.onChunk("Recovered reply.");
+      });
+      const readsBefore = getConversation.mock.calls.length;
+      serve(() =>
+        conv([
+          msg("user", "q", "u1"),
+          msg("assistant", "Recovered reply.", "a1"),
+        ]),
+      );
+      await finish(() => retry.end());
+
+      expect(getConversation.mock.calls.length).toBeGreaterThan(readsBefore);
+      expect(transcript(result)).toEqual([
+        ["user", "q"],
+        ["assistant", "Recovered reply."],
+      ]);
+      expect(result.current.error).toBeNull();
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.streamingContent).toBe("");
+      expect(result.current.canRetry).toBe(false);
+      expect(onTurnComplete).toHaveBeenCalledTimes(1);
+      expect(onConversationCreated).not.toHaveBeenCalled();
+      expect(onTurnStarted).not.toHaveBeenCalled();
+    });
+
+    it("a successful retry whose re-read after [DONE] fails keeps the streamed reply shown", async () => {
+      const { result } = await interrupted();
+      const retry = holdRetry();
+      await pressRetry(result);
+      act(() => {
+        retry.handlers.onConversationId("c1");
+        retry.handlers.onChunk("Recovered reply.");
+      });
+      serve(() => new Error("boom"));
+      await finish(() => retry.end());
+
+      expect(transcript(result)).toEqual([
+        ["user", "q"],
+        ["assistant", "Recovered reply."],
+      ]);
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    it("a retry that fails again shows the interrupted line with Try again and keeps the question last", async () => {
+      const onTurnComplete = vi.fn();
+      const { result } = await interrupted(null, { onTurnComplete });
+      const retry = holdRetry();
+      await pressRetry(result);
+      act(() => {
+        retry.handlers.onConversationId("c1");
+        retry.handlers.onChunk("Failing reply");
+      });
+      await finish(() => retry.fail(new ReplyFailedError("reply_failed")));
+
+      expect(result.current.error).toBe(INTERRUPTED);
+      expect(result.current.canRetry).toBe(true);
+      expect(transcript(result)).toEqual([["user", "q"]]);
+      expect(result.current.streamingContent).toBe("");
+      expect(result.current.isLoading).toBe(false);
+      expect(onTurnComplete).not.toHaveBeenCalled();
+    });
+
+    it("no retry is sent while a send is in flight", async () => {
+      const { result } = await interrupted();
+      holdTurn();
+      await start(result, "again");
+      await pressRetry(result);
+      expect(streamRetry).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("refusals and lost retries", () => {
+    it("NothingToRetryError re-reads the conversation and shows it with no line", async () => {
+      const { result } = await interrupted();
+      streamRetry.mockRejectedValueOnce(new NothingToRetryError());
+      serve(() =>
+        conv([
+          msg("user", "q", "u1"),
+          msg("assistant", "Other tab's reply.", "a1"),
+        ]),
+      );
+      await pressRetry(result);
+      await tick(0);
+
+      expect(transcript(result)).toEqual([
+        ["user", "q"],
+        ["assistant", "Other tab's reply."],
+      ]);
+      expect(result.current.error).toBeNull();
+      expect(result.current.canRetry).toBe(false);
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    it("NothingToRetryError whose re-read still ends with the user's message shows the interrupted line with Try again", async () => {
+      const { result } = await interrupted();
+      streamRetry.mockRejectedValueOnce(new NothingToRetryError());
+      await pressRetry(result);
+      await tick(0);
+
+      expect(transcript(result)).toEqual([["user", "q"]]);
+      expect(result.current.error).toBe(INTERRUPTED);
+      expect(result.current.canRetry).toBe(true);
+    });
+
+    it("NothingToRetryError whose re-read finds a reply running shows Still answering and polls until it lands", async () => {
+      const { result } = await interrupted();
+      streamRetry.mockRejectedValueOnce(new NothingToRetryError());
+      serve(() => conv([msg("user", "q", "u1")], true));
+      await pressRetry(result);
+      await tick(0);
+      expect(result.current.stillAnswering).toBe(true);
+      expect(result.current.error).toBeNull();
+
+      serve(() =>
+        conv([msg("user", "q", "u1"), msg("assistant", "Landed.", "a1")]),
+      );
+      await tick(POLL_MS);
+      await tick(POLL_MS);
+      expect(result.current.stillAnswering).toBe(false);
+      expect(transcript(result)).toEqual([
+        ["user", "q"],
+        ["assistant", "Landed."],
+      ]);
+      expect(result.current.error).toBeNull();
+    });
+
+    it("AlreadyAnsweredError re-reads the conversation and shows the answer with no line", async () => {
+      const { result } = await interrupted();
+      streamRetry.mockRejectedValueOnce(new AlreadyAnsweredError());
+      serve(() =>
+        conv([
+          msg("user", "q", "u1"),
+          msg("assistant", "Other tab's reply.", "a1"),
+        ]),
+      );
+      await pressRetry(result);
+      await tick(0);
+
+      expect(transcript(result)).toEqual([
+        ["user", "q"],
+        ["assistant", "Other tab's reply."],
+      ]);
+      expect(result.current.error).toBeNull();
+      expect(result.current.canRetry).toBe(false);
+    });
+
+    it("a retry refused because a reply is in progress shows Still answering and polls until that reply lands", async () => {
+      const { result } = await interrupted();
+      streamRetry.mockRejectedValueOnce(
+        new TurnInProgressError(
+          "A reply is already in progress in this conversation.",
+        ),
+      );
+      serve(() => conv([msg("user", "q", "u1")], true));
+      await pressRetry(result);
+      await tick(0);
+      expect(result.current.stillAnswering).toBe(true);
+      expect(result.current.error).toBeNull();
+
+      serve(() =>
+        conv([
+          msg("user", "q", "u1"),
+          msg("assistant", "Other tab's reply.", "a1"),
+        ]),
+      );
+      await tick(POLL_MS);
+      await tick(POLL_MS);
+      expect(result.current.stillAnswering).toBe(false);
+      expect(transcript(result)).toEqual([
+        ["user", "q"],
+        ["assistant", "Other tab's reply."],
+      ]);
+      expect(result.current.error).toBeNull();
+    });
+
+    it("a retry whose stream is lost polls and shows the reply the server saved", async () => {
+      const { result } = await interrupted();
+      const retry = holdRetry();
+      await pressRetry(result);
+      act(() => {
+        retry.handlers.onConversationId("c1");
+        retry.handlers.onChunk("Recov");
+      });
+      serve(() => conv([msg("user", "q", "u1")], true));
+      await finish(() => retry.fail(new ConnectionLostError()));
+      expect(result.current.stillAnswering).toBe(true);
+
+      serve(() =>
+        conv([
+          msg("user", "q", "u1"),
+          msg("assistant", "Recovered reply.", "a1"),
+        ]),
+      );
+      await tick(POLL_MS);
+      await tick(POLL_MS);
+      expect(result.current.stillAnswering).toBe(false);
+      expect(transcript(result)).toEqual([
+        ["user", "q"],
+        ["assistant", "Recovered reply."],
+      ]);
+      expect(result.current.error).toBeNull();
+    });
+
+    it("a retry lost to a network failure with no response decides interrupted only after two consecutive free reads", async () => {
+      const { result } = await interrupted();
+      const readsBefore = getConversation.mock.calls.length;
+      streamRetry.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+      await pressRetry(result);
+
+      async function untilReads(n: number) {
+        for (
+          let i = 0;
+          i < 5 && getConversation.mock.calls.length < readsBefore + n;
+          i++
+        ) {
+          await tick(POLL_MS);
+        }
+        await tick(0);
+        expect(getConversation.mock.calls.length).toBeGreaterThanOrEqual(
+          readsBefore + n,
+        );
+      }
+
+      await untilReads(1);
+      // One free read is not final: the retry may still claim just after it.
+      expect(result.current.error).toBeNull();
+
+      await untilReads(2);
+      expect(result.current.error).toBe(INTERRUPTED);
+      expect(result.current.canRetry).toBe(true);
+      expect(transcript(result)).toEqual([["user", "q"]]);
+    });
+  });
+
+  describe("after a stop", () => {
+    it("a stop that ends the turn with kept text sets stoppedNotice and offers Try again with no error line", async () => {
+      const { result } = await stopped("Partial");
+      expect(transcript(result).at(-1)).toEqual(["assistant", "Partial"]);
+      expect(result.current.stoppedNotice).toBe(true);
+      expect(result.current.error).toBeNull();
+      expect(result.current.canRetry).toBe(true);
+    });
+
+    it("a stop before any text sets stoppedNotice and offers Try again under the question", async () => {
+      const { result } = await stopped("");
+      expect(transcript(result).at(-1)).toEqual(["user", "hi"]);
+      expect(result.current.stoppedNotice).toBe(true);
+      expect(result.current.canRetry).toBe(true);
+    });
+
+    it("a turn that ends without a stop leaves stoppedNotice false", async () => {
+      const { result } = await loaded(conv(EARLIER));
+      const turn = holdTurn();
+      const { settled } = await start(result, "hi");
+      act(() => {
+        turn.handlers.onConversationId("c1");
+        turn.handlers.onChunk("Whole");
+      });
+      await act(async () => {
+        turn.end();
+        await settled;
+      });
+      expect(result.current.stoppedNotice).toBe(false);
+      expect(result.current.canRetry).toBe(false);
+    });
+
+    it("the next send clears stoppedNotice", async () => {
+      const { result } = await stopped("Partial");
+      holdTurn();
+      await start(result, "next");
+      expect(result.current.stoppedNotice).toBe(false);
+    });
+
+    it("loading another conversation clears stoppedNotice", async () => {
+      serve(() => conv(EARLIER));
+      const hook = renderHook(({ id }) => useChat(id, null), {
+        initialProps: { id: "c1" },
+      });
+      await tick(0);
+      const turn = holdTurn();
+      const { settled } = await start(hook.result, "hi");
+      act(() => {
+        turn.handlers.onConversationId("c1");
+        turn.handlers.onChunk("Partial");
+      });
+      await act(async () => {
+        await hook.result.current.stop();
+      });
+      await act(async () => {
+        turn.end();
+        await settled;
+      });
+      expect(hook.result.current.stoppedNotice).toBe(true);
+
+      hook.rerender({ id: "c2" });
+      await tick(0);
+      expect(hook.result.current.stoppedNotice).toBe(false);
+    });
+
+    it("Try again after a stop with kept text sends replace true for the stopped question and hides the kept reply at once", async () => {
+      const { result } = await stopped("Partial");
+      const question = sentId();
+      holdRetry();
+      await pressRetry(result);
+
+      const [conversationId, after, replace] = streamRetry.mock.calls[0];
+      expect(conversationId).toBe("c1");
+      expect(after).toBe(question);
+      expect(replace).toBe(true);
+      expect(transcript(result)).toEqual([
+        ["user", "earlier"],
+        ["assistant", "answer"],
+        ["user", "hi"],
+      ]);
+      expect(result.current.stoppedNotice).toBe(false);
+    });
+
+    it("Try again after a stop before any text sends replace false", async () => {
+      const { result } = await stopped("");
+      const question = sentId();
+      holdRetry();
+      await pressRetry(result);
+      const [, after, replace] = streamRetry.mock.calls[0];
+      expect(after).toBe(question);
+      expect(replace).toBe(false);
+      expect(result.current.stoppedNotice).toBe(false);
+    });
+
+    it("the kept reply is gone for good once the retry's prelude arrives, and the new reply shows once", async () => {
+      const { result } = await stopped("Partial");
+      const question = sentId();
+      const retry = holdRetry();
+      await pressRetry(result);
+      act(() => {
+        retry.handlers.onConversationId("c1");
+        retry.handlers.onChunk("Fresh reply.");
+      });
+      serve(() =>
+        conv([
+          ...EARLIER,
+          msg("user", "hi", question),
+          msg("assistant", "Fresh reply.", "a2"),
+        ]),
+      );
+      await finish(() => retry.end());
+
+      expect(transcript(result)).toEqual([
+        ["user", "earlier"],
+        ["assistant", "answer"],
+        ["user", "hi"],
+        ["assistant", "Fresh reply."],
+      ]);
+      expect(result.current.stoppedNotice).toBe(false);
+      expect(result.current.error).toBeNull();
+    });
+
+    it("a retry after a stop that then fails leaves the question last with the interrupted line, the kept reply gone", async () => {
+      const { result } = await stopped("Partial");
+      const retry = holdRetry();
+      await pressRetry(result);
+      act(() => retry.handlers.onConversationId("c1"));
+      await finish(() => retry.fail(new ReplyFailedError("reply_failed")));
+
+      expect(transcript(result)).toEqual([
+        ["user", "earlier"],
+        ["assistant", "answer"],
+        ["user", "hi"],
+      ]);
+      expect(result.current.error).toBe(INTERRUPTED);
+      expect(result.current.canRetry).toBe(true);
+    });
+
+    it("a retry after a stop refused by the demo limit restores the kept reply and shows the limit", async () => {
+      const { result } = await stopped("Partial");
+      streamRetry.mockRejectedValueOnce(new DemoLimitError());
+      await pressRetry(result);
+      await tick(0);
+
+      expect(transcript(result)).toEqual([
+        ["user", "earlier"],
+        ["assistant", "answer"],
+        ["user", "hi"],
+        ["assistant", "Partial"],
+      ]);
+      expect(result.current.limited).toBe(true);
+    });
+
+    it("a retry after a stop refused with a 404 restores the kept reply under its question and shows the error", async () => {
+      const { result } = await stopped("Partial");
+      streamRetry.mockRejectedValueOnce(
+        new ReplyRefusedError(404, "Conversation not found"),
+      );
+      await pressRetry(result);
+      await tick(0);
+
+      expect(transcript(result)).toEqual([
+        ["user", "earlier"],
+        ["assistant", "answer"],
+        ["user", "hi"],
+        ["assistant", "Partial"],
+      ]);
+      expect(result.current.error).toBe("Conversation not found");
+      expect(result.current.canRetry).toBe(false);
+    });
+
+    it("a retry after a stop refused with a 500 never puts the kept reply back and shows what the server holds", async () => {
+      const { result } = await stopped("Partial");
+      const question = sentId();
+      // The claim's delete committed before the failure.
+      serve(() => conv([...EARLIER, msg("user", "hi", question)]));
+      streamRetry.mockRejectedValueOnce(
+        new ReplyRefusedError(500, "Internal Server Error"),
+      );
+      await pressRetry(result);
+      await tick(0);
+      expect(transcript(result)).toEqual([
+        ["user", "earlier"],
+        ["assistant", "answer"],
+        ["user", "hi"],
+      ]);
+
+      for (let i = 0; i < 4 && result.current.error === null; i++) {
+        await tick(POLL_MS);
+      }
+      expect(result.current.error).toBe(INTERRUPTED);
+      expect(result.current.canRetry).toBe(true);
+      expect(transcript(result)).toEqual([
+        ["user", "earlier"],
+        ["assistant", "answer"],
+        ["user", "hi"],
+      ]);
+    });
+
+    it("a stopped reply whose stream was lost, brought back by the poll, shows stoppedNotice and is the reply Try again replaces", async () => {
+      const { result } = await loaded(conv(EARLIER));
+      const turn = holdTurn();
+      await start(result, "hi");
+      act(() => {
+        turn.handlers.onConversationId("c1");
+        turn.handlers.onChunk("Partial");
+      });
+      await act(async () => {
+        await result.current.stop();
+      });
+      const question = sentId();
+      serve(() =>
+        conv([
+          ...EARLIER,
+          msg("user", "hi", question),
+          msg("assistant", "Partial", "a-kept"),
+        ]),
+      );
+      await finish(() => turn.fail(new ConnectionLostError()));
+      for (let i = 0; i < 5 && result.current.stillAnswering; i++) {
+        await tick(POLL_MS);
+      }
+      expect(result.current.stillAnswering).toBe(false);
+      expect(transcript(result).at(-1)).toEqual(["assistant", "Partial"]);
+      expect(result.current.stoppedNotice).toBe(true);
+      expect(result.current.canRetry).toBe(true);
+
+      holdRetry();
+      await pressRetry(result);
+      const [, after, replace] = streamRetry.mock.calls[0];
+      expect(after).toBe(question);
+      expect(replace).toBe(true);
+      expect(transcript(result)).toEqual([
+        ["user", "earlier"],
+        ["assistant", "answer"],
+        ["user", "hi"],
+      ]);
+    });
+
+    it("Try again is not offered while a stop request is still in flight", async () => {
+      const { result } = await loaded(conv(EARLIER));
+      let answer!: (status: number) => void;
+      fetchMock.mockImplementationOnce(
+        () =>
+          new Promise<Response>((resolve) => {
+            answer = (status) => resolve(new Response(null, { status }));
+          }),
+      );
+      const turn = holdTurn();
+      const { settled } = await start(result, "hi");
+      act(() => {
+        turn.handlers.onConversationId("c1");
+        turn.handlers.onChunk("Partial");
+      });
+      await act(async () => {
+        Promise.resolve(result.current.stop()).catch(() => {});
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      await act(async () => {
+        turn.end();
+        await settled;
+      });
+      expect(result.current.canRetry).toBe(false);
+      await pressRetry(result);
+      expect(streamRetry).not.toHaveBeenCalled();
+
+      await act(async () => {
+        answer(204);
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(result.current.canRetry).toBe(true);
+    });
+
+    it("a stop request that fails with an HTTP status after the turn settled clears stoppedNotice and shows the interrupted line when the conversation ends with the user's message", async () => {
+      const { result } = await loaded(conv(EARLIER));
+      let answer!: (status: number) => void;
+      fetchMock.mockImplementationOnce(
+        () =>
+          new Promise<Response>((resolve) => {
+            answer = (status) => resolve(new Response(null, { status }));
+          }),
+      );
+      const turn = holdTurn();
+      const { settled } = await start(result, "hi");
+      act(() => turn.handlers.onConversationId("c1"));
+      await act(async () => {
+        Promise.resolve(result.current.stop()).catch(() => {});
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      await act(async () => {
+        turn.end();
+        await settled;
+      });
+      expect(transcript(result).at(-1)).toEqual(["user", "hi"]);
+      expect(result.current.stoppedNotice).toBe(true);
+
+      await act(async () => {
+        answer(500);
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(result.current.stoppedNotice).toBe(false);
+      expect(result.current.error).toBe(INTERRUPTED);
+      expect(result.current.canRetry).toBe(true);
+    });
+
+    it("a stop request that fails with an HTTP status after a turn that kept text clears stoppedNotice and shows no line", async () => {
+      const { result } = await loaded(conv(EARLIER));
+      let answer!: (status: number) => void;
+      fetchMock.mockImplementationOnce(
+        () =>
+          new Promise<Response>((resolve) => {
+            answer = (status) => resolve(new Response(null, { status }));
+          }),
+      );
+      const turn = holdTurn();
+      const { settled } = await start(result, "hi");
+      act(() => {
+        turn.handlers.onConversationId("c1");
+        turn.handlers.onChunk("Partial");
+      });
+      await act(async () => {
+        Promise.resolve(result.current.stop()).catch(() => {});
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      await act(async () => {
+        turn.end();
+        await settled;
+      });
+      expect(result.current.stoppedNotice).toBe(true);
+
+      await act(async () => {
+        answer(500);
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(result.current.stoppedNotice).toBe(false);
+      expect(result.current.error).toBeNull();
+      expect(result.current.canRetry).toBe(false);
+    });
   });
 });
