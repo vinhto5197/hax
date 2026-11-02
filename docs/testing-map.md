@@ -121,7 +121,7 @@ What the e2e stack can stage today, and what it cannot:
 |---|---|---|---|
 | 62 | Privacy page public; mailto link | `routing.guest` | – |
 | 63 | Greeting by time of day and name; weekday; names shown as typed | greeting.test | – |
-| 64 | Greeting blank until hydrated | none | U |
+| 64 | Greeting blank until hydrated | `NewChat.test` | – |
 | 65 | Wordmark accessible name | Wordmark.test | – |
 | 66 | Fonts and dark-mode look | none | L |
 
@@ -129,4 +129,4 @@ What the e2e stack can stage today, and what it cannot:
 
 Produced by `python scripts/testing_map_counts.py` from the tables above; rerun it after editing a row and paste its output here.
 
-84 behaviours; 81 covered; 3 gaps: J 0 (J\* 0, J† 0), U 1, L 2.
+84 behaviours; 82 covered; 2 gaps: J 0 (J\* 0, J† 0), U 0, L 2.
