@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Proves .claude/hooks/review_gate.sh (a Stop hook): a final message that asks
-# the maintainer for a review word ("merge", "commit", "approved", "push",
-# "go <id>") without a "Your review" section is sent back; the same message
+# Proves .claude/hooks/review_gate.sh (a Stop hook): a final hand-off (it names
+# a PR, a brief card's artifact link or a gate block) that asks the maintainer
+# for a review word ("merge", "commit", "approved", "push", "go <id>") without
+# a "Your review" section is sent back; a plain ask with no hand-off passes; the same message
 # with the section, a message asking for nothing, and a second stop in a row
 # all pass. The final message is read from the transcript (the text after the
 # last user or tool-result entry), or from last_assistant_message when given.
@@ -48,10 +49,10 @@ out=$(run "$(transcript $'PR #44 is green.\n\n**Your review**\n1. Look at the sc
 out=$(run "$(transcript 'The deploy is live and health answers 200.')" false)
 [ -z "$out" ] && report PASS "a message asking for nothing passes" || report FAIL "plain message blocked: '$out'"
 
-out=$(run "$(transcript 'Reply “approved” or ask for a fifth look.')" false)
+out=$(run "$(transcript 'The card is at https://claude.ai/artifact/abc. Reply “approved” or ask for a fifth look.')" false)
 blocked "$out" && report PASS "curly quotes count" || report FAIL "curly-quoted ask passed: '$out'"
 
-out=$(run "$(transcript 'Reply "go server-turn" to start it.')" false)
+out=$(run "$(transcript 'Card: https://claude.ai/artifact/abc. Reply "go server-turn" to start it.')" false)
 blocked "$out" && report PASS "a go-word counts" || report FAIL "go-word passed: '$out'"
 
 # An earlier message's ask (before the last tool result) is not the final one.
@@ -62,23 +63,33 @@ out=$(run "$(transcript 'All checks passed.')" false)
 out=$(run "$(transcript 'The check looks for a quoted review word like "merge" or "commit".')" false)
 [ -z "$out" ] && report PASS "a mentioned word is not an ask" || report FAIL "a mention was blocked: '$out'"
 
-out=$(run "$(transcript 'The skill edit waits for your "commit".')" false)
+out=$(run "$(transcript 'The gate block is ready; it waits for your "merge".')" false)
 blocked "$out" && report PASS "a word waiting on the maintainer is an ask" || report FAIL "waiting-on ask passed: '$out'"
 
-out=$(run "$(transcript $'All green.\n\n**To end the review:** "merge".')" false)
+# Not a hand-off: no PR, card or gate block named. A plain ask passes.
+out=$(run "$(transcript 'The skill edit waits for your "commit".')" false)
+[ -z "$out" ] && report PASS "a plain ask with no hand-off passes" || report FAIL "plain ask blocked: '$out'"
+
+out=$(run "$(transcript 'CI is green. Say "merge" when ready.')" false)
+[ -z "$out" ] && report PASS "a status answer with no PR named passes" || report FAIL "status answer blocked: '$out'"
+
+out=$(run "$(transcript 'https://github.com/o/r/pull/7 is up. Reply "merge".')" false)
+blocked "$out" && report PASS "a PR link is a hand-off" || report FAIL "PR link ask passed: '$out'"
+
+out=$(run "$(transcript $'PR #44: all green.\n\n**To end the review:** "merge".')" false)
 blocked "$out" && report PASS "a to-end-the-review line is an ask" || report FAIL "end-the-review ask passed: '$out'"
 
 # Recounting an earlier ask is not an ask: "your" alone is no cue.
 out=$(run "$(transcript 'My first answer asked for your "commit" without the section.')" false)
 [ -z "$out" ] && report PASS "a recounted ask is not an ask" || report FAIL "recounted ask blocked: '$out'"
 
-out=$(run "$(transcript 'Reply "merge".')" false)
+out=$(run "$(transcript 'PR #44: reply "merge".')" false)
 case "$out" in *"only"*"do not repeat"*) report PASS "the reason asks for the section alone, no repeat" ;; *) report FAIL "reason: '$out'" ;; esac
 
-out=$(run "$(transcript 'Reply "merge".')" true)
+out=$(run "$(transcript 'PR #44: reply "merge".')" true)
 [ -z "$out" ] && report PASS "a second stop in a row passes" || report FAIL "stop_hook_active blocked: '$out'"
 
-out=$(jq -cn '{hook_event_name:"Stop", stop_hook_active:false, last_assistant_message:"Say \"commit\"."}' | "$hook")
+out=$(jq -cn '{hook_event_name:"Stop", stop_hook_active:false, last_assistant_message:"PR #44 is green. Say \"merge\"."}' | "$hook")
 blocked "$out" && report PASS "last_assistant_message is used when given" || report FAIL "last_assistant_message: '$out'"
 
 out=$(echo '{}' | "$hook"; echo "exit=$?")
