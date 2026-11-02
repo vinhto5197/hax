@@ -147,8 +147,9 @@ async def persist_assistant_turn(
     sources), bumping updated_at, in one transaction — "reply saved" and
     "conversation free" cannot disagree.
 
-    Called only by the turn's task (apps/api/turns.py), on a clean finish:
-    a stored reply is always complete. The claim is always released; the
+    Called only by the turn's task (apps/api/turns.py), on a clean finish
+    or a Stop with text: a stored reply is complete, or cut short by its user's
+    Stop. The claim is always released; the
     message is written only if something streamed — sources alone are not a
     turn. `claimed_at` is the claim's latest value, after any refresh.
     `sources` is the deduplicated provenance from the turn's searches; it is

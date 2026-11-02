@@ -10,6 +10,7 @@ import {
   getConversation,
   ReplyFailedError,
   type Source,
+  stopReply,
   streamChat,
   TurnInProgressError,
 } from "@/lib/chatApi";
@@ -61,6 +62,17 @@ function isNetworkFailure(err: unknown): boolean {
   );
 }
 
+// stopReply's bound fires as a TimeoutError: like a network failure, the stop
+// may have reached the server.
+function isStopNetworkFailure(err: unknown): boolean {
+  return (
+    isNetworkFailure(err) ||
+    (typeof err === "object" &&
+      err !== null &&
+      (err as { name?: unknown }).name === "TimeoutError")
+  );
+}
+
 type UseChatResult = {
   messages: ChatMessage[];
   isLoading: boolean;
@@ -80,6 +92,12 @@ type UseChatResult = {
   // null otherwise.
   restoreDraft: string | null;
   send: (text: string) => Promise<void>;
+  // Asks the server to stop the reply this page is streaming; the stream's
+  // own end then says what was kept.
+  stop: () => Promise<void>;
+  // After this send's prelude, while this page reads the stream and no stop
+  // request is in flight; never while "Still answering…".
+  canStop: boolean;
 };
 
 // Owns all chat state for the current conversation: transcript, streaming
@@ -106,6 +124,16 @@ export function useChat(
   const [activeId, setActiveId] = useState<string | null>(conversationId);
   const [stillAnswering, setStillAnswering] = useState(false);
   const [restoreDraft, setRestoreDraft] = useState<string | null>(null);
+  // This send's prelude has arrived and its stream is still being read: the
+  // turn is registered on the server, so a stop can find it.
+  const [streaming, setStreaming] = useState(false);
+  // A stop request in flight. The composer stays busy until it settles, so a
+  // slow stop can never land on the user's next turn.
+  const [stopping, setStopping] = useState(false);
+  // Set by Stop, reset by the next send, cleared when the server answered the
+  // stop with an error status (it did not stop it). While set, a reply that
+  // ends without text is the user's own doing: no "interrupted" line.
+  const stoppedRef = useRef(false);
   // A send in this tab owns the outcome of its turn until it settles: a load
   // landing meanwhile neither starts "Still answering…" nor reports an
   // interruption.
@@ -195,8 +223,9 @@ export function useChat(
             setMessages(toChatMessages(settled));
             setStillAnswering(false);
             setIsLoading(false);
-            if (endsWithUser(settled)) setError(REPLY_FAILED);
-            else onTurnCompleteRef.current?.();
+            if (endsWithUser(settled)) {
+              if (!stoppedRef.current) setError(REPLY_FAILED);
+            } else onTurnCompleteRef.current?.();
             return true;
           });
         } else if (endsWithUser(conv)) {
@@ -214,11 +243,14 @@ export function useChat(
     };
   }, [conversationId, startPolling]);
 
+  const busy = isLoading || stopping;
+
   const send = useCallback(
     async (text: string): Promise<void> => {
       const prompt = text.trim();
-      if (!prompt || isLoading) return;
+      if (!prompt || busy) return;
       sendingRef.current = true;
+      stoppedRef.current = false;
       const generation = generationRef.current;
       // This send's user message id: whether the send reached the server is
       // asked by this id alone, never by text or time.
@@ -278,7 +310,7 @@ export function useChat(
             return true;
           }
           setMessages(toChatMessages(conv));
-          if (endsWithUser(conv)) setError(REPLY_FAILED);
+          if (endsWithUser(conv) && !stoppedRef.current) setError(REPLY_FAILED);
           onTurnCompleteRef.current?.();
           return true;
         });
@@ -295,6 +327,7 @@ export function useChat(
               // Set-once: a late prelude can't overwrite activeId after we've
               // navigated elsewhere (which would misroute the next send).
               setActiveId((current) => current ?? id);
+              setStreaming(true);
               // Only fires on a new chat's first turn (activeId null only then).
               if (!activeId) onConversationCreated?.(id);
               // The prelude follows the saved user turn, which moved an
@@ -339,7 +372,7 @@ export function useChat(
           // The server stored no reply: drop the partial so the view matches
           // it. The user's turn was saved and stays.
           fullContent = "";
-          setError(REPLY_FAILED);
+          if (!stoppedRef.current) setError(REPLY_FAILED);
           return;
         }
         if (err instanceof ConnectionLostError) {
@@ -387,12 +420,13 @@ export function useChat(
           sendingRef.current = false;
           setIsLoading(false);
         }
+        setStreaming(false);
         setStreamingContent("");
         setStatus(null);
       }
     },
     [
-      isLoading,
+      busy,
       model,
       activeId,
       onConversationCreated,
@@ -402,9 +436,28 @@ export function useChat(
     ],
   );
 
+  const canStop = streaming && !stopping && !stillAnswering;
+
+  // Targets activeId, which the prelude set in the same update that made
+  // canStop true; never a send closure's id.
+  const stop = useCallback(async (): Promise<void> => {
+    if (!canStop || !activeId) return;
+    stoppedRef.current = true;
+    setStopping(true);
+    try {
+      await stopReply(activeId);
+    } catch (err) {
+      // An error status: the server did not stop it, so a later failure must
+      // show. A network failure keeps it set: that stop may have landed.
+      if (!isStopNetworkFailure(err)) stoppedRef.current = false;
+    } finally {
+      setStopping(false);
+    }
+  }, [canStop, activeId]);
+
   return {
     messages,
-    isLoading,
+    isLoading: busy,
     streamingContent,
     status,
     error,
@@ -412,5 +465,7 @@ export function useChat(
     stillAnswering,
     restoreDraft,
     send,
+    stop,
+    canStop,
   };
 }

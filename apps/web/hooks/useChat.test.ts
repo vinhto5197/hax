@@ -1,5 +1,5 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type {
   ConversationDetail,
@@ -35,6 +35,9 @@ vi.mock("@/lib/chatApi", async () => {
     TurnInProgressError: actual.TurnInProgressError,
     ReplyFailedError: actual.ReplyFailedError,
     ConnectionLostError: actual.ConnectionLostError,
+    // The real request over a stubbed fetch: the hook tells an HTTP failure
+    // from a network one by what stopReply rejects with.
+    stopReply: actual.stopReply,
   };
 });
 
@@ -1229,6 +1232,77 @@ describe("useChat still answering", () => {
     });
   });
 
+  describe("after Stop", () => {
+    const fetchMock = vi.fn<typeof fetch>();
+
+    beforeEach(() => {
+      vi.stubGlobal("fetch", fetchMock);
+      fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+    });
+
+    afterEach(() => {
+      fetchMock.mockReset();
+      vi.unstubAllGlobals();
+    });
+
+    async function pressStop(result: { current: ReturnType<typeof useChat> }) {
+      await act(async () => {
+        await result.current.stop();
+      });
+    }
+
+    it("a stopped reply whose stream is lost settles with the user's message last and no error line", async () => {
+      const { result } = await loaded("c1", conv("c1", EARLIER));
+      const turn = holdTurn();
+      await start(result, "hi");
+      act(() => turn.handlers.onConversationId("c1"));
+      await pressStop(result);
+      serve(() => conv("c1", [...EARLIER, sent("hi", 10)], true));
+
+      await lose(turn, new ConnectionLostError());
+      expect(result.current.stillAnswering).toBe(true);
+
+      serve(() => conv("c1", [...EARLIER, sent("hi", 10)]));
+      await tick(POLL_MS);
+      expect(result.current.stillAnswering).toBe(false);
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.error).toBeNull();
+      expect(transcript(result)).toEqual([
+        ["user", "earlier"],
+        ["assistant", "answer"],
+        ["user", "hi"],
+      ]);
+    });
+
+    it("a load that lands after a stopped reply ended polls to the user's message last with no error line", async () => {
+      vi.useFakeTimers();
+      const load = deferred<ConversationDetail>();
+      serve(() => load.promise);
+      const hook = renderHook(() => useChat("c1", null));
+      const turn = holdTurn();
+      const { settled } = await start(hook.result, "hi");
+      act(() => turn.handlers.onConversationId("c1"));
+      await pressStop(hook.result);
+      await settle(settled, () =>
+        turn.fail(new ReplyFailedError("reply_failed")),
+      );
+      expect(hook.result.current.error).toBeNull();
+
+      // Read before the stop took effect: still replying.
+      await act(async () => {
+        load.resolve(conv("c1", [...EARLIER, msg("user", "hi", 10)], true));
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(hook.result.current.stillAnswering).toBe(true);
+
+      serve(() => conv("c1", [...EARLIER, msg("user", "hi", 10)]));
+      await tick(POLL_MS);
+      expect(hook.result.current.stillAnswering).toBe(false);
+      expect(hook.result.current.error).toBeNull();
+      expect(transcript(hook.result).at(-1)).toEqual(["user", "hi"]);
+    });
+  });
+
   describe("a load landing mid-send", () => {
     it("does not show Still answering, and the send's own stream decides", async () => {
       vi.useFakeTimers();
@@ -1282,5 +1356,349 @@ describe("useChat still answering", () => {
       });
       expect(hook.result.current.error).toBeNull();
     });
+  });
+});
+
+describe("useChat stop", () => {
+  const INTERRUPTED = "The reply was interrupted.";
+  const fetchMock = vi.fn<typeof fetch>();
+
+  beforeEach(() => {
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    fetchMock.mockReset();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  function transcript(result: { current: ReturnType<typeof useChat> }) {
+    return result.current.messages.map((m) => [m.role, m.content]);
+  }
+
+  function stopAnswers(status: number) {
+    fetchMock.mockResolvedValue(new Response(null, { status }));
+  }
+
+  // The next stop request stays in flight until the test answers it.
+  function stopHeld(): { answer: (status: number) => void } {
+    const held = {} as { answer: (status: number) => void };
+    fetchMock.mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          held.answer = (status) => resolve(new Response(null, { status }));
+        }),
+    );
+    return held;
+  }
+
+  // A reply in a new chat whose prelude (the conversation id) has arrived.
+  async function replying(turn: Turn) {
+    const hook = renderHook(() => useChat(null, null));
+    const { settled } = await start(hook.result, "hi");
+    act(() => turn.handlers.onConversationId("c1"));
+    return { result: hook.result, settled };
+  }
+
+  // Returns the stop's promise wrapped, so awaiting the press does not also
+  // await the stop request.
+  async function pressStop(result: {
+    current: ReturnType<typeof useChat>;
+  }): Promise<{ stopping: Promise<void> }> {
+    let stopping!: Promise<void>;
+    await act(async () => {
+      stopping = Promise.resolve(result.current.stop());
+      // A rejection is asserted through the hook's state, not here.
+      stopping.catch(() => {});
+    });
+    return { stopping };
+  }
+
+  it("Stop is not offered before the reply's prelude arrives, and is once it has", async () => {
+    const turn = holdTurn();
+    const hook = renderHook(() => useChat(null, null));
+    await start(hook.result, "hi");
+    expect(hook.result.current.canStop).toBe(false);
+
+    act(() => turn.handlers.onConversationId("c1"));
+    expect(hook.result.current.canStop).toBe(true);
+  });
+
+  it("Stop asks the server to stop the reply's conversation", async () => {
+    const turn = holdTurn();
+    stopAnswers(204);
+    const { result } = await replying(turn);
+
+    await act(async () => {
+      await result.current.stop();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [input, init] = fetchMock.mock.calls[0];
+    expect(String(input)).toBe("/api/conversations/c1/stop");
+    expect((init?.method ?? "GET").toUpperCase()).toBe("POST");
+  });
+
+  it("a stop in flight takes Stop away at once, so it cannot be pressed twice", async () => {
+    const turn = holdTurn();
+    stopHeld();
+    const { result } = await replying(turn);
+
+    await pressStop(result);
+
+    expect(result.current.canStop).toBe(false);
+    expect(result.current.isLoading).toBe(true);
+  });
+
+  it("a stopped reply that ends with [DONE] keeps the partial as the assistant message, with no error line", async () => {
+    const turn = holdTurn();
+    stopAnswers(204);
+    const { result, settled } = await replying(turn);
+    act(() => {
+      turn.handlers.onChunk("Half an ");
+      turn.handlers.onChunk("answer");
+    });
+    const { stopping } = await pressStop(result);
+
+    await act(async () => {
+      await stopping;
+    });
+    await settle(settled, () => turn.end());
+
+    expect(transcript(result)).toEqual([
+      ["user", "hi"],
+      ["assistant", "Half an answer"],
+    ]);
+    expect(result.current.error).toBeNull();
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.canStop).toBe(false);
+  });
+
+  it("the composer stays busy until the stop request settles, even when [DONE] arrives first", async () => {
+    const turn = holdTurn();
+    const held = stopHeld();
+    const { result, settled } = await replying(turn);
+    act(() => turn.handlers.onChunk("Half an answer"));
+    const { stopping } = await pressStop(result);
+
+    await settle(settled, () => turn.end());
+    expect(transcript(result)).toEqual([
+      ["user", "hi"],
+      ["assistant", "Half an answer"],
+    ]);
+    expect(result.current.isLoading).toBe(true);
+
+    await act(async () => {
+      held.answer(204);
+      await stopping;
+    });
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.error).toBeNull();
+  });
+
+  it("after stop, a following reply_failed shows no error line and keeps the user message last", async () => {
+    const turn = holdTurn();
+    stopAnswers(204);
+    const { result, settled } = await replying(turn);
+    const { stopping } = await pressStop(result);
+    await act(async () => {
+      await stopping;
+    });
+
+    await settle(settled, () =>
+      turn.fail(new ReplyFailedError("reply_failed")),
+    );
+
+    expect(result.current.error).toBeNull();
+    expect(transcript(result)).toEqual([["user", "hi"]]);
+    expect(result.current.isLoading).toBe(false);
+  });
+
+  it("a reply_failed that arrives before the stop request's 204 shows no error line", async () => {
+    const turn = holdTurn();
+    const held = stopHeld();
+    const { result, settled } = await replying(turn);
+    const { stopping } = await pressStop(result);
+
+    await settle(settled, () =>
+      turn.fail(new ReplyFailedError("reply_failed")),
+    );
+    expect(result.current.isLoading).toBe(true);
+    await act(async () => {
+      held.answer(204);
+      await stopping;
+    });
+
+    expect(result.current.error).toBeNull();
+    expect(transcript(result)).toEqual([["user", "hi"]]);
+    expect(result.current.isLoading).toBe(false);
+  });
+
+  it("a stop request that fails with an HTTP status offers Stop again and a later reply failure still shows", async () => {
+    const turn = holdTurn();
+    stopAnswers(500);
+    const { result, settled } = await replying(turn);
+    const { stopping } = await pressStop(result);
+    await act(async () => {
+      await stopping.catch(() => {});
+    });
+
+    expect(result.current.canStop).toBe(true);
+    expect(result.current.isLoading).toBe(true);
+    expect(result.current.error).toBeNull();
+
+    await settle(settled, () =>
+      turn.fail(new ReplyFailedError("reply_failed")),
+    );
+    expect(result.current.error).toBe(INTERRUPTED);
+  });
+
+  it("a stop request that fails with a 404 offers Stop again and shows no error line", async () => {
+    const turn = holdTurn();
+    stopAnswers(404);
+    const { result } = await replying(turn);
+    const { stopping } = await pressStop(result);
+    await act(async () => {
+      await stopping.catch(() => {});
+    });
+
+    expect(result.current.canStop).toBe(true);
+    expect(result.current.error).toBeNull();
+  });
+
+  it("a stop request that fails on the network offers Stop again, and a later reply failure shows no error line", async () => {
+    const turn = holdTurn();
+    fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
+    const { result, settled } = await replying(turn);
+    const { stopping } = await pressStop(result);
+    await act(async () => {
+      await stopping.catch(() => {});
+    });
+
+    expect(result.current.canStop).toBe(true);
+    expect(result.current.error).toBeNull();
+
+    await settle(settled, () =>
+      turn.fail(new ReplyFailedError("reply_failed")),
+    );
+    expect(result.current.error).toBeNull();
+    expect(transcript(result)).toEqual([["user", "hi"]]);
+  });
+
+  it("a stop request that never settles frees the composer after its 10 s timeout", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: false });
+    // The request's own bound, driven by the fake clock.
+    vi.spyOn(AbortSignal, "timeout").mockImplementation((ms: number) => {
+      const controller = new AbortController();
+      setTimeout(
+        () => controller.abort(new DOMException("timed out", "TimeoutError")),
+        ms,
+      );
+      return controller.signal;
+    });
+    fetchMock.mockImplementation(
+      (_input, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () =>
+            reject(init.signal!.reason),
+          );
+        }),
+    );
+    const turn = holdTurn();
+    const { result, settled } = await replying(turn);
+    act(() => turn.handlers.onChunk("Half an answer"));
+    await pressStop(result);
+    await settle(settled, () => turn.end());
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(9_000);
+    });
+    expect(result.current.isLoading).toBe(true);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_500);
+    });
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.error).toBeNull();
+    expect(transcript(result)).toEqual([
+      ["user", "hi"],
+      ["assistant", "Half an answer"],
+    ]);
+  });
+
+  it("a stop request that times out keeps the stop: a reply_failed after it shows no error line", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: false });
+    vi.spyOn(AbortSignal, "timeout").mockImplementation((ms: number) => {
+      const controller = new AbortController();
+      setTimeout(
+        () => controller.abort(new DOMException("timed out", "TimeoutError")),
+        ms,
+      );
+      return controller.signal;
+    });
+    fetchMock.mockImplementation(
+      (_input, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () =>
+            reject(init.signal!.reason),
+          );
+        }),
+    );
+    const turn = holdTurn();
+    const { result, settled } = await replying(turn);
+    await pressStop(result);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_500);
+    });
+    expect(result.current.canStop).toBe(true);
+
+    await settle(settled, () =>
+      turn.fail(new ReplyFailedError("reply_failed")),
+    );
+    expect(result.current.error).toBeNull();
+    expect(transcript(result)).toEqual([["user", "hi"]]);
+  });
+
+  it("no send goes out while the stop request is still in flight", async () => {
+    const turn = holdTurn();
+    const held = stopHeld();
+    const { result, settled } = await replying(turn);
+    const { stopping } = await pressStop(result);
+    await settle(settled, () => turn.end());
+
+    await act(async () => {
+      await result.current.send("too soon");
+    });
+    expect(streamChat).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      held.answer(204);
+      await stopping;
+    });
+  });
+
+  it("the next send after a stopped reply shows a reply failure again", async () => {
+    const first = holdTurn();
+    stopAnswers(204);
+    const { result, settled } = await replying(first);
+    const { stopping } = await pressStop(result);
+    await act(async () => {
+      await stopping;
+    });
+    await settle(settled, () =>
+      first.fail(new ReplyFailedError("reply_failed")),
+    );
+    expect(result.current.error).toBeNull();
+
+    const second = holdTurn();
+    const next = await start(result, "again");
+    await settle(next.settled, () =>
+      second.fail(new ReplyFailedError("reply_failed")),
+    );
+
+    expect(result.current.error).toBe(INTERRUPTED);
   });
 });

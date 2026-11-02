@@ -28,6 +28,12 @@ interface ChatInputProps {
   // A demo visitor has no documents to ask about, so the placeholder
   // points them at hax itself.
   visitor?: boolean;
+  // A reply this page is waiting on: given onStop, Stop replaces Send.
+  // Never derived from `disabled` (a visitor at the cap is disabled, not
+  // waiting).
+  waiting?: boolean;
+  onStop?: () => void;
+  canStop?: boolean;
 }
 
 export function ChatInput({
@@ -37,6 +43,9 @@ export function ChatInput({
   model,
   onModelChange,
   visitor = false,
+  waiting = false,
+  onStop,
+  canStop = false,
 }: ChatInputProps) {
   const [input, setInput] = useState("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -134,28 +143,49 @@ export function ChatInput({
         ) : (
           <span />
         )}
-        <button
-          type="submit"
-          aria-label="Send"
-          title="Send"
-          className="flex size-8 shrink-0 items-center justify-center rounded-control bg-accent text-accent-ink disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-ink-3"
-          disabled={disabled || !input.trim()}
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.75"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
+        {waiting && onStop ? (
+          <button
+            type="button"
+            aria-label="Stop"
+            title="Stop"
+            onClick={onStop}
+            className="flex size-8 shrink-0 items-center justify-center rounded-control bg-accent text-accent-ink disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-ink-3"
+            disabled={!canStop}
           >
-            <path d="M13 3v5a2 2 0 0 1-2 2H4" />
-            <path d="M6.5 7.5 4 10l2.5 2.5" />
-          </svg>
-        </button>
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <rect x="4" y="4" width="8" height="8" rx="1.5" />
+            </svg>
+          </button>
+        ) : (
+          <button
+            type="submit"
+            aria-label="Send"
+            title="Send"
+            className="flex size-8 shrink-0 items-center justify-center rounded-control bg-accent text-accent-ink disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-ink-3"
+            disabled={disabled || !input.trim()}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.75"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M13 3v5a2 2 0 0 1-2 2H4" />
+              <path d="M6.5 7.5 4 10l2.5 2.5" />
+            </svg>
+          </button>
+        )}
       </div>
     </form>
   );
