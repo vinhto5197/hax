@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.auth import CurrentUser, current_user
 from apps.api.deps import get_session
+from apps.api.turns import stop_turn
 from packages.core.schemas.conversation import (
     ConversationDetailOut,
     ConversationOut,
@@ -52,4 +53,19 @@ async def delete_conversation(
     if not await conversations_repo.delete_owned(session, user.id, conversation_id):
         raise HTTPException(status_code=404, detail="conversation not found")
     await session.commit()
+    return Response(status_code=204)
+
+
+@router.post("/{conversation_id}/stop", status_code=204)
+async def stop_conversation_reply(
+    conversation_id: UUID,
+    session: AsyncSession = Depends(get_session),
+    user: CurrentUser = Depends(current_user),
+) -> Response:
+    # Ownership before the registry: turns are keyed by conversation only, so
+    # this check is what keeps a stop from crossing users. 204 whether or not
+    # a turn was running here: stopping is idempotent.
+    if await conversations_repo.get_owned(session, user.id, conversation_id) is None:
+        raise HTTPException(status_code=404, detail="conversation not found")
+    stop_turn(conversation_id)
     return Response(status_code=204)

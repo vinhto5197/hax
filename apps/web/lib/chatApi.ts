@@ -207,6 +207,18 @@ export async function deleteConversation(id: string): Promise<void> {
   throw new Error(await errorDetail(response));
 }
 
+// 204 whether or not a turn was running (stopping is idempotent and says
+// nothing about the turn). Bounded because the composer waits on it: the
+// timeout's rejection is a network failure, like fetch's own; any non-2xx
+// rejects with a plain Error.
+export async function stopReply(conversationId: string): Promise<void> {
+  const response = await apiFetch(
+    `${API_BASE}/api/conversations/${conversationId}/stop`,
+    { method: "POST", signal: AbortSignal.timeout(10_000) },
+  );
+  if (!response.ok) throw new Error(await errorDetail(response));
+}
+
 // {"error": <code>}: the model failed mid-reply. The server stored no reply,
 // released the conversation, and ends the stream after the frame. `message`
 // is the frame's code, never user copy.

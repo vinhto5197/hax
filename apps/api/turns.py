@@ -6,14 +6,17 @@ task alone owns the turn's end — saving the reply and releasing the claim —
 and the request only listens. A listener that goes away (disconnect,
 cancellation) detaches; the task carries on and the reply is still saved.
 
-A stored reply is always complete: a model failure, the turn deadline, or a
-cancellation (drain_turns at shutdown) stores nothing and releases the claim.
+A stored reply is always complete, or cut short by its user's Stop: a model
+failure, the turn deadline, or a cancellation (drain_turns at shutdown) stores
+nothing and releases the claim. A Stop stores the text written so far, or
+nothing if that text is blank; a drain always wins over a Stop.
 
 The registry is the only strong reference to a running task (the event loop
 holds tasks weakly), so a turn whose request is gone is not collected
-mid-reply. Turns live in the process that started them; a returning client
-learns the outcome from Postgres (`replying` on the conversation), so any
-process can answer it.
+mid-reply. Turns live in the process that started them, and so does Stop: a
+stop that reaches another process finds no turn. A returning client learns the
+outcome from Postgres (`replying` on the conversation), so any process can
+answer it.
 """
 
 import asyncio
@@ -43,6 +46,9 @@ Terminal = Literal["done", "failed"]
 T = TypeVar("T")
 
 _turns: set[asyncio.Task[None]] = set()
+# A lapsed claim can let a second turn for the same conversation register in
+# this process; an entry is removed only by the turn it points to.
+_by_conversation: dict[UUID, "Turn"] = {}
 
 
 async def _shielded(aw: Awaitable[T]) -> T:
@@ -77,6 +83,17 @@ class Turn:
         # Unbounded: the task never waits on its listener, and a detached
         # listener's backlog is one reply's events.
         self._queue: asyncio.Queue[dict | Terminal] = asyncio.Queue()
+        self._stopped = False
+        self._consumer: asyncio.Task[None] | None = None
+
+    def stop(self) -> None:
+        """End the model stream where it is; _run keeps what was written.
+        Cancels only the inner consumption, so the model call and its HTTP
+        stream end at once while the task's save still runs. A no-op once the
+        stream has finished."""
+        self._stopped = True
+        if self._consumer is not None and not self._consumer.done():
+            self._consumer.cancel()
 
     async def listen(self) -> AsyncIterator[dict | Terminal]:
         """Every event of the turn, then exactly one terminal marker. One
@@ -100,17 +117,37 @@ class Turn:
         heartbeat = asyncio.create_task(self._heartbeat(stop))
         completed = False
         outcome: Terminal = "failed"
+
+        async def consume() -> None:
+            async for item in stream_fn(messages):
+                event = {"content": item} if isinstance(item, str) else item
+                if "content" in event:
+                    buffer.append(event["content"])
+                for s in event.get("sources", ()):
+                    sources.setdefault((s["document_id"], s["chunk_idx"]), s)
+                self._queue.put_nowait(event)
+
         try:
             try:
                 async with asyncio.timeout(TURN_DEADLINE_SECONDS):
-                    async for item in stream_fn(messages):
-                        event = {"content": item} if isinstance(item, str) else item
-                        if "content" in event:
-                            buffer.append(event["content"])
-                        for s in event.get("sources", ()):
-                            sources.setdefault((s["document_id"], s["chunk_idx"]), s)
-                        self._queue.put_nowait(event)
-                completed = True
+                    # A stop that arrives before the stream starts keeps nothing.
+                    if not self._stopped:
+                        self._consumer = asyncio.create_task(consume())
+                        try:
+                            await self._consumer
+                            completed = True
+                        except asyncio.CancelledError:
+                            # A stop only when this task itself is not being
+                            # cancelled: a drain or the deadline (or both at
+                            # once with a stop) must propagate and store nothing.
+                            current = asyncio.current_task()
+                            if not self._stopped or (
+                                current is not None and current.cancelling() > 0
+                            ):
+                                raise
+                            # The model API rejects a whitespace-only text
+                            # block; storing one would break every later turn.
+                            completed = bool("".join(buffer).strip())
             except Exception as exc:
                 # Model failure or the deadline (TimeoutError). Type name only:
                 # provider errors can echo prompt content.
@@ -157,7 +194,8 @@ class Turn:
         stop.set()
         await heartbeat
         if not completed:
-            # A partial reply is never stored: history would replay it as whole.
+            # A partial reply is stored only when its user stopped it (see
+            # _run); otherwise history would replay it as whole.
             await chat_service.release_claim(self.conversation_id, self._token)
             return False
         # Saved and released before the terminal marker: a client that sees
@@ -230,7 +268,23 @@ def start_turn(
     task = asyncio.create_task(turn._run(stream_fn, messages))
     _turns.add(task)
     task.add_done_callback(_turns.discard)
+    _by_conversation[conversation_id] = turn
+
+    def unregister(_: asyncio.Task[None]) -> None:
+        if _by_conversation.get(conversation_id) is turn:
+            del _by_conversation[conversation_id]
+
+    task.add_done_callback(unregister)
     return turn
+
+
+def stop_turn(conversation_id: UUID) -> None:
+    """Stop the turn running for this conversation in this process, if any.
+    The caller has checked ownership: the registry is keyed by conversation
+    only."""
+    turn = _by_conversation.get(conversation_id)
+    if turn is not None:
+        turn.stop()
 
 
 async def drain_turns(timeout: float) -> None:

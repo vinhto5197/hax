@@ -94,6 +94,8 @@ function ChatSession({
     stillAnswering,
     restoreDraft,
     send,
+    stop,
+    canStop,
   } = useChat(
     conversationId,
     model || null,
@@ -101,6 +103,18 @@ function ChatSession({
     refresh,
     refresh,
   );
+
+  // The hook's isLoading also covers a pending stop request, which can
+  // outlive the reply's end; the thread shows no activity line for it.
+  const [stopPending, setStopPending] = useState(false);
+  const onStop = useCallback(async () => {
+    setStopPending(true);
+    try {
+      await stop();
+    } finally {
+      setStopPending(false);
+    }
+  }, [stop]);
 
   const titled = conversations.some((c) => c.id === createdId && c.title);
   useEffect(() => {
@@ -148,7 +162,7 @@ function ChatSession({
 
       <MessageList
         messages={messages}
-        isLoading={isLoading}
+        isLoading={isLoading && !stopPending}
         streamingContent={streamingContent}
         status={status}
         stillAnswering={stillAnswering}
@@ -167,6 +181,9 @@ function ChatSession({
           model={demo ? undefined : model}
           onModelChange={demo ? undefined : setModel}
           visitor={demo}
+          waiting={isLoading && !stillAnswering}
+          onStop={onStop}
+          canStop={canStop}
         />
       </div>
 
