@@ -18,8 +18,10 @@ type ConversationsContextValue = {
   conversations: ConversationSummary[];
   // False until the first list fetch succeeds: before that, an empty
   // `conversations` means "not loaded", not "none", and must not render the
-  // empty state.
+  // empty state. `loadFailed`: the latest call failed, so with !loaded the
+  // list is blank, not loading.
   loaded: boolean;
+  loadFailed: boolean;
   // Stable identity — safe as an effect/callback dep.
   refresh: () => void;
   // Bumped by startNewChat (every new-chat link, and deleting the open
@@ -50,6 +52,7 @@ export function ConversationsProvider({
 }) {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [newChatNonce, setNewChatNonce] = useState(0);
   // Ref, not state: read imperatively at click time; nothing renders it.
   const routedIdRef = useRef<string | null>(null);
@@ -64,10 +67,12 @@ export function ConversationsProvider({
         if (seq === refreshSeqRef.current) {
           setConversations(list);
           setLoaded(true);
+          setLoadFailed(false);
         }
       })
       .catch(() => {
         // A failed sidebar fetch shouldn't break the chat; leave the last list.
+        if (seq === refreshSeqRef.current) setLoadFailed(true);
       });
   }, []);
 
@@ -90,6 +95,7 @@ export function ConversationsProvider({
       value={{
         conversations,
         loaded,
+        loadFailed,
         refresh,
         newChatNonce,
         startNewChat,

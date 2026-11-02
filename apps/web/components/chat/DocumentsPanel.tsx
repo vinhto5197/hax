@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 
+import { SkeletonRows } from "@/components/chat/SkeletonRows";
 import {
   type DocumentSummary,
   deleteDocument,
@@ -45,6 +46,10 @@ function statusRank(doc: DocumentSummary): number {
 // (lib/showInPanel) and nothing else.
 export function DocumentsPanel() {
   const [documents, setDocuments] = useState<DocumentSummary[]>([]);
+  // Until a list lands, an empty `documents` means "unknown", not "none":
+  // no count and no empty line. A failed list ends the skeleton.
+  const [loaded, setLoaded] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -64,11 +69,18 @@ export function DocumentsPanel() {
   const [toggled, setToggled] = useState<boolean | null>(null);
   const open = toggled ?? !short;
 
+  function applyList(list: DocumentSummary[]) {
+    setDocuments(list);
+    setLoaded(true);
+    setLoadFailed(false);
+  }
+
   useEffect(() => {
     listDocuments()
-      .then(setDocuments)
+      .then(applyList)
       .catch(() => {
-        // A failed list shouldn't break the chat; leave the panel empty.
+        // A failed list shouldn't break the chat; leave the panel blank.
+        setLoadFailed(true);
       });
   }, []);
 
@@ -80,9 +92,10 @@ export function DocumentsPanel() {
     if (!hasPending) return;
     const id = setInterval(() => {
       listDocuments()
-        .then(setDocuments)
+        .then(applyList)
         .catch(() => {
           // Transient list failure; the next tick retries.
+          setLoadFailed(true);
         });
     }, POLL_INTERVAL_MS);
     return () => clearInterval(id);
@@ -162,7 +175,9 @@ export function DocumentsPanel() {
             ▸
           </span>
           Documents
-          <span className="font-normal text-ink-3">{documents.length}</span>
+          {loaded && (
+            <span className="font-normal text-ink-3">{documents.length}</span>
+          )}
         </span>
         <button
           type="button"
@@ -188,9 +203,13 @@ export function DocumentsPanel() {
       {error && <p className="px-1 text-small text-status-failed">{error}</p>}
 
       {documents.length === 0 ? (
-        <p className="px-1 text-small text-ink-3">
-          No documents yet. Upload a .txt, .md, .pdf or .docx to chat over it.
-        </p>
+        loaded ? (
+          <p className="px-1 text-small text-ink-3">
+            No documents yet. Upload a .txt, .md, .pdf or .docx to chat over it.
+          </p>
+        ) : (
+          !loadFailed && <SkeletonRows kind="documents" />
+        )
       ) : (
         <ul className="flex max-h-24 scroll-smooth flex-col gap-1 overflow-y-auto short:max-h-20">
           {ordered.map((doc) => {

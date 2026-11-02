@@ -111,3 +111,83 @@ describe("ConversationsProvider refresh", () => {
     expect(result.current.conversations).toEqual(LIST_B);
   });
 });
+
+type HeldEither = Held & { reject: (error: Error) => void };
+
+// Like holdList, but the test may also reject the call.
+function holdEither(): HeldEither {
+  const held = {} as HeldEither;
+  listConversations.mockImplementationOnce(
+    () =>
+      new Promise<ConversationSummary[]>((resolve, reject) => {
+        held.resolve = resolve;
+        held.reject = reject;
+      }),
+  );
+  return held;
+}
+
+describe("ConversationsProvider load state", () => {
+  it("a failed first list sets loadFailed and leaves loaded false", async () => {
+    const mount = holdEither();
+    const { result } = renderHook(() => useConversations(), { wrapper });
+    await waitFor(() => expect(listConversations).toHaveBeenCalledTimes(1));
+    expect(result.current.loaded).toBe(false);
+    expect(result.current.loadFailed).toBe(false);
+
+    await act(async () => {
+      mount.reject(new Error("API 500: Internal Server Error"));
+    });
+    await waitFor(() => expect(result.current.loadFailed).toBe(true));
+    expect(result.current.loaded).toBe(false);
+    expect(result.current.conversations).toEqual([]);
+  });
+
+  it("a later successful refresh clears loadFailed and sets loaded", async () => {
+    const mount = holdEither();
+    const { result } = renderHook(() => useConversations(), { wrapper });
+    await waitFor(() => expect(listConversations).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      mount.reject(new Error("API 500: Internal Server Error"));
+    });
+    await waitFor(() => expect(result.current.loadFailed).toBe(true));
+
+    const next = holdEither();
+    act(() => {
+      result.current.refresh();
+    });
+    await waitFor(() => expect(listConversations).toHaveBeenCalledTimes(2));
+    // Starting a call never touches either flag.
+    expect(result.current.loadFailed).toBe(true);
+    expect(result.current.loaded).toBe(false);
+
+    await act(async () => {
+      next.resolve(LIST_A);
+    });
+    await waitFor(() => expect(result.current.loaded).toBe(true));
+    expect(result.current.loadFailed).toBe(false);
+    expect(result.current.conversations).toEqual(LIST_A);
+  });
+
+  it("a superseded call's failure never sets loadFailed", async () => {
+    const earlier = holdEither();
+    const { result } = renderHook(() => useConversations(), { wrapper });
+    await waitFor(() => expect(listConversations).toHaveBeenCalledTimes(1));
+    const later = holdEither();
+    act(() => {
+      result.current.refresh();
+    });
+    await waitFor(() => expect(listConversations).toHaveBeenCalledTimes(2));
+
+    await act(async () => {
+      later.resolve(LIST_B);
+    });
+    await waitFor(() => expect(result.current.loaded).toBe(true));
+    await act(async () => {
+      earlier.reject(new Error("API 500: Internal Server Error"));
+    });
+    expect(result.current.loadFailed).toBe(false);
+    expect(result.current.loaded).toBe(true);
+    expect(result.current.conversations).toEqual(LIST_B);
+  });
+});
