@@ -129,4 +129,4 @@ What the e2e stack can stage today, and what it cannot:
 
 Produced by `python scripts/testing_map_counts.py` from the tables above; rerun it after editing a row and paste its output here.
 
-84 behaviours; 81 covered; 3 gaps: J 0 (J\* 0, J† 0), U 1, L 2.
+84 behaviours; 82 covered; 2 gaps: J 0 (J\* 0, J† 0), U 0, L 2.
