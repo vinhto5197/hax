@@ -104,6 +104,6 @@ if [ ${#lines[@]} -eq 0 ]; then
   case "$prompt" in BAU|bau|BAU*) echo "[due] BAU: nothing is due (digest done $last_digest)." ;; esac
 fi
 for l in ${lines[@]+"${lines[@]}"}; do echo "[due] $l"; done
-echo "[state] For the day's state, what is open or what comes next: \`scripts/state.sh\` prints it live, with the ordered next list from the backlog's START HERE. Read it before answering; never answer from recall."
+echo "[state] For the day's state, what is open or what comes next: \`scripts/state.sh\` prints it live: the ordered next list from the backlog's START HERE, then every open item. Read it before answering; never answer from recall."
 [ -n "$full" ] && printf '%s\n' "$full"
 exit 0
