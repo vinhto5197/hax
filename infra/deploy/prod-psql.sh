@@ -60,7 +60,10 @@ SQL
   printf 'OPS_DATABASE_URL=%s\n' "$ro" > "$ops"
   pg "$ro" -tAc 'SELECT 1' </dev/null >/dev/null || { echo "hax_readonly still cannot connect" >&2; exit 1; }
 fi
-exec docker run --rm -it postgres:16 psql "$ro"
+# A transaction left open in this session ends itself after a minute idle,
+# instead of pinning a snapshot (and any lock it holds) until psql quits.
+exec docker run --rm -it -e PGOPTIONS='-c idle_in_transaction_session_timeout=60s' \
+  postgres:16 psql "$ro"
 BOX
 
 # Base64 keeps the script intact through SSM parameter quoting; bash -c (not

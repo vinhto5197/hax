@@ -35,8 +35,18 @@ MIGRATIONS_DATABASE_URL_ASYNC = to_async_url(
 # checkout, at the cost of one fresh connect. Pool sizes are SQLAlchemy's
 # defaults on purpose: wrong sizes against RDS's connection limit queue
 # requests, which looks like a hang (backlog 12).
+# lock_timeout / statement_timeout bound how long an app statement waits for
+# someone else's lock and how long it runs, so a hang fails in seconds instead
+# of holding a request for minutes (backlog 82). App connections only: the
+# migrations engine (alembic env.py) builds its own without them.
 engine = create_async_engine(
-    DATABASE_URL_ASYNC, hide_parameters=True, pool_pre_ping=True, pool_recycle=1800
+    DATABASE_URL_ASYNC,
+    hide_parameters=True,
+    pool_pre_ping=True,
+    pool_recycle=1800,
+    connect_args={
+        "server_settings": {"lock_timeout": "5s", "statement_timeout": "30s"}
+    },
 )
 # expire_on_commit=False: the default's post-commit lazy reload isn't awaited in
 # async and raises MissingGreenlet. Trade-off: objects keep pre-commit values,
