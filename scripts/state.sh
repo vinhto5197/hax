@@ -4,7 +4,9 @@
 # ledger, the nightly queue, the digest and retro marks, the week's retro
 # tally, the explorer's last run. Then the ordered next list, the one part
 # that is a decision: the "### Next" section of the backlog's START HERE,
-# kept by the controller whenever the maintainer's decisions change it.
+# kept by the controller whenever the maintainer's decisions change it. Last,
+# every open item: the backlog's "## Open items" section, whole, so an answer
+# to "what's left" is never a hand-picked subset.
 # A missing source is named, never guessed. The due hook attaches this to the
 # day's first prompt; any answer about "what's next" starts from it.
 #
@@ -22,6 +24,13 @@ next_list() {
   local section
   section=$(awk '/^### Next/ {on=1; print; next} on && /^##/ {exit} on' "$backlog")
   if [ -z "$section" ]; then echo "next list: no '### Next' section in DEV_BACKLOG.local.md"; else echo "$section"; fi
+}
+
+open_items() {
+  [ -f "$backlog" ] || return
+  local section
+  section=$(awk '/^## Open items/ {on=1; print; next} on && /^## / {exit} on' "$backlog")
+  if [ -z "$section" ]; then echo "open items: no '## Open items' section in DEV_BACKLOG.local.md"; else echo "$section"; fi
 }
 
 if [ "${1:-}" = --next ]; then next_list; exit 0; fi
@@ -78,3 +87,6 @@ fi
 
 echo
 next_list
+
+echo
+open_items
