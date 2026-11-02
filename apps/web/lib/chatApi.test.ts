@@ -1116,3 +1116,183 @@ describe("stopReply", () => {
     }
   });
 });
+
+describe("streamRetry", () => {
+  function stream(reads: Array<string | Uint8Array>): void {
+    respondWith(() => sseResponse(reads));
+  }
+
+  async function rejection(promise: Promise<unknown>): Promise<unknown> {
+    return promise.then(
+      () => {
+        throw new Error("expected streamRetry to reject");
+      },
+      (err: unknown) => err,
+    );
+  }
+
+  it("posts after, replace and the chosen model as JSON to the conversation's retry route with credentials included", async () => {
+    const api = await load();
+    stream([sseEvent("[DONE]")]);
+    await api.streamRetry("c1", "m-1", false, handlers(), "claude-sonnet");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const { url, init } = call();
+    expect(url).toBe("/api/conversations/c1/retry");
+    expect((init.method ?? "GET").toUpperCase()).toBe("POST");
+    expect(init.credentials).toBe("include");
+    expect(new Headers(init.headers).get("content-type")).toBe(
+      "application/json",
+    );
+    expect(JSON.parse(init.body as string)).toEqual({
+      after: "m-1",
+      replace: false,
+      model: "claude-sonnet",
+    });
+  });
+
+  it("posts replace true when asked and a null model when none is chosen", async () => {
+    const api = await load();
+    stream([sseEvent("[DONE]")]);
+    await api.streamRetry("c1", "m-1", true, handlers());
+    expect(JSON.parse(call().init.body as string)).toEqual({
+      after: "m-1",
+      replace: true,
+      model: null,
+    });
+  });
+
+  it("dispatches the retry's events to its handlers in stream order and resolves at [DONE]", async () => {
+    const api = await load();
+    const h = handlers();
+    stream([
+      sseEvent({ conversation_id: "c1" }),
+      sseEvent({ status: "Searching your documents" }),
+      sseEvent({ content: "Recovered" }),
+      sseEvent({ sources: [source] }),
+      sseEvent({ content: " reply." }),
+      sseEvent("[DONE]"),
+      sseEvent({ content: "after" }),
+    ]);
+    await api.streamRetry("c1", "m-1", false, h);
+    expect(h.log).toEqual([
+      ["conversation", "c1"],
+      ["status", "Searching your documents"],
+      ["chunk", "Recovered"],
+      ["sources", [source]],
+      ["chunk", " reply."],
+    ]);
+  });
+
+  it("rejects a 409 nothing_to_retry with NothingToRetryError and delivers nothing", async () => {
+    const api = await load();
+    respondWith(() => jsonResponse({ detail: "nothing_to_retry" }, 409));
+    const h = handlers();
+    const err = await rejection(api.streamRetry("c1", "m-1", false, h));
+    expect(err).toBeInstanceOf(api.NothingToRetryError);
+    expect(err).not.toBeInstanceOf(api.TurnInProgressError);
+    expect(err).not.toBeInstanceOf(api.AlreadyAnsweredError);
+    expect(h.log).toEqual([]);
+  });
+
+  it("rejects a 409 already_answered with AlreadyAnsweredError and delivers nothing", async () => {
+    const api = await load();
+    respondWith(() => jsonResponse({ detail: "already_answered" }, 409));
+    const h = handlers();
+    const err = await rejection(api.streamRetry("c1", "m-1", false, h));
+    expect(err).toBeInstanceOf(api.AlreadyAnsweredError);
+    expect(err).not.toBeInstanceOf(api.TurnInProgressError);
+    expect(err).not.toBeInstanceOf(api.NothingToRetryError);
+    expect(h.log).toEqual([]);
+  });
+
+  it("rejects a 409 for a reply in progress with TurnInProgressError carrying the server's detail", async () => {
+    const api = await load();
+    const detail = "A reply is already in progress in this conversation.";
+    respondWith(() => jsonResponse({ detail }, 409));
+    const err = await rejection(
+      api.streamRetry("c1", "m-1", false, handlers()),
+    );
+    expect(err).toBeInstanceOf(api.TurnInProgressError);
+    expect((err as Error).message).toBe(detail);
+    expect(err).not.toBeInstanceOf(api.NothingToRetryError);
+  });
+
+  it("rejects a demo_limit 403 with DemoLimitError", async () => {
+    const api = await load();
+    respondWith(() => jsonResponse({ detail: { code: "demo_limit" } }, 403));
+    const err = await rejection(
+      api.streamRetry("c1", "m-1", false, handlers()),
+    );
+    expect(err).toBeInstanceOf(api.DemoLimitError);
+  });
+
+  it("rejects any other non-OK status with ReplyRefusedError carrying the status and the server's detail", async () => {
+    const api = await load();
+    respondWith(() => jsonResponse({ detail: "Conversation not found" }, 404));
+    const notFound = await rejection(
+      api.streamRetry("c1", "m-1", false, handlers()),
+    );
+    expect(notFound).toBeInstanceOf(api.ReplyRefusedError);
+    expect(
+      (notFound as InstanceType<typeof api.ReplyRefusedError>).status,
+    ).toBe(404);
+    expect((notFound as Error).message).toBe("Conversation not found");
+
+    respondWith(() => new Response("Bad Gateway", { status: 502 }));
+    const proxy = await rejection(
+      api.streamRetry("c1", "m-1", false, handlers()),
+    );
+    expect(proxy).toBeInstanceOf(api.ReplyRefusedError);
+    expect((proxy as InstanceType<typeof api.ReplyRefusedError>).status).toBe(
+      502,
+    );
+  });
+
+  it("rejects an error frame with ReplyFailedError after the events before it", async () => {
+    const api = await load();
+    const h = handlers();
+    stream([
+      sseEvent({ conversation_id: "c1" }),
+      sseEvent({ content: "Failing" }),
+      sseEvent({ error: "reply_failed" }),
+    ]);
+    const err = await rejection(api.streamRetry("c1", "m-1", false, h));
+    expect(err).toBeInstanceOf(api.ReplyFailedError);
+    expect(h.log).toEqual([
+      ["conversation", "c1"],
+      ["chunk", "Failing"],
+    ]);
+  });
+
+  it("rejects a stream that ends without [DONE] with ConnectionLostError", async () => {
+    const api = await load();
+    stream([sseEvent({ conversation_id: "c1" }), sseEvent({ content: "cut" })]);
+    const err = await rejection(
+      api.streamRetry("c1", "m-1", false, handlers()),
+    );
+    expect(err).toBeInstanceOf(api.ConnectionLostError);
+  });
+
+  it("NothingToRetryError and AlreadyAnsweredError are Errors named after their class", async () => {
+    const api = await load();
+    const nothing = new api.NothingToRetryError();
+    expect(nothing).toBeInstanceOf(Error);
+    expect(nothing.name).toBe("NothingToRetryError");
+    const answered = new api.AlreadyAnsweredError();
+    expect(answered).toBeInstanceOf(Error);
+    expect(answered.name).toBe("AlreadyAnsweredError");
+  });
+});
+
+describe("streamChat 409 after the split by detail", () => {
+  it("a 409 'This message was already sent.' still rejects with TurnInProgressError carrying the detail", async () => {
+    const api = await load();
+    const detail = "This message was already sent.";
+    respondWith(() => jsonResponse({ detail }, 409));
+    const err = await api
+      .streamChat("hi", "c1", handlers(), null, "m-1")
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(api.TurnInProgressError);
+    expect((err as Error).message).toBe(detail);
+  });
+});

@@ -15,6 +15,9 @@
 // - a prompt starting with "fail:" streams "Failing reply, part N. " for N =
 //   1..3, 500 ms apart, then destroys the connection without message_stop,
 //   which the SDK raises on (the API's model-failure path);
+// - a prompt starting with "flaky:" fails like "fail:" on the first streaming
+//   request for that exact text and answers "Recovered reply." on every later
+//   one (remembered in memory, so per run: journeys use unique text);
 // - a prompt starting with "search:" answers with one search_documents
 //   tool_use whose query is the rest of the prompt, trimmed (stop_reason
 //   "tool_use"); the follow-up call, whose last user turn carries the
@@ -65,6 +68,8 @@ const CODE_REPLY = [
 ].join("\n");
 const TITLE_REPLY = JSON.stringify({ title: "Fake model title" });
 
+// "flaky:" prompts already failed once.
+const flakyFailed = new Set();
 let messageCount = 0;
 let toolUseCount = 0;
 
@@ -139,17 +144,26 @@ function scriptReply(messages) {
       delayMs: LONG_DELAY_MS,
     };
   }
+  if (prompt.startsWith("flaky:")) {
+    if (flakyFailed.has(prompt)) return { pieces: ["Recovered reply."] };
+    flakyFailed.add(prompt);
+    return failingReply();
+  }
   if (prompt.startsWith("fail:")) {
-    return {
-      pieces: Array.from(
-        { length: 3 },
-        (_, i) => `Failing reply, part ${i + 1}. `,
-      ),
-      delayMs: FAIL_DELAY_MS,
-      fail: true,
-    };
+    return failingReply();
   }
   return { pieces: ["Hello ", "from the ", "fake model."] };
+}
+
+function failingReply() {
+  return {
+    pieces: Array.from(
+      { length: 3 },
+      (_, i) => `Failing reply, part ${i + 1}. `,
+    ),
+    delayMs: FAIL_DELAY_MS,
+    fail: true,
+  };
 }
 
 function sendJson(res, status, body) {

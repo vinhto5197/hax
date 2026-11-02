@@ -79,6 +79,38 @@ export class TurnInProgressError extends Error {
   }
 }
 
+// 409 nothing_to_retry: the conversation no longer ends where the page saw it
+// end (a newer turn, or no such question). Thrown by streamRetry; refused
+// before anything changed, so the caller re-reads the conversation.
+export class NothingToRetryError extends Error {
+  constructor() {
+    super("nothing_to_retry");
+    this.name = "NothingToRetryError";
+  }
+}
+
+// 409 already_answered: a reply to the question was stored after the page
+// last read it (another tab). Thrown by streamRetry; nothing was deleted, so
+// the caller re-reads the conversation and shows that reply.
+export class AlreadyAnsweredError extends Error {
+  constructor() {
+    super("already_answered");
+    this.name = "AlreadyAnsweredError";
+  }
+}
+
+// Any other non-OK status from a reply route, before the stream: the message
+// is the server's detail, `status` the HTTP status.
+export class ReplyRefusedError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "ReplyRefusedError";
+  }
+}
+
 // FastAPI's `detail`, else `fallback` (the status by default): statusText is
 // empty under HTTP/2 (any TLS-terminating proxy), so a bare status is
 // uninformative. `detail` is a string for HTTPException but an array of
@@ -357,6 +389,26 @@ export async function streamChat(
   );
 }
 
+// Writes a new reply to the stored user message `after` without storing it
+// again. `replace` says the page shows a reply to `after` that the new one
+// replaces (the server deletes it); false when the page shows none, and the
+// server then refuses a reply it finds (AlreadyAnsweredError). Errors as
+// documented on streamChat, plus NothingToRetryError.
+export async function streamRetry(
+  conversationId: string,
+  after: string,
+  replace: boolean,
+  handlers: StreamHandlers,
+  model: string | null = null,
+): Promise<void> {
+  // Field names must match RetryRequest (hand-built body, not typed).
+  await readReplyStream(
+    `${API_BASE}/api/conversations/${conversationId}/retry`,
+    { after, replace, model },
+    handlers,
+  );
+}
+
 // POSTs `body` as JSON to a route that answers with a reply's SSE stream and
 // reads it to the end: status mapping, the SSE reader and the silence limit
 // for every such route. Errors as documented on streamChat.
@@ -388,11 +440,14 @@ async function readReplyStream(
 
     if (await isDemoLimit(response)) throw new DemoLimitError();
     if (response.status === 409) {
-      throw new TurnInProgressError(
-        await errorDetail(response, TURN_IN_PROGRESS),
-      );
+      const detail = await errorDetail(response, TURN_IN_PROGRESS);
+      if (detail === "nothing_to_retry") throw new NothingToRetryError();
+      if (detail === "already_answered") throw new AlreadyAnsweredError();
+      throw new TurnInProgressError(detail);
     }
-    if (!response.ok) throw new Error(await errorDetail(response));
+    if (!response.ok) {
+      throw new ReplyRefusedError(response.status, await errorDetail(response));
+    }
     if (!response.body) {
       throw new Error("Streaming response body is missing.");
     }
