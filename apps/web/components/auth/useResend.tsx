@@ -27,7 +27,8 @@ export function useResend() {
     try {
       result = await resendVerification(email);
     } catch {
-      // A request that throws (network down, a bug) must not leave the
+      // post() (lib/authApi.ts) already turns a network failure into an
+      // error result, so only a bug throws here; it must still not leave the
       // button stuck on "sending".
       if (request === requestRef.current) setState("error");
       return;
