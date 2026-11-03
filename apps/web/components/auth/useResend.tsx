@@ -23,7 +23,16 @@ export function useResend() {
   async function resend(email: string) {
     const request = ++requestRef.current;
     setState("sending");
-    const result = await resendVerification(email);
+    let result: Awaited<ReturnType<typeof resendVerification>>;
+    try {
+      result = await resendVerification(email);
+    } catch {
+      // post() (lib/authApi.ts) already turns a network failure into an
+      // error result, so only a bug throws here; it must still not leave the
+      // button stuck on "sending".
+      if (request === requestRef.current) setState("error");
+      return;
+    }
     if (request !== requestRef.current) return;
     setState(
       result.ok

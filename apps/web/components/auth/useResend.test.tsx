@@ -114,6 +114,44 @@ describe("useResend", () => {
     });
     expect(result.current.state).toBe("rate_limited");
   });
+
+  it("ends in error, without rejecting, when the request throws", async () => {
+    let fail!: (reason: unknown) => void;
+    resendVerification.mockReturnValue(
+      new Promise((_resolve, reject) => (fail = reject)),
+    );
+    const { result } = renderHook(() => useResend());
+    let pending!: Promise<void>;
+    act(() => {
+      pending = result.current.resend("a@b.co");
+    });
+    expect(result.current.state).toBe("sending");
+    await act(async () => {
+      fail(new TypeError("Failed to fetch"));
+      await expect(pending).resolves.toBeUndefined();
+    });
+    expect(result.current.state).toBe("error");
+  });
+
+  it("ignores a rejection that lands after reset", async () => {
+    let fail!: (reason: unknown) => void;
+    resendVerification.mockReturnValue(
+      new Promise((_resolve, reject) => (fail = reject)),
+    );
+    const { result } = renderHook(() => useResend());
+    let pending!: Promise<void>;
+    act(() => {
+      pending = result.current.resend("a@b.co");
+    });
+    expect(result.current.state).toBe("sending");
+    act(() => result.current.reset());
+    expect(result.current.state).toBe("idle");
+    await act(async () => {
+      fail(new TypeError("Failed to fetch"));
+      await expect(pending).resolves.toBeUndefined();
+    });
+    expect(result.current.state).toBe("idle");
+  });
 });
 
 describe("ResendStatus", () => {
