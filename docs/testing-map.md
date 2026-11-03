@@ -71,7 +71,7 @@ What the e2e stack can stage today, and what it cannot:
 | # | Behaviour | Pinned by | Gap |
 |---|---|---|---|
 | 35 | Upload opens the panel, shows "Uploading…", adds a pending row | `documents-lifecycle.member`, chatApi.test | – |
-| 36 | Pending becomes ready via a 2.5 s poll that then stops | `documents-lifecycle.member` | – |
+| 36 | Pending becomes ready via a 2.5 s poll that then stops | `documents-lifecycle.member`, DocumentsPanel.test (stops polling once every document is ready) | – |
 | 37 | Failed status; tapping it shows the reason | `documents-lifecycle.member`, py:test_ingest_status, py:test_authz_documents | – |
 | 38 | Order: failed, then in progress, then ready | `documents-lifecycle.member` | – |
 | 39 | Upload refusals (type, 5 MB, 256 KB, hourly and daily caps) shown | `documents-panel.member` (type, 5 MB, 256 KB), chatApi.test, py:test_upload_limits (caps), py:test_authz_documents | – |

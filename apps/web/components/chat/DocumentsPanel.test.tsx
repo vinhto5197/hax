@@ -162,14 +162,42 @@ describe("DocumentsPanel loading", () => {
     // An upload is not a list: the count waits for one.
     expect(countIn(container)).toBeNull();
 
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(30_000);
-    });
+    // One poll interval per act(), so React commits each list before the
+    // next tick, as it does between real ticks; a single 30 s act() keeps
+    // the interval firing on the stale pending list.
+    for (let tick = 0; tick < 12; tick++) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2_500);
+      });
+    }
     expect(vi.mocked(listDocuments).mock.calls.length).toBeGreaterThanOrEqual(
       2,
     );
     expect(
       within(summaryOf(container)).getByText("1", { exact: true }),
     ).toBeInTheDocument();
+  });
+
+  it("stops polling once every document is ready", async () => {
+    vi.useFakeTimers();
+    vi.mocked(listDocuments)
+      .mockResolvedValueOnce([doc({ status: "processing" })])
+      .mockResolvedValue([doc({ status: "ready" })]);
+
+    render(<DocumentsPanel />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    // One poll tick turns the row ready.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_500);
+    });
+    expect(screen.getByText("ready")).toBeInTheDocument();
+    const settled = vi.mocked(listDocuments).mock.calls.length;
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+    });
+    expect(vi.mocked(listDocuments).mock.calls.length).toBe(settled);
   });
 });
