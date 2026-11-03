@@ -1,11 +1,13 @@
 ---
 name: blind-tests
-description: Tests written by a fresh agent from an interface and a behaviour list, never from the implementation; for delegated test writing (code written inline follows TDD instead)
+description: Tests written by a fresh agent from an interface and a behaviour list, never from the implementation, and before it (test-first); every lane, the main lane included
 ---
 
 # Blind tests
 
 The agent that wrote the code must not write its tests: tests written beside the implementation agree with it, so green proves nothing, and tests written against existing code pin today's bugs as intended behaviour. A fresh agent writes the tests from two inputs only, the public interface and a behaviour list, then the tests run against the real code.
+
+It is test-first with a different author, in every lane: the controller writes the behaviour list, the fresh agent writes the tests, the controller watches them fail, then the code is written until they pass. A pure refactor (no behaviour a user, a caller or a gate depends on changes) writes no new tests: the existing suite is its test, and it still gets the fresh-eyes reviewer.
 
 ## Which suite
 

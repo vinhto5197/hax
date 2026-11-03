@@ -172,6 +172,9 @@ this repo. Write prod-level comments only:
   request parameters (ADR 0002 addenda).
 ## Working lanes
 - Main: one item at a time with the maintainer; specs and plans in `local/`;
+  blind tests first for a behaviour change (skill `blind-tests`), one
+  fresh-eyes reviewer on every change, the adversarial review when it touches
+  auth, security, concurrency, a pool, the deploy path or more than one store;
   one gate block per slice (skill `gate-block`).
 - Feature: a brief (skill `feature-brief`, approved on an artifact) built by
   the `feature-chain` workflow in its own worktree, with blind tests (skill
