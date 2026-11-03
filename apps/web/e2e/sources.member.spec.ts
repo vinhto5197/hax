@@ -182,6 +182,28 @@ test.describe("desktop", () => {
       .poll(() => row.evaluate((el) => el.outerHTML), { timeout: 3_000 })
       .not.toBe(before);
   });
+
+  test("row 84: Show in panel with the panel already open puts the row in view with its highlight", async ({
+    page,
+  }) => {
+    expect(conversationPath).not.toBe("");
+    await page.goto(conversationPath);
+    const main = page.getByRole("main");
+    await expect(main.getByText(ANSWER, { exact: true })).toBeVisible();
+    await expect(panel(page)).toHaveAttribute("open", "");
+    const row = documentRow(page, SHORT.name);
+    await expect(row).toBeVisible();
+    await expect(row).not.toHaveAttribute("data-flash");
+
+    await chip(page, SHORT.name).click();
+    await main.getByRole("button", { name: "Show in panel" }).first().click();
+
+    await expect(panel(page)).toHaveAttribute("open", "");
+    await expect(row).toBeInViewport();
+    await expect(row).toHaveAttribute("data-flash", "true");
+    // Brief: the highlight clears by itself.
+    await expect(row).not.toHaveAttribute("data-flash", { timeout: 3_000 });
+  });
 });
 
 test.describe("phone", () => {
