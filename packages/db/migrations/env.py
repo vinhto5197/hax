@@ -29,19 +29,14 @@ target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
-    """Emit the migrations as SQL to stdout instead of running them.
-
-    No Engine and no DBAPI connection — nothing here may read the database.
-    """
-    context.configure(
-        url=MIGRATIONS_DATABASE_URL_ASYNC,
-        target_metadata=target_metadata,
-        literal_binds=True,
-        dialect_opts={"paramstyle": "named"},
+    """Refuse `alembic ... --sql`: data migrations (f9fc01e849ec's backfill)
+    read the database, which offline mode cannot, so it would print a partial
+    script and fail midway. Every environment migrates online (make migrate,
+    the deploy's migrate service)."""
+    raise SystemExit(
+        "alembic offline mode is not supported (--sql): "
+        "migrate online with `make migrate`"
     )
-
-    with context.begin_transaction():
-        context.run_migrations()
 
 
 def do_run_migrations(connection: Connection) -> None:

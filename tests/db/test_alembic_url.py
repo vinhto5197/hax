@@ -29,3 +29,27 @@ def test_migrations_run_with_a_percent_encoded_password():
     )
     assert proc.returncode == 0, proc.stderr
     assert "(head)" in proc.stdout
+
+
+def test_offline_sql_mode_is_refused_before_emitting_anything():
+    # Data migrations read the database, which --sql cannot: without the
+    # refusal it prints a partial script, then fails midway with a traceback.
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "alembic",
+            "-c",
+            "alembic.ini",
+            "upgrade",
+            "head",
+            "--sql",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert proc.returncode != 0
+    assert proc.stdout == ""
+    assert "offline mode is not supported" in proc.stderr
+    assert "Traceback" not in proc.stderr
