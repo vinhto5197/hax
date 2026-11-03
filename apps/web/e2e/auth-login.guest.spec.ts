@@ -44,6 +44,34 @@ test("wrong credentials show the generic message and the Google hint", async ({
   await expect(page).toHaveURL(/\/login$/);
 });
 
+test("a login the API never answers shows 'That took too long' and the button comes back", async ({
+  page,
+}) => {
+  // The ten-second limit itself is Next's server-side call to the API
+  // (lib/internalApi.test.ts); a browser cannot slow that call, so this
+  // answers the sign-in request the way Auth.js does once authorize() has
+  // failed with code "timeout".
+  await page.route("**/auth/callback/credentials*", (route) =>
+    route.fulfill({
+      json: {
+        url: new URL("/login?error=CredentialsSignin&code=timeout", page.url())
+          .href,
+      },
+    }),
+  );
+  await logIn(page, uniqueEmail("timeout"), PASSWORD);
+
+  await expect(
+    page.getByText("That took too long, please try again."),
+  ).toBeVisible();
+  await expect(page.getByText("Invalid email or password.")).toHaveCount(0);
+  await expect(page.getByText(GOOGLE_HINT)).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Log in", exact: true }),
+  ).toBeEnabled();
+  await expect(page).toHaveURL(/\/login$/);
+});
+
 test("an unverified account sees the verify message and Resend, not the Google hint", async ({
   page,
 }) => {

@@ -3,6 +3,8 @@ import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import { SignJWT, jwtVerify } from "jose";
 
+import { InternalApiTimeout, internalFetch } from "@/lib/internalApi";
+
 // Rate-limiting leaks nothing (unlike 401's anti-enumeration), so it surfaces
 // distinctly. `code` rides the Auth.js redirect as ?code=rate_limited and is
 // returned to the client as signIn()'s result.code (redirect:false path).
@@ -15,6 +17,22 @@ class RateLimit extends CredentialsSignin {
 // generic denial.
 class EmailUnverified extends CredentialsSignin {
   code = "email_unverified";
+}
+
+// An API that did not answer in time (lib/internalApi.ts). A CredentialsSignin
+// subclass, because Auth.js passes only those codes through to the page; any
+// other throw from authorize() becomes its generic "Configuration" error.
+class SignInTimeout extends CredentialsSignin {
+  code = "timeout";
+}
+
+async function callApi(path: string, init: RequestInit): Promise<Response> {
+  try {
+    return await internalFetch(`${process.env.API_INTERNAL_URL}${path}`, init);
+  } catch (error) {
+    if (error instanceof InternalApiTimeout) throw new SignInTimeout();
+    throw error;
+  }
 }
 
 // The minting half of the JWT bridge. Cross-module contract with
@@ -45,20 +63,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     Credentials({
       credentials: { email: {}, password: {} },
       async authorize(credentials) {
-        const res = await fetch(
-          `${process.env.API_INTERNAL_URL}/internal/auth/verify-credentials`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Internal-Secret": process.env.INTERNAL_API_SECRET ?? "",
-            },
-            body: JSON.stringify({
-              email: credentials.email,
-              password: credentials.password,
-            }),
+        const res = await callApi("/internal/auth/verify-credentials", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Internal-Secret": process.env.INTERNAL_API_SECRET ?? "",
           },
-        );
+          body: JSON.stringify({
+            email: credentials.email,
+            password: credentials.password,
+          }),
+        });
         if (res.status === 429) throw new RateLimit();
         // Unverified is also safe to distinguish — the password already
         // matched, so this isn't a credential-guessing oracle.
@@ -82,16 +97,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       credentials: {},
       async authorize(_credentials, request) {
         const forwarded = request.headers.get("x-forwarded-for") ?? "";
-        const res = await fetch(
-          `${process.env.API_INTERNAL_URL}/internal/auth/anonymous`,
-          {
-            method: "POST",
-            headers: {
-              "X-Internal-Secret": process.env.INTERNAL_API_SECRET ?? "",
-              "X-Visitor-IP": forwarded.split(",")[0].trim(),
-            },
+        const res = await callApi("/internal/auth/anonymous", {
+          method: "POST",
+          headers: {
+            "X-Internal-Secret": process.env.INTERNAL_API_SECRET ?? "",
+            "X-Visitor-IP": forwarded.split(",")[0].trim(),
           },
-        );
+        });
         if (res.status === 429) throw new RateLimit();
         if (!res.ok) return null;
         const { id } = (await res.json()) as { id: string };
@@ -115,23 +127,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       // sends the user to its own /auth/error page instead of ours.
       let hax: { id: string; email: string; name: string | null };
       try {
-        const res = await fetch(
-          `${process.env.API_INTERNAL_URL}/internal/auth/oauth-upsert`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Internal-Secret": process.env.INTERNAL_API_SECRET ?? "",
-            },
-            body: JSON.stringify({
-              provider: "google",
-              provider_account_id: account.providerAccountId,
-              email: profile?.email,
-              email_verified: profile?.email_verified === true,
-              name: profile?.name ?? null,
-            }),
+        const res = await callApi("/internal/auth/oauth-upsert", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Internal-Secret": process.env.INTERNAL_API_SECRET ?? "",
           },
-        );
+          body: JSON.stringify({
+            provider: "google",
+            provider_account_id: account.providerAccountId,
+            email: profile?.email,
+            email_verified: profile?.email_verified === true,
+            name: profile?.name ?? null,
+          }),
+        });
         if (res.status === 403) return "/login?error=google_unverified";
         if (!res.ok) return "/login?error=google_failed";
         hax = (await res.json()) as typeof hax;

@@ -67,12 +67,15 @@ function LoginForm() {
         redirect: false,
       });
       if (result?.error) {
-        // authorize() throws RateLimit ("rate_limited") on 429 and
-        // EmailUnverified ("email_unverified") on 403; both are safe to
+        // authorize() throws RateLimit ("rate_limited") on 429,
+        // EmailUnverified ("email_unverified") on 403 and SignInTimeout
+        // ("timeout") when the API does not answer in time; all are safe to
         // distinguish (no account-existence leak). Everything else collapses
         // to the generic anti-enumeration message.
         if (result.code === "rate_limited") {
           setError("Too many attempts — try again in a few minutes.");
+        } else if (result.code === "timeout") {
+          setError("That took too long, please try again.");
         } else if (result.code === "email_unverified") {
           setError("Verify your email first — check your inbox for the link.");
           setUnverifiedEmail(email);

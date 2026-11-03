@@ -109,6 +109,7 @@ What the e2e stack can stage today, and what it cannot:
 | 51 | Wrong-credentials message with Google hint; rate-limit message | `auth-login.guest` (rate limit: py:test_login_gate, API side) | – |
 | 52 | Unverified-email message and Resend button | `auth-login.guest`, py:test_login_gate, useResend.test | – |
 | 53 | `?error=` messages; `?verified` / `?reset` banners; email prefilled | `auth-login.guest` | – |
+| 85 | A login the API does not answer within 10 s shows "That took too long, please try again." and the button comes back (Google: the temporarily-unavailable message) | `auth-login.guest` (the page), internalApi.test (the 10 s limit on Next's server-side call: no browser can slow it) | – |
 | 54 | Signup: check-your-inbox panel, resend, validation, rate limit | `auth-signup.guest` (rate limit: py:test_signup_flow) | – |
 | 55 | Verify: no token → invalid view; verifies only on Confirm, then `/login?verified=1`; invalid link → resend form | `auth-signup.guest` (invalid paths), `auth-email.guest`, py:test_verify_email | – |
 | 56 | Forgot password: same panel whatever the email; error messages | `auth-signup.guest`, py:test_password_reset | – |
@@ -134,4 +135,4 @@ What the e2e stack can stage today, and what it cannot:
 
 Produced by `python scripts/testing_map_counts.py` from the tables above; rerun it after editing a row and paste its output here.
 
-88 behaviours; 86 covered; 2 gaps: J 0 (J\* 0, J† 0), U 0, L 2.
+90 behaviours; 88 covered; 2 gaps: J 0 (J\* 0, J† 0), U 0, L 2.
