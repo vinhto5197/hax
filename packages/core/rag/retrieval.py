@@ -63,7 +63,8 @@ async def retrieve(
 
         async with AsyncSessionLocal() as session:
             # Lazy SQL expression (embedding <=> qvec), evaluated per row by
-            # Postgres; the HNSW index serves the nearest-k ordering.
+            # Postgres. When the HNSW index serves the ordering it filters on
+            # user_id after the scan, so a query can return fewer than k rows.
             distance = Chunk.embedding.cosine_distance(qvec)
             stmt = (
                 select(
