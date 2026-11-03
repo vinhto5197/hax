@@ -76,12 +76,12 @@ function columnIsNumeric(rows: Row[], col: number): boolean {
 }
 
 // Cells are model output, and an uploaded file can author model output (the
-// invariant behind Markdown.tsx's image guard). In a spreadsheet a cell that
-// starts with = + - @ or a control character is a formula, so an export must
+// invariant behind Markdown.tsx's image guard). In a spreadsheet a cell whose
+// first non-whitespace character is = + - @ is a formula, so an export must
 // not hand one over verbatim: a leading apostrophe makes it text. Signed
 // figures ("-5", "-$1,850") parse as numbers and are left alone.
 export function inert(c: Cell): Cell {
-  return /^[=+\-@\t\r]/.test(c.trim()) && asNumber(c) === null ? `'${c}` : c;
+  return /^[=+\-@]/.test(c.trim()) && asNumber(c) === null ? `'${c}` : c;
 }
 
 // For the clipboard: spreadsheets split pasted text on tabs without being
