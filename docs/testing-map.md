@@ -2,7 +2,7 @@
 
 Every user-visible behaviour of the web app, and the test that would go red if it regressed. A behaviour change edits this file in the same PR as its test: a new row, or a row's **Pinned by** column.
 
-Swept through: 10af3c5 — the weekly journeys sweep (`docs/routines/journeys-prompt.md`) checks only the changes after this commit and moves the line in its PR.
+Swept through: 1b4245f — the weekly journeys sweep (`docs/routines/journeys-prompt.md`) checks only the changes after this commit and moves the line in its PR.
 
 Lanes: **J** a Playwright journey in `apps/web/e2e/` can observe it; **U** only a unit test can stage it (a race, an ordering, a mocked boundary); **L** a person has to look. Journey short names: demo = `demo.guest`, newchat = `new-chat.member`, hist = `history.member`, switch = `switch-mid-stream.member`, guard = `turn-guard.member`, setup = `auth.setup`; the newer journeys go by file stem: `auth-login.guest`, `auth-signup.guest`, `demo-landing.guest`, `demo-start.guest`, `routing.guest` and `routing.member`, `chat-basics.member`, `chat-thread.member`, `drawer.member`, `documents-panel.member`, `failed-reply.member`, `still-answering.member`, `about-you.member`, `sources.member`, `rich-replies.member`, `documents-lifecycle.member`, `model-hint.member`, `shell-short.member`, `google-button.guest`, `auth-email.guest`, `stop.member`, `stop.guest`, `try-again.member`, `jump-to-latest.member`. `py:` is a pytest module under `tests/`. A gap is a behaviour no test in its lane pins; a row whose gap is `–` is covered. **Gap** holds only the lane(s) of the gap, or `–`; a note on partial coverage goes in **Pinned by**, in parentheses.
 
