@@ -23,7 +23,15 @@ export function useResend() {
   async function resend(email: string) {
     const request = ++requestRef.current;
     setState("sending");
-    const result = await resendVerification(email);
+    let result: Awaited<ReturnType<typeof resendVerification>>;
+    try {
+      result = await resendVerification(email);
+    } catch {
+      // A request that throws (network down, a bug) must not leave the
+      // button stuck on "sending".
+      if (request === requestRef.current) setState("error");
+      return;
+    }
     if (request !== requestRef.current) return;
     setState(
       result.ok
