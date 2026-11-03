@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { inert } from "./DataTable";
+import { inert, toTsv } from "./DataTable";
 
 describe("inert", () => {
   it.each([
@@ -34,5 +34,43 @@ describe("inert", () => {
     "",
   ])("leaves %j unchanged", (cell) => {
     expect(inert(cell)).toBe(cell);
+  });
+});
+
+// Spreadsheets read a pasted field that starts with a double quote as a
+// quoted field: they drop the quotes, and an unclosed one swallows the tabs
+// and line breaks after it, even after leading spaces (probed in Google
+// Sheets, 2026-11-03).
+describe("toTsv", () => {
+  it.each([
+    ['"Acme" Ltd', '"""Acme"" Ltd"'],
+    ['"Acme, Ltd"', '"""Acme, Ltd"""'],
+    ['"Acme Ltd', '"""Acme Ltd"'],
+    ['  "Acme Ltd', '"  ""Acme Ltd"'],
+  ])(
+    "quotes the quote-led cell %j so it pastes as itself",
+    (cell, expected) => {
+      expect(toTsv(["cell"], [[cell]])).toBe(`cell\n${expected}`);
+    },
+  );
+
+  it.each(['Acme "Ltd"', "plain", "'=1+1"])("leaves %j as it is", (cell) => {
+    expect(toTsv(["cell"], [[cell]])).toBe(`cell\n${cell}`);
+  });
+
+  it("keeps an unclosed quote inside its own cell and row", () => {
+    expect(
+      toTsv(
+        ["case", "cell", "next"],
+        [
+          ["C", '"Acme Ltd', "C-after"],
+          ["D", "x", "D-after"],
+        ],
+      ),
+    ).toBe('case\tcell\tnext\nC\t"""Acme Ltd"\tC-after\nD\tx\tD-after');
+  });
+
+  it("quotes a quote-led formula-looking cell, so it pastes as its literal text", () => {
+    expect(toTsv(["cell"], [['"=1"']])).toBe('cell\n"""=1"""');
   });
 });

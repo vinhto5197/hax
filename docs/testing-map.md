@@ -25,7 +25,7 @@ What the e2e stack can stage today, and what it cannot:
 | 8 | Source chips grouped by file, expand to passages, deduplicated | `sources.member`, useChat.test | – |
 | 9 | "Show in panel" reveals and flashes the document row (desktop) | `sources.member`, showInPanel.test | – |
 | 84 | "Show in panel" with the panel already open scrolls the row into view and flashes it | `sources.member` | – |
-| 10 | Table sort (numbers; placeholders last), Copy table, Download CSV | `rich-replies.member`, DataTable.test (formula escaping only) | – |
+| 10 | Table sort (numbers; placeholders last), Copy table, Download CSV | `rich-replies.member`, DataTable.test (formula escaping; quote-led cells on copy, whose paste into Google Sheets was checked by hand 2026-11-03) | – |
 | 11 | Copy message; timestamp on hover | `chat-thread.member` (the hover look: L) | – |
 | 12 | Remote image src removed; code highlighted | `rich-replies.member` (the highlighting look: L) | – |
 | 13 | View follows the bottom while streaming; scrolling up stops it | `chat-thread.member`, MessageList.test (re-pin on resize) | – |

@@ -87,8 +87,15 @@ export function inert(c: Cell): Cell {
 // For the clipboard: spreadsheets split pasted text on tabs without being
 // asked (Sheets never splits pasted commas), so a copy is tab-separated. A
 // tab or newline inside a cell would break the grid; collapse it to a space.
-function toTsv(header: Row, rows: Row[]): string {
-  const flat = (c: Cell) => inert(c.replace(/[\t\n\r]+/g, " "));
+// A field whose first non-space character is a double quote is read as a
+// quoted field: its quotes are dropped, and an unclosed one swallows the tabs
+// and rows after it. Such a cell is quoted, inner quotes doubled, so it
+// pastes as itself.
+export function toTsv(header: Row, rows: Row[]): string {
+  const flat = (raw: Cell) => {
+    const c = inert(raw.replace(/[\t\n\r]+/g, " "));
+    return /^\s*"/.test(c) ? `"${c.replace(/"/g, '""')}"` : c;
+  };
   return [header, ...rows].map((r) => r.map(flat).join("\t")).join("\n");
 }
 
