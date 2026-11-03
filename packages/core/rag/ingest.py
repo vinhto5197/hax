@@ -21,6 +21,14 @@ IN_FLIGHT = ("pending", "processing")
 # dimension mismatch) will not change on a retry.
 BAD_EMBEDDINGS = "the embedding service returned an unusable response"
 
+# These messages become the document's user-visible `error` (DocumentOut.error):
+# static text only, never the id, the storage key or the filename. The worker
+# logs the document id beside them.
+NOT_FOUND = "the document no longer exists"
+NO_STORED_FILE = "the document has no stored file"
+NOT_IN_FLIGHT = "the document is not in flight (failed or deleted)"
+STORED_FILE_MISSING = "the document's stored file is missing"
+
 
 async def ingest_document_async(document_id: UUID) -> None:
     """Read a document's raw file from object storage, then chunk -> embed -> store.
@@ -44,9 +52,9 @@ async def ingest_document_async(document_id: UUID) -> None:
     async with AsyncSessionLocal() as session:
         doc = await session.get(Document, document_id)
         if doc is None:
-            raise PermanentIngestError(f"document {document_id} not found")
+            raise PermanentIngestError(NOT_FOUND)
         if doc.storage_key is None:
-            raise PermanentIngestError(f"document {document_id} has no storage_key")
+            raise PermanentIngestError(NO_STORED_FILE)
         storage_key = doc.storage_key
         filename = doc.filename
         user_id = doc.user_id
@@ -67,9 +75,7 @@ async def ingest_document_async(document_id: UUID) -> None:
             )
             if status == "ready":
                 return
-            raise PermanentIngestError(
-                f"document {document_id} is not in flight (failed or deleted)"
-            )
+            raise PermanentIngestError(NOT_IN_FLIGHT)
         # Commit now rather than holding one transaction across the whole ingest:
         # frees the pooled connection during the multi-second embed and makes the
         # status visible to the polling UI.
@@ -80,9 +86,7 @@ async def ingest_document_async(document_id: UUID) -> None:
         try:
             raw = await asyncio.to_thread(storage.get, storage_key)
         except storage.StorageKeyNotFound as exc:
-            raise PermanentIngestError(
-                f"storage object {storage_key} not found for document {document_id}"
-            ) from exc
+            raise PermanentIngestError(STORED_FILE_MISSING) from exc
         # Parsing is CPU-bound (PDF especially) -> off the loop.
         text = await asyncio.to_thread(extract_text, raw, filename)
         chunks = split_text(text)
