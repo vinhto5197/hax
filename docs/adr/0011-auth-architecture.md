@@ -73,6 +73,11 @@ the API; a token revoked mid-life passes the proxy (still
 cryptographically valid) but is rejected at the API, which is where it
 actually matters.
 
+> **Corrected 2026-11-03.** "A token that fails the proxy never reaches the
+> API" holds for page navigations only: the browser calls `/api/*` directly
+> with its bearer token, never through the proxy, so the API verifies every
+> token itself (crypto plus revocation). The decision above is unchanged.
+
 **Revocation** is `users.sessions_valid_after` (bumped on password reset,
 reusable for a future sign-out-everywhere) compared against the token's
 `auth_time`, backed by a Redis write-through cache so the check doesn't hit
