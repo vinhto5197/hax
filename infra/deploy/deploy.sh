@@ -113,6 +113,16 @@ compose() { docker compose --env-file .env --env-file "\${IMAGES_ENV:-images.env
 # earlier roll must not be able to fill the root volume and fail this one.
 # Only images no container uses go; the running ones stay.
 docker image prune -af > /dev/null
+# Refuse the pull when the root volume is still nearly full after the prune:
+# a pull that fills it fails mid-extract (incident 2026-10-09), and a full
+# disk then breaks container logs and Redis's AOF. A new image pair is about
+# 1.1 GB unpacked; 3 GB leaves room for its download beside the running stack.
+free_mb=\$(( \$(df --output=avail -k /var/lib/docker | tail -1) / 1024 ))
+echo "disk: \$free_mb MB free on /var/lib/docker"
+if (( free_mb < 3072 )); then
+  echo "deploy refused: under 3072 MB free; the running stack is unchanged (infra/deploy/README.md, When something is wrong)"
+  exit 1
+fi
 IMAGES_ENV=images.env.next COMPOSE_FILE=compose.prod.yml.new compose pull --quiet
 # stdin from /dev/null on EVERY command that attaches it (run, exec): SSM
 # feeds this script to the shell on stdin, and an attached stdin swallows

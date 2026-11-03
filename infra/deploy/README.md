@@ -112,7 +112,12 @@ first. Then, on the box: `docker ps` shows each container's health label;
 `hc logs --tail=200 <service>` has the last minutes; `cat images.env` says
 which commit is running (it is written only after that commit's migrate
 succeeded). A build that fails fetching fonts is Google Fonts being
-unreachable from the builder, not the code (ADR 0013, 0014). Rolling back is the section above. Database
+unreachable from the builder, not the code (ADR 0013, 0014). A roll that
+says "deploy refused: under 3072 MB free" stopped before the pull, with the
+old stack still serving: on the box, `df -h /` and
+`docker system df` show what fills it (unused images were already pruned, so
+look at container logs and volumes), free space, then re-run the deploy.
+Rolling back is the section above. Database
 recovery is from RDS's automated backups (console → the instance →
 Maintenance & backups; one-day window on the Free plan): restore to a NEW
 instance, repoint `DATABASE_URL` in `/opt/hax/.env`, `roll`.
