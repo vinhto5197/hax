@@ -11,6 +11,7 @@ import os
 
 import pytest
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 import apps.api.routers.internal_auth as internal_auth
 from tests.api.factories import make_account, make_user
@@ -158,6 +159,36 @@ async def test_link_to_unverified_password_user_clears_password_and_revokes_sess
     assert row.sessions_valid_after > before
     cached = await fake_redis.get(f"sva:{pw_user.id}")
     assert cached == str(int(row.sessions_valid_after.timestamp()))
+
+
+async def test_revocation_is_published_only_after_the_commit(
+    client, admin_engine, pw_user, monkeypatch
+):
+    # The cache must never lead the DB: a cutoff published before the commit
+    # could announce a revocation that a failed commit then rolls back.
+    events: list[str] = []
+    real_commit = AsyncSession.commit
+
+    async def recording_commit(self):
+        await real_commit(self)
+        events.append("commit")
+
+    async def recording_publish(redis, user_id, cutoff):
+        events.append("publish")
+        # Visible to another connection, so committed, not merely flushed.
+        row = (await _users(admin_engine))[0]
+        assert row.id == user_id and row.sessions_valid_after == cutoff
+
+    monkeypatch.setattr(AsyncSession, "commit", recording_commit)
+    monkeypatch.setattr(internal_auth, "publish_sva", recording_publish)
+    res = await client.post(
+        "/internal/auth/oauth-upsert",
+        json=google(email=pw_user.email),
+        headers=INTERNAL,
+    )
+    assert res.status_code == 200, res.text
+    assert "publish" in events
+    assert events.index("commit") < events.index("publish")
 
 
 async def test_link_to_already_verified_user_keeps_password(
