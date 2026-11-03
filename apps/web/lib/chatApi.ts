@@ -2,7 +2,7 @@ import { signOut } from "next-auth/react";
 
 import type { components } from "@/lib/openapi";
 
-type ChatRole = "user" | "assistant";
+type ChatRole = components["schemas"]["MessageOut"]["role"];
 
 export type ChatMessage = {
   // The server's message id; the optimistic user turn carries the id its send

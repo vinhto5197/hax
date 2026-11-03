@@ -454,8 +454,11 @@ export interface components {
             mime_type: string;
             /** Size Bytes */
             size_bytes: number;
-            /** Status */
-            status: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "processing" | "ready" | "failed";
             /** Error */
             error: string | null;
             /**
@@ -494,8 +497,11 @@ export interface components {
              * Format: uuid
              */
             id: string;
-            /** Role */
-            role: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "user" | "assistant";
             /** Content */
             content: string;
             /**

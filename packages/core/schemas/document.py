@@ -5,6 +5,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
+from packages.db.models.document import DocumentStatus
+
 
 class DocumentOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -13,7 +15,7 @@ class DocumentOut(BaseModel):
     filename: str
     mime_type: str
     size_bytes: int
-    status: str
+    status: DocumentStatus
     error: str | None
     created_at: datetime
     updated_at: datetime
