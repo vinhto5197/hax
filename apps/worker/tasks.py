@@ -1,5 +1,6 @@
 """Celery tasks for hax background jobs: document ingestion, transactional
-email, conversation titles, and the daily sweep of aged demo visitors."""
+email, conversation titles, the daily sweep of aged demo visitors, and the
+daily sweep of dead email links."""
 
 import asyncio
 import logging
@@ -22,6 +23,7 @@ from packages.core.rag.errors import PermanentIngestError
 from packages.core.rag.ingest import ingest_document_async, mark_document_failed
 from packages.db import AsyncSessionLocal, engine
 from packages.db.repos import conversations as conversations_repo
+from packages.db.repos import email_tokens as email_tokens_repo
 from packages.db.repos import users as users_repo
 from packages.db.user_context import current_user_id
 
@@ -335,3 +337,33 @@ def sweep_anonymous_users() -> None:
     only: a visitor has no email, and content is never logged."""
     deleted = _run_async(sweep_anonymous_users_async())
     logger.info("swept %d anonymous users", deleted)
+
+
+# Rows per DELETE: bounds each statement's locks and runtime well inside the
+# app connection's lock_timeout / statement_timeout (packages/db/session.py).
+TOKEN_SWEEP_BATCH = 1000
+
+
+async def sweep_email_tokens_async() -> int:
+    """Delete every dead email_tokens row (spent, voided or expired) in batches,
+    a commit per batch; returns how many went. Runs as hax_app with no
+    announced identity: the table is outside RLS (ADR 0012)."""
+    total = 0
+    async with AsyncSessionLocal() as session:
+        while True:
+            batch = TOKEN_SWEEP_BATCH
+            deleted = await email_tokens_repo.delete_dead(session, limit=batch)
+            await session.commit()
+            total += deleted
+            if deleted < batch:
+                return total
+
+
+# No retries: beat runs it again tomorrow and the work is idempotent.
+# ignore_result: see generate_title.
+@celery_app.task(name="sweep_email_tokens", ignore_result=True)
+def sweep_email_tokens() -> None:
+    """Scheduled by celery_app's beat_schedule, daily. Logs the count only:
+    a row holds a user id and a token hash."""
+    deleted = _run_async(sweep_email_tokens_async())
+    logger.info("swept %d email tokens", deleted)

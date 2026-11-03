@@ -62,7 +62,7 @@ celery_app.conf.update(
     broker_transport_options={"socket_connect_timeout": 2, "visibility_timeout": 600},
     # Two strict lanes: `ingest` is consumed by a worker that consumes nothing
     # else, and the default queue by a worker that never consumes `ingest`, so
-    # a parse can never delay an email, a title or the sweep. Every task is
+    # a parse can never delay an email, a title or a sweep. Every task is
     # routed here by its registered name — a new task without an entry fails
     # tests/api/test_task_routes.py, so its lane is a conscious choice.
     # The default queue keeps Celery's own name (`celery`; task_default_queue
@@ -76,6 +76,7 @@ celery_app.conf.update(
         "send_email": {"queue": "celery"},
         "generate_title": {"queue": "celery"},
         "sweep_anonymous_users": {"queue": "celery"},
+        "sweep_email_tokens": {"queue": "celery"},
     },
     # The schedule fires only where a beat process exists. The beat is embedded
     # (--beat) in the worker that consumes the default queue — the fast worker,
@@ -87,6 +88,11 @@ celery_app.conf.update(
         "sweep-anonymous-users": {
             "task": "sweep_anonymous_users",
             "schedule": crontab(hour=4, minute=0),
+        },
+        # Half an hour after the anonymous sweep: the fast worker has one slot.
+        "sweep-email-tokens": {
+            "task": "sweep_email_tokens",
+            "schedule": crontab(hour=4, minute=30),
         },
     },
 )
