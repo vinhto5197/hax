@@ -279,12 +279,13 @@ async def reset_password(
     session: AsyncSession = Depends(get_session),
 ) -> EmailOut:
     await _limit(request, "reset_confirm", per_ip=10, window_s=900)
-    # Hash before the token is spent: inside the transaction, argon2's tens of
-    # milliseconds would hold a pooled connection and the token rows' locks.
-    # An invalid token then costs one hash, bounded by the limiter above.
-    password_hash = await hash_password_async(body.password)
+    # The token is spent before the hash, so a used, expired or junk token is
+    # refused without argon2's memory and CPU; a valid one holds the
+    # connection for the hash, which on a route this rare is the cheaper cost.
     user = await _spend_token(session, body.token, "reset_password")
-    cutoff = await users_repo.reset_password(session, user, password_hash)
+    cutoff = await users_repo.reset_password(
+        session, user, await hash_password_async(body.password)
+    )
     await session.commit()
     await publish_sva(get_redis(), user.id, cutoff)
     # Inbox proof: the owner just set this password, so the guessing limiter

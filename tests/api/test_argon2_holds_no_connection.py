@@ -1,23 +1,22 @@
-"""Argon2 runs with no transaction open: a login or a reset holds no pooled
-connection (and no row lock) for the tens of milliseconds a hash takes."""
+"""Login's Argon2 runs with no transaction open: it holds no pooled
+connection for the tens of milliseconds a hash takes. (Reset spends its token
+first on purpose, so a bad token costs no hash.)"""
 
 import os
 
 import pytest
 from sqlalchemy import text
 
-import apps.api.routers.auth as auth_routes
 import apps.api.routers.internal_auth as internal_routes
-from packages.core.auth.email_tokens import hash_token
 from packages.core.auth.passwords import hash_password
-from tests.api.factories import make_email_token, make_user
+from tests.api.factories import make_user
 
 INTERNAL = {"X-Internal-Secret": os.environ["INTERNAL_API_SECRET"]}
 
 
 @pytest.fixture
 def open_transactions(admin_engine, monkeypatch):
-    """Wraps every Argon2 entry point the routes use; each call records how
+    """Wraps the Argon2 entry points login uses; each call records how
     many app-role transactions were open at that moment."""
     seen: list[int] = []
 
@@ -42,7 +41,6 @@ def open_transactions(admin_engine, monkeypatch):
 
     wrap(internal_routes, "verify_password_async")
     wrap(internal_routes, "dummy_verify_async")
-    wrap(auth_routes, "hash_password_async")
     return seen
 
 
@@ -92,16 +90,4 @@ async def test_unknown_email_burns_the_dummy_hash_with_no_transaction_open(
         headers=INTERNAL,
     )
     assert res.status_code == 401
-    assert open_transactions == [0]
-
-
-async def test_reset_hashes_the_new_password_with_no_transaction_open(
-    client, admin_engine, open_transactions
-):
-    user = await _password_user(admin_engine, "r@example.com")
-    await make_email_token(admin_engine, user.id, "reset_password", hash_token("raw1"))
-    res = await client.post(
-        "/api/auth/reset-password", json={"token": "raw1", "password": "brand-new-9"}
-    )
-    assert res.status_code == 200
     assert open_transactions == [0]
