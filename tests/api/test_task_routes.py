@@ -9,7 +9,12 @@ import pytest
 
 from apps.worker.celery_app import celery_app
 
-FAST_TASKS = ("send_email", "generate_title", "sweep_anonymous_users")
+FAST_TASKS = (
+    "send_email",
+    "generate_title",
+    "sweep_anonymous_users",
+    "sweep_email_tokens",
+)
 
 
 def _registered_tasks() -> set[str]:

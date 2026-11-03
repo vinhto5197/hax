@@ -1,10 +1,11 @@
 """email_tokens rows. Not user-scoped (these flows run pre-login); the table
-is outside RLS (ADR 0012). Routes own the commit."""
+is outside RLS (ADR 0012). Routes own the commit. Rows are deleted once dead
+by the daily sweep (apps/worker/tasks.py::sweep_email_tokens)."""
 
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from packages.db.models import EmailToken
@@ -62,3 +63,27 @@ async def consume(session: AsyncSession, token: EmailToken) -> bool:
     """Spend `token`: True iff this call voided it (a concurrent confirm with
     the same or a sibling link loses — the DB arbitrates, not a check-then-set)."""
     return token.id in await void_unused(session, token.user_id, token.purpose)
+
+
+async def delete_dead(session: AsyncSession, *, limit: int) -> int:
+    """Delete up to `limit` rows get_valid() can no longer return; returns how
+    many went. The predicate is get_valid's exact complement on the same
+    database clock, so a worker clock ahead of the database can never delete a
+    live link. SKIP LOCKED: a row a request holds (void_unused also locks
+    expired unused rows) is left for the next run, so the sweep never waits on
+    a request, never hits lock_timeout, and cannot join a deadlock. The caller
+    owns the commit."""
+    dead = (
+        select(EmailToken.id)
+        .where(
+            or_(EmailToken.used_at.is_not(None), EmailToken.expires_at <= func.now())
+        )
+        .limit(limit)
+        .with_for_update(skip_locked=True)
+    )
+    result = await session.execute(
+        delete(EmailToken)
+        .where(EmailToken.id.in_(dead))
+        .execution_options(synchronize_session=False)
+    )
+    return result.rowcount
