@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from packages.db.models import Conversation, Message
+from packages.db.models.message import MessageRole
 
 # A claim older than this counts as free. A running turn refreshes its claim
 # well inside the window (refresh_turn), so the window bounds only how long a
@@ -100,7 +101,7 @@ async def delete_owned(
 async def add_message(
     session: AsyncSession,
     conversation_id: uuid.UUID,
-    role: str,
+    role: MessageRole,
     content: str,
     sources: list[dict] | None = None,
     id: uuid.UUID | None = None,
@@ -152,7 +153,7 @@ async def touch(session: AsyncSession, conversation_id: uuid.UUID) -> None:
 
 async def load_history(
     session: AsyncSession, user_id: uuid.UUID, conversation_id: uuid.UUID
-) -> list[tuple[str, str]]:
+) -> list[tuple[MessageRole, str]]:
     """(role, content) turns, oldest first. Owner-scoped via join even though
     callers verify ownership first — an unowned id yields []."""
     rows = await session.execute(

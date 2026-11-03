@@ -53,11 +53,9 @@ type Turn =
     };
 
 function toChatMessages(conv: ConversationDetail): ChatMessage[] {
-  // role is `string` in the generated type but constrained to user/assistant
-  // by a DB CHECK; safe to narrow.
   return conv.messages.map((m) => ({
     id: m.id,
-    role: m.role as ChatMessage["role"],
+    role: m.role,
     content: m.content,
     // null (user rows, sourceless turns) and undefined both mean no footer.
     sources: m.sources ?? undefined,
