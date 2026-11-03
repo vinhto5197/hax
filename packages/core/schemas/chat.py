@@ -1,10 +1,22 @@
 """Chat REQUEST (input) schemas — the bodies POST /api/chat and the retry
 route parse."""
 
+import re
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, StringConstraints
+from pydantic import AfterValidator, BaseModel, StringConstraints
+
+# C0 controls other than tab, newline and carriage return. NUL cannot be
+# stored in a Postgres text column; the rest have no place in a typed prompt.
+_C0_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+
+
+def _no_control_chars(value: str) -> str:
+    if _C0_CONTROL.search(value):
+        raise ValueError("must not contain control characters")
+    return value
+
 
 ModelId = Literal["claude-haiku-4-5", "claude-sonnet-4-6", "claude-opus-4-8"]
 
@@ -19,7 +31,9 @@ class ChatRequest(BaseModel):
     # the model's context window; large data belongs in a document upload, not
     # a chat turn).
     prompt: Annotated[
-        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=20000)
+        str,
+        StringConstraints(strip_whitespace=True, min_length=1, max_length=20000),
+        AfterValidator(_no_control_chars),
     ]
     # None on the first turn of a new chat — the server lazily creates a
     # conversation and returns its id in the SSE prelude.
