@@ -2,8 +2,11 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from apps.api.routers.auth import router as auth_router
 from apps.api.routers.chat import router as chat_router
@@ -37,6 +40,19 @@ logging.basicConfig(
 )
 
 app = FastAPI(lifespan=lifespan)
+
+
+# FastAPI's default 422 echoes the rejected body in each error's `input` (a
+# bad sign-up sends the password back) and copies input into `ctx`. Only
+# loc, msg and type leave the server: the web's 422 mapping
+# (apps/web/lib/chatApi.ts) reads loc and msg.
+@app.exception_handler(RequestValidationError)
+async def _validation_error(_request: Request, exc: RequestValidationError):
+    detail = [
+        {"loc": e["loc"], "msg": e["msg"], "type": e["type"]} for e in exc.errors()
+    ]
+    return JSONResponse(status_code=422, content={"detail": jsonable_encoder(detail)})
+
 
 # Dev only: the browser talks to FastAPI cross-origin (ADR 0005 — Next's dev
 # rewrite buffers SSE). Behind the production reverse proxy web and API share
