@@ -53,16 +53,27 @@ async def verify_credentials(
         raise HTTPException(429, detail={"code": "rate_limited"})
 
     user = await users_repo.get_by_email(session, email)
-    if user is None or user.password_hash is None:
+    found = (
+        None
+        if user is None
+        else AuthUserOut(id=user.id, email=user.email, name=user.name)
+    )
+    password_hash = user.password_hash if user else None
+    unverified = user is not None and user.email_verified_at is None
+    # The read is done: end its transaction before argon2's tens of
+    # milliseconds, so the hash never holds a pooled connection. Rollback
+    # expires `user`, hence the copies above.
+    await session.rollback()
+    if found is None or password_hash is None:
         # Unknown email / passwordless account: burn equivalent argon2 work so
         # response timing can't distinguish "no account" from "wrong password".
         await dummy_verify_async(body.password)
         raise HTTPException(401, detail={"code": "invalid_credentials"})
-    if not await verify_password_async(user.password_hash, body.password):
+    if not await verify_password_async(password_hash, body.password):
         raise HTTPException(401, detail={"code": "invalid_credentials"})
-    if _require_verified() and user.email_verified_at is None:
+    if _require_verified() and unverified:
         raise HTTPException(403, detail={"code": "email_unverified"})
-    return AuthUserOut(id=user.id, email=user.email, name=user.name)
+    return found
 
 
 async def _resolve_oauth_user(
