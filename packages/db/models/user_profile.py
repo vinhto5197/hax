@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import CheckConstraint, ForeignKey
+from sqlalchemy import CheckConstraint, ForeignKey, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -29,4 +29,4 @@ class UserProfile(Base):
         ForeignKey("users.id", ondelete="CASCADE"),
         primary_key=True,
     )
-    about: Mapped[str]
+    about: Mapped[str] = mapped_column(Text)

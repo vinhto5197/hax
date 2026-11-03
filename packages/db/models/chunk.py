@@ -29,6 +29,9 @@ class Chunk(Base):
             postgresql_ops={"embedding": "vector_cosine_ops"},
         ),
         Index("chunks_user_id_idx", "user_id"),
+        # Serves the documents FK's ON DELETE CASCADE and the ingest retry's
+        # delete; without it each is a scan of every user's chunks.
+        Index("chunks_document_id_idx", "document_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
