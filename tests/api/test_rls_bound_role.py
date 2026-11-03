@@ -76,3 +76,22 @@ def test_worker_process_init_signal_aborts_worker_when_the_db_is_unreachable(
     monkeypatch.setattr(apps.worker.celery_app, "assert_rls_bound_role", unreachable)
     with pytest.raises(SystemExit):
         worker_process_init.send(sender=None)
+
+
+async def test_api_lifespan_runs_the_probe_before_serving(monkeypatch):
+    # apps.api.main imports the probe by name, so it is patched there. Entering
+    # the app's own lifespan is what uvicorn does at boot: a probe that raises
+    # must abort startup, so the API never serves as a bypassing role.
+    import apps.api.main as api_main
+
+    calls: list[str] = []
+
+    async def failing_probe():
+        calls.append("probe")
+        raise RuntimeError("RLS-bypassing role")
+
+    monkeypatch.setattr(api_main, "assert_rls_bound_role", failing_probe)
+    with pytest.raises(RuntimeError, match="RLS-bypassing role"):
+        async with api_main.app.router.lifespan_context(api_main.app):
+            calls.append("served")
+    assert calls == ["probe"]
