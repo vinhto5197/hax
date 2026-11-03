@@ -5,7 +5,7 @@ from sqlalchemy import text
 
 import apps.api.routers.chat as chat_router
 from tests.api.conftest import bearer
-from tests.api.factories import make_conversation, make_message
+from tests.api.factories import make_conversation, make_document, make_message
 
 
 async def test_list_is_partitioned(client, user_a, user_b, admin_engine):
@@ -134,11 +134,28 @@ async def test_detail_returns_sources(client, user_a, admin_engine):
 
 
 async def test_detail_returns_sources_after_document_delete(
-    client, user_a, admin_engine
+    client, user_a, admin_engine, monkeypatch
 ):
-    # Provenance is a snapshot: the row references no document, so deleting
-    # (or never having had) the document leaves it intact.
+    # Provenance is a snapshot (ADR 0002): sources carry no foreign key, so
+    # deleting the cited document leaves the reply's sources exactly as stored.
+    from packages.core import storage
+
+    monkeypatch.setattr(storage, "delete", lambda key: None)
+    doc = await make_document(
+        admin_engine, user_a.id, filename="lease.pdf", storage_key="documents/x/l"
+    )
+    source = {**SRC, "document_id": str(doc)}
     conv = await make_conversation(admin_engine, user_a.id)
-    await _insert_assistant_with_sources(admin_engine, conv, [SRC])
+    await _insert_assistant_with_sources(admin_engine, conv, [source])
+
+    r = await client.delete(f"/api/documents/{doc}", headers=bearer(user_a))
+    assert r.status_code == 204
+    async with admin_engine.connect() as conn:
+        gone = await conn.scalar(
+            text("SELECT count(*) FROM documents WHERE id = :i"), {"i": doc}
+        )
+    assert gone == 0
+
     r = await client.get(f"/api/conversations/{conv}", headers=bearer(user_a))
-    assert r.json()["messages"][0]["sources"][0]["filename"] == "lease.pdf"
+    assert r.status_code == 200
+    assert r.json()["messages"][0]["sources"] == [source]
