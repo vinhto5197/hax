@@ -11,11 +11,12 @@ from packages.core.rag.extract import extract_text
 from packages.core.rag.splitter import split_text
 from packages.db import AsyncSessionLocal
 from packages.db.models import Chunk, Document
+from packages.db.models.document import DocumentStatus
 
 # The states a worker may claim. 'ready' and 'failed' are terminal: the API
 # writes 'failed' too (its deadline in routers/documents.py, a publish that
 # fails), and the worker never leaves either.
-IN_FLIGHT = ("pending", "processing")
+IN_FLIGHT: tuple[DocumentStatus, ...] = ("pending", "processing")
 
 # A response of the wrong shape (embeddings.py raises ValueError on a count or
 # dimension mismatch) will not change on a retry.

@@ -5,6 +5,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
+from packages.db.models.message import MessageRole
+
 
 class SourceOut(BaseModel):
     """One retrieved passage the model had in context for the turn — a
@@ -22,7 +24,7 @@ class MessageOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    role: str
+    role: MessageRole
     content: str
     created_at: datetime
     # Assistant turns that searched and found something; None otherwise.

@@ -1,8 +1,8 @@
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, get_args
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -11,11 +11,20 @@ from packages.db.session import Base
 if TYPE_CHECKING:
     from packages.db.models.conversation import Conversation
 
+MessageRole = Literal["user", "assistant"]
+MESSAGE_ROLES: tuple[MessageRole, ...] = get_args(MessageRole)
+
 
 class Message(Base):
     __tablename__ = "messages"
     __table_args__ = (
-        CheckConstraint("role IN ('user','assistant')", name="messages_role_check"),
+        # Autogenerate does not compare CHECK text: a change to MessageRole needs
+        # a hand-written migration, and test_message_role_check_matches_literal
+        # fails until it exists.
+        CheckConstraint(
+            "role IN (" + ", ".join(f"'{r}'" for r in MESSAGE_ROLES) + ")",
+            name="messages_role_check",
+        ),
         Index("messages_conv_created_idx", "conversation_id", "created_at"),
     )
 
@@ -28,7 +37,9 @@ class Message(Base):
         UUID(as_uuid=True),
         ForeignKey("conversations.id", ondelete="CASCADE"),
     )
-    role: Mapped[str]
+    # String pinned: a bare Mapped[Literal] maps to a bounded non-native Enum,
+    # which drifts from the migration's unbounded sa.String().
+    role: Mapped[MessageRole] = mapped_column(String)
     content: Mapped[str]
     # User-facing provenance for an assistant turn: the retrieved passages the
     # model had in context, snapshotted (a later document delete does not

@@ -225,7 +225,9 @@ describe("useChat loading", () => {
       getConversation.mockImplementation(
         (id) => new Promise((r) => (resolvers[id] = r)),
       );
-      const message = (content: string) => ({
+      const message = (
+        content: string,
+      ): ConversationDetail["messages"][number] => ({
         id: content,
         role: "user",
         content,

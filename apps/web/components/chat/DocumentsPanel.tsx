@@ -18,7 +18,9 @@ import {
 } from "@/lib/chatApi";
 import { SHORT, useMediaQuery } from "@/lib/media";
 
-const STATUS_STYLES: Record<string, string> = {
+type DocumentStatus = DocumentSummary["status"];
+
+const STATUS_STYLES: Record<DocumentStatus, string> = {
   ready: "text-status-ready",
   failed: "text-status-failed",
   pending: "text-ink-3",
@@ -26,13 +28,16 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 // What a row says for a status; one missing here reads as the raw status.
-const STATUS_LABELS: Record<string, string> = {
+const STATUS_LABELS: Partial<Record<DocumentStatus, string>> = {
   pending: "Processing…",
   processing: "Processing…",
 };
 
 const POLL_INTERVAL_MS = 2500;
-const IN_FLIGHT: ReadonlySet<string> = new Set(["pending", "processing"]);
+const IN_FLIGHT: ReadonlySet<DocumentStatus> = new Set([
+  "pending",
+  "processing",
+]);
 
 // Failed rows sort above the fold of the capped list, then in-flight, then
 // ready; stable within a group.
