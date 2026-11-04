@@ -71,7 +71,7 @@ What the e2e stack can stage today, and what it cannot:
 | # | Behaviour | Pinned by | Gap |
 |---|---|---|---|
 | 35 | Upload opens the panel, shows "Uploading…", adds a pending row | `documents-lifecycle.member`, chatApi.test | – |
-| 36 | Pending becomes ready via a 2.5 s poll that then stops | `documents-lifecycle.member`, DocumentsPanel.test (stops polling once every document is ready) | – |
+| 36 | Pending becomes ready via a 2.5 s poll that runs while any document is in flight and stops once all are ready | `documents-lifecycle.member`, DocumentsPanel.test (keeps polling while any document is in flight, and stops once every one is ready) | – |
 | 86 | An upload that resolves while the first list is in flight keeps its row when that list lands without it; a later list carrying it takes over; a list requested after the upload that lacks it drops the row and polling stops | DocumentsPanel.test (upload during the first list: keeps its row, takes over its row, a list requested after the upload drops the row) | – |
 | 37 | Failed status; tapping it shows the reason | `documents-lifecycle.member`, py:test_ingest_status, py:test_authz_documents | – |
 | 38 | Order: failed, then in progress, then ready | `documents-lifecycle.member` | – |

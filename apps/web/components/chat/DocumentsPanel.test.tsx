@@ -219,27 +219,58 @@ describe("DocumentsPanel loading", () => {
     ).toBeInTheDocument();
   });
 
-  it("stops polling once every document is ready", async () => {
+  it("keeps polling while any document is in flight, and stops once every one is ready", async () => {
     vi.useFakeTimers();
+    const a = (status: DocumentSummary["status"]) =>
+      doc({
+        id: "00000000-0000-0000-0000-00000000000a",
+        filename: "a.pdf",
+        status,
+      });
+    const b = (status: DocumentSummary["status"]) =>
+      doc({
+        id: "00000000-0000-0000-0000-00000000000b",
+        filename: "b.pdf",
+        status,
+      });
+    // The first list has both in flight; the first poll finds only a.pdf
+    // ready; the second finds both ready.
     vi.mocked(listDocuments)
-      .mockResolvedValueOnce([doc({ status: "processing" })])
-      .mockResolvedValue([doc({ status: "ready" })]);
+      .mockResolvedValueOnce([a("processing"), b("processing")])
+      .mockResolvedValueOnce([a("ready"), b("processing")])
+      .mockResolvedValue([a("ready"), b("ready")]);
+    const calls = () => vi.mocked(listDocuments).mock.calls.length;
 
     render(<DocumentsPanel />);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });
-    // One poll tick turns the row ready.
+    expect(calls()).toBe(1);
+
+    // First poll, at exactly 2.5 s: one document is ready, one is not, so
+    // the polling goes on.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_499);
+    });
+    expect(calls()).toBe(1);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(calls()).toBe(2);
+    expect(screen.getAllByText("ready")).toHaveLength(1);
+
+    // Second poll: a repeating poll, not a one-shot timer, fetches again.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2_500);
     });
-    expect(screen.getByText("ready")).toBeInTheDocument();
-    const settled = vi.mocked(listDocuments).mock.calls.length;
+    expect(calls()).toBe(3);
+    expect(screen.getAllByText("ready")).toHaveLength(2);
 
+    // Every document is ready: no more list requests.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(30_000);
     });
-    expect(vi.mocked(listDocuments).mock.calls.length).toBe(settled);
+    expect(calls()).toBe(3);
   });
 });
 
