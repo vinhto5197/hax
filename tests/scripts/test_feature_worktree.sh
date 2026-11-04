@@ -1,25 +1,16 @@
 #!/usr/bin/env bash
 # Proves scripts/feature-worktree.sh refuses an id that could leave
-# .claude/worktrees/ (".." would otherwise resolve to the repo itself) and
-# removes nothing on a refusal. Run by hand: bash tests/scripts/test_feature_worktree.sh
+# .claude/worktrees/ ("" is the folder itself, ".." resolves to .claude/,
+# "../.." to the repo) and creates or removes nothing on a refusal (the temp clone's whole tree is compared before
+# and after). Run by hand: bash tests/scripts/test_feature_worktree.sh
 set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
 script=$root/scripts/feature-worktree.sh
 fails=0
 report() { echo "$1: $2"; [ "$1" = PASS ] || fails=$((fails + 1)); }
-for bad in ".." "../.." "a/b" "" ".hidden" "x y"; do
-  before=$(ls -A "$root/.claude" | sort | cksum)
-  rc=0; "$script" --remove "$bad" >/dev/null 2>&1 || rc=$?
-  after=$(ls -A "$root/.claude" | sort | cksum)
-  if [ "$rc" -eq 64 ] && [ "$before" = "$after" ]; then
-    report PASS "refuses id '$bad' with exit 64 and removes nothing"
-  else
-    report FAIL "id '$bad': exit $rc, .claude changed: $([ "$before" = "$after" ] && echo no || echo yes)"
-  fi
-done
-
-# Everything below runs in a temp clone of a temp bare origin, with the script
-# copied in and committed, so nothing touches this repo's .claude/worktrees/.
+# Everything runs in a temp clone of a temp bare origin, with the script
+# copied in and committed, so nothing touches this repo, and no other session's
+# writes under this repo's .claude/ can make a case fail.
 work=$(mktemp -d "${TMPDIR:-/tmp}/feature-worktree-test.XXXXXX")
 work=$(cd "$work" && pwd -P)
 trap 'rm -rf "$work"' EXIT
@@ -50,6 +41,27 @@ create() { fw "$1" >/dev/null 2>&1 && [ -d "$(wt "$1")" ]; }
 # A line-start match, not grep in a pipe: under pipefail an early grep exit can
 # fail the writer and flip a negated check.
 says_removed() { case $'\n'"$1" in *$'\n''removed '*) return 0 ;; esac; return 1; }
+
+# Something for a wrongly accepted id to destroy: the folders "a/b", ".hidden"
+# and "x y" would name, a sentinel beside them, and --force, the only path
+# that deletes. ("." and ".." segments stay exit-code-only: rm refuses them.)
+mkdir -p "$main/.claude/worktrees/a/b" "$main/.claude/worktrees/.hidden" "$main/.claude/worktrees/x y"
+touch "$main/.claude/worktrees/keep" "$main/.claude/keep"
+for bad in ".." "../.." "a/b" "" ".hidden" "x y"; do
+  for mode in "--remove --force" "create"; do
+    before=$(cd "$work" && find . -path ./main/.git -prune -o -print | LC_ALL=C sort | cksum)
+    rc=0
+    if [ "$mode" = create ]; then fw "$bad" >/dev/null 2>&1 || rc=$?; else fw --remove --force "$bad" >/dev/null 2>&1 || rc=$?; fi
+    after=$(cd "$work" && find . -path ./main/.git -prune -o -print | LC_ALL=C sort | cksum)
+    if [ "$rc" -eq 64 ] && [ "$before" = "$after" ]; then
+      report PASS "refuses id '$bad' ($mode) with exit 64 and changes nothing"
+    else
+      report FAIL "id '$bad' ($mode): exit $rc, tree changed: $([ "$before" = "$after" ] && echo no || echo yes)"
+    fi
+  done
+done
+rm -rf "$main/.claude/worktrees/a" "$main/.claude/worktrees/.hidden" "$main/.claude/worktrees/x y" \
+  "$main/.claude/worktrees/keep" "$main/.claude/keep"
 
 for bad in '-rf' '-x'; do
   before=$(cd "$work" && find . -path ./main/.git -prune -o -print | LC_ALL=C sort | cksum)
