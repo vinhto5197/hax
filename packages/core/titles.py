@@ -10,6 +10,7 @@ import os
 import re
 
 from anthropic import AsyncAnthropic
+from anthropic.types import JSONOutputFormatParam
 
 TITLE_MODEL = os.getenv("TITLE_MODEL", "claude-haiku-4-5")
 # Deliberate bound, not an accident: a title needs only the opening of the
@@ -30,7 +31,7 @@ TITLE_SYSTEM = (
 # nowhere to go, so nothing downstream guesses at the model's phrasing. The
 # schema cannot bound length (the API accepts maxLength but does not enforce
 # it); clean_title does.
-_TITLE_FORMAT = {
+_TITLE_FORMAT: JSONOutputFormatParam = {
     "type": "json_schema",
     "schema": {
         "type": "object",

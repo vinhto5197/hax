@@ -184,8 +184,10 @@ async def load_history(conversation_id: UUID, user_id: UUID) -> list[MessagePara
     for role, content in rows:
         if history and history[-1]["role"] == role:
             history[-1]["content"] = f"{history[-1]['content']}\n\n{content}"
+        elif role == "user":
+            history.append({"role": "user", "content": content})
         else:
-            history.append({"role": role, "content": content})
+            history.append({"role": "assistant", "content": content})
     return history
 
 

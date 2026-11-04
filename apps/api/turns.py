@@ -120,7 +120,7 @@ class Turn:
 
         async def consume() -> None:
             async for item in stream_fn(messages):
-                event = {"content": item} if isinstance(item, str) else item
+                event: dict = {"content": item} if isinstance(item, str) else item
                 if "content" in event:
                     buffer.append(event["content"])
                 for s in event.get("sources", ()):

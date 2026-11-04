@@ -4,8 +4,9 @@ by the daily sweep (apps/worker/tasks.py::sweep_email_tokens)."""
 
 import uuid
 from datetime import UTC, datetime
+from typing import Any, cast
 
-from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy import CursorResult, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from packages.db.models import EmailToken
@@ -81,9 +82,14 @@ async def delete_dead(session: AsyncSession, *, limit: int) -> int:
         .limit(limit)
         .with_for_update(skip_locked=True)
     )
-    result = await session.execute(
-        delete(EmailToken)
-        .where(EmailToken.id.in_(dead))
-        .execution_options(synchronize_session=False)
+    # A DELETE always executes to a CursorResult; the session's signature
+    # only promises the Result base, which has no rowcount.
+    result = cast(
+        CursorResult[Any],
+        await session.execute(
+            delete(EmailToken)
+            .where(EmailToken.id.in_(dead))
+            .execution_options(synchronize_session=False)
+        ),
     )
     return result.rowcount

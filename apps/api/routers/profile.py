@@ -2,6 +2,8 @@
 refusal). The chat route reads the same note into the system prompt. The
 note is user content: never log it."""
 
+from typing import Any
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,7 +15,9 @@ from packages.db.repos import profiles as profiles_repo
 
 router = APIRouter(prefix="/me/profile", tags=["profile"])
 
-_VISITOR_REFUSED = {403: {"description": "demo_limit: sign up to keep a note"}}
+_VISITOR_REFUSED: dict[int | str, dict[str, Any]] = {
+    403: {"description": "demo_limit: sign up to keep a note"}
+}
 
 
 async def _member(user: CurrentUser = Depends(current_user)) -> CurrentUser:

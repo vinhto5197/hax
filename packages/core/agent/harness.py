@@ -11,9 +11,10 @@ are user-facing only: the model receives ToolOutput.text and nothing else.
 import logging
 import os
 from collections.abc import AsyncIterator
+from typing import Any, cast
 
 from anthropic import AsyncAnthropic
-from anthropic.types import MessageParam
+from anthropic.types import MessageParam, ToolResultBlockParam
 
 from packages.core.agent.tools import TOOLS, Source, ToolContext, ToolOutput
 
@@ -46,7 +47,7 @@ def _cache_last(messages: list[MessageParam]) -> list[MessageParam]:
     caller's list is never mutated."""
     if not messages:
         return messages
-    last = dict(messages[-1])
+    last: dict[str, Any] = dict(messages[-1])
     content = last["content"]
     if isinstance(content, str):
         last["content"] = [
@@ -56,7 +57,9 @@ def _cache_last(messages: list[MessageParam]) -> list[MessageParam]:
         blocks = [dict(b) for b in content]
         blocks[-1] = {**blocks[-1], "cache_control": _EPHEMERAL}
         last["content"] = blocks
-    return [*messages[:-1], last]
+    # Same role, only the content's blocks gain cache_control: still a
+    # MessageParam, which a per-block-type TypedDict copy cannot express.
+    return [*messages[:-1], cast(MessageParam, last)]
 
 
 async def _run_tool(
@@ -138,7 +141,7 @@ async def stream_completion_agentic(
             return  # end_turn — the answer already streamed
 
         messages.append({"role": "assistant", "content": final.content})
-        tool_results: list[dict] = []
+        tool_results: list[ToolResultBlockParam] = []
         for block in final.content:
             if block.type != "tool_use":
                 continue

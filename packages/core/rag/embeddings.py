@@ -1,6 +1,7 @@
 import os
+from typing import cast
 
-import voyageai
+from voyageai.client_async import AsyncClient
 
 from packages.db.models.chunk import EMBEDDING_DIM
 
@@ -18,22 +19,28 @@ _BATCH = 100
 # closes an aiohttp session per request; it holds no loop-bound connection.
 # That stops being true if `voyageai.aiosession` is ever set to a shared
 # session — then build the client per call, as packages/core/titles.py does.
-_client: voyageai.AsyncClient | None = None
+_client: AsyncClient | None = None
 
 
-def _get_client() -> voyageai.AsyncClient:
+def _get_client() -> AsyncClient:
     global _client
     if _client is None:
         # Bounded per attempt: the SDK default is 600 s, and retrieval runs on
         # the request path. Reads VOYAGE_API_KEY from env. VOYAGE_BASE_URL is
         # set only by the e2e stack (its fake model serves /v1/embeddings);
         # unset, None keeps the SDK's own endpoint.
-        _client = voyageai.AsyncClient(
+        _client = AsyncClient(
             max_retries=2,
             timeout=15,
             base_url=os.getenv("VOYAGE_BASE_URL") or None,
         )
     return _client
+
+
+def _floats(vectors: list[list[float]] | list[list[int]]) -> list[list[float]]:
+    # The SDK types every embedding response as float-or-int; int vectors
+    # come only from an int8/binary `output_dtype`, which no call here asks for.
+    return cast(list[list[float]], vectors)
 
 
 def _check_dim(vectors: list[list[float]]) -> list[list[float]]:
@@ -59,7 +66,7 @@ async def embed_documents(texts: list[str]) -> list[list[float]]:
         result = await _get_client().embed(
             batch, model=VOYAGE_MODEL, input_type="document"
         )
-        out.extend(result.embeddings)
+        out.extend(_floats(result.embeddings))
     # zip() downstream would silently truncate on a count mismatch — make it loud.
     if len(out) != len(texts):
         raise ValueError(
@@ -71,7 +78,7 @@ async def embed_documents(texts: list[str]) -> list[list[float]]:
 async def embed_query(text: str) -> list[float]:
     """Embed a single query for retrieval (input_type='query'). Async."""
     result = await _get_client().embed([text], model=VOYAGE_MODEL, input_type="query")
-    vectors = _check_dim(result.embeddings)
+    vectors = _check_dim(_floats(result.embeddings))
     if not vectors:
         raise ValueError("Voyage returned an empty embeddings response")
     return vectors[0]
