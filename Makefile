@@ -10,7 +10,11 @@ infra-up:
 	  echo "  open -a Docker  # if you use Docker Desktop"; \
 	  exit 1; \
 	}
-	$(COMPOSE_DEV) up -d
+	@# --remove-orphans: a container from a service since dropped from the file
+	@# (the old hax-minio) would otherwise keep running and hold its ports. Every
+	@# worktree shares the hax-dev project, so a service only another worktree's
+	@# file declares is removed too.
+	$(COMPOSE_DEV) up -d --remove-orphans
 
 infra-down:
 	$(COMPOSE_DEV) down
