@@ -38,9 +38,11 @@ asks=$(printf '%s' "$message" | grep -Eio "\\b(say|reply|respond|waits? for|wait
   | grep -Eio "[\"“]${words}[\"”]" | head -1)
 [ -n "$asks" ] || exit 0
 # A hand-off names a PR or an artifact, or carries a gate block as a heading
-# line; a gate block mentioned in a sentence (a status note) is not one.
+# line (a Markdown heading or a whole bold line that names it, as the feature
+# template's "# <id> — gate block" does, or a line opening "Gate block:"); a
+# gate block mentioned in a sentence (a status note) is not one.
 printf '%s' "$message" | grep -Eiq '(\bPRs? #[0-9]+|\bpull requests? #[0-9]+|/pull/[0-9]+|claude\.ai/(code/)?artifact/)' \
-  || printf '%s\n' "$message" | grep -Eiq '^[[:space:]]*(#+[[:space:]]*Gate block|\*\*Gate block|Gate block:)' \
+  || printf '%s\n' "$message" | grep -Eiq '^[[:space:]]*(#+[[:space:]].*gate block|\*\*[^*]*gate block[^*]*\*\*[[:space:]]*$|Gate block:)' \
   || exit 0
 # The section is a heading line, never a mention inside a sentence.
 printf '%s\n' "$message" | grep -Eq '^[[:space:]]*([-*][[:space:]]+)?(\*\*Your review[^*]*\*\*|#+[[:space:]]*Your review\b|Your review[[:space:]:]*$)' && exit 0

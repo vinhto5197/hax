@@ -136,6 +136,12 @@ expect_block "a '### Gate block' heading with a suffix is a hand-off" \
   $'### Gate block — slice 3\nTests pass.\n\nSay "commit" when ready.'
 expect_block "a line starting 'Gate block:' is a hand-off" \
   $'Tests pass.\nGate block: slice 3, two files.\n\nSay "commit" when ready.'
+expect_block "the feature template's '# <id> — gate block' heading is a hand-off" \
+  $'# F5c — gate block\nTests pass.\n\nSay "commit" when ready.'
+expect_block "a heading naming a bite's gate block is a hand-off" \
+  $'## Bite 2 gate block\nTests pass.\n\nSay "commit" when ready.'
+expect_pass "a bold phrase opening a sentence about the gate block passes" \
+  $'**F5c\'s gate block** above still waits. Say "commit" when ready.'
 expect_pass "a '#N' beside 'PR' in a sentence is not a hand-off" \
   'I checked #3 in the PR list. Say "push"'
 
