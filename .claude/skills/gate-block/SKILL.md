@@ -54,7 +54,7 @@ A main-lane item is cut into bites when it is planned: a bite is one or more of 
   - then the fixes, each with its visible effect: a count that drops, a test that turns green (a failing test ships in the same bite as its fix);
   - last the enforcement that requires the clean state: a CI step, a hook, a gate.
 - **Each bite stands on its own:** it is built to pass CI with this bite committed and the later bites still shelved.
-- **Only the current bite's files are in the tree;** the later bites wait under `local/shelf/<item>/`.
+- **Only the current bite's files are in the tree;** the later bites wait under `local/shelf/<item>/`, and that folder is deleted when the item's last bite is committed, so a shelf never outlives its item.
 - **Each bite carries its own review:** its tier, its fresh-eyes reviewer, blind tests where it changes behaviour, and its own gate block.
 - **The adversarial review runs once per item, not per bite:** when any bite is tier 1, one run over the item's whole commit range is offered after its last tier-1 bite (cost preview, the maintainer's "go"); its findings become a fix bite.
 
