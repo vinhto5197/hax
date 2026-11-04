@@ -7,6 +7,7 @@ import { composer, REPLY, send } from "./chat";
 // seconds shows whether it kept growing.
 const STILL = "Still answering…";
 const INTERRUPTED = "The reply was interrupted.";
+const STOPPED = "You stopped this reply.";
 const LONG_REPLY = Array.from(
   { length: 20 },
   (_, i) => `Long reply, part ${i + 1}. `,
@@ -28,6 +29,15 @@ function sendButton(page: Page) {
 // outside it on every page.
 function errorLine(page: Page) {
   return page.getByRole("main").getByRole("alert");
+}
+
+// The thread's activity line; the stopped line is also a status, so it is
+// left out.
+function activityLine(page: Page) {
+  return page
+    .getByRole("main")
+    .getByRole("status")
+    .filter({ hasNotText: STOPPED });
 }
 
 function longReply(page: Page) {
@@ -106,11 +116,11 @@ test("A stop request still pending after the reply ended shows no activity line 
   await page.waitForTimeout(1_500);
   await expect(composer(page)).toBeDisabled();
   await expect(longReply(page)).toBeVisible();
-  await expect(main.getByRole("status")).toHaveCount(0);
+  await expect(activityLine(page)).toHaveCount(0);
 
   release();
   await expect(composer(page)).toBeEnabled();
-  await expect(main.getByRole("status")).toHaveCount(0);
+  await expect(activityLine(page)).toHaveCount(0);
   await expect(errorLine(page)).toHaveCount(0);
 });
 
