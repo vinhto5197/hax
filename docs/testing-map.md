@@ -99,7 +99,7 @@ What the e2e stack can stage today, and what it cannot:
 | 74 | Phone: the menu opens inside the drawer; the dialog fills the width less the gutter; Escape closes only the menu or the dialog; a backdrop tap does nothing and leaves focus in the dialog; saving keeps the drawer open | `about-you.member`, AboutYouDialog.test, Shell.test | – |
 | 75 | The dialog and its text survive a resize across the breakpoint and a remount of the sidebar; it closes when the signed-in member changes, and a save under another member's cookie does not go out | `about-you.member` (resize), AboutYouProvider.test, Shell.test (route change: no journey can open the dialog in time) | – |
 | 77 | Delete targets (conversation and document rows) are at least 44 px wide, conversation ones 44 px tall, and never overlap a neighbour; AA contrast at rest | `chat-basics.member`, `documents-panel.member` (the contrast: L) | – |
-| 83 | Skeleton rows match the real rows' height and spacing; still under reduced motion | `chat-basics.member` (the documents geometry and the look: L) | – |
+| 83 | Skeleton rows match the real rows' height and spacing; still under reduced motion; hidden from assistive tech, the list aria-busy until its first fetch lands or fails | `chat-basics.member` (the documents geometry and the look: L), Sidebar.test, DocumentsPanel.test (aria-hidden, aria-busy) | – |
 
 ## Auth
 
