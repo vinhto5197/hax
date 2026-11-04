@@ -750,6 +750,26 @@ else
   echo "note: /bin/bash is the same binary as the PATH bash; the case above covers it"
 fi
 
+# 26 --------------------------------------------------------------------------
+# Static: the owner file is created with noclobber in the wrapper's own shell,
+# never in a ( … ) subshell. A subshell resets trapped signals to their
+# defaults, so a Ctrl-C between its O_EXCL open and its exit kills it and
+# leaves an empty owner file that no trap removes and every later caller waits
+# on; a race that narrow is not reachable by a timing test. Comment lines are
+# skipped. The second check keeps the first from passing because the
+# noclobber primitive vanished altogether.
+code=$(grep -v '^[[:space:]]*#' "$with_lock")
+if grep -Eq '\([^)]*(noclobber|set -C)' <<<"$code"; then
+  report FAIL "the owner file is not created by a noclobber subshell (found: $(grep -E '\([^)]*(noclobber|set -C)' <<<"$code" | head -n 1))"
+else
+  report PASS "the owner file is not created by a noclobber subshell"
+fi
+if grep -Eq '(^|[;&|[:space:]])set (-C|-o noclobber)([;&|[:space:]]|$)' <<<"$code"; then
+  report PASS "the wrapper takes the lock with noclobber (set -C or set -o noclobber)"
+else
+  report FAIL "the wrapper takes the lock with noclobber (set -C or set -o noclobber): no such line"
+fi
+
 if [ "$fails" -gt 0 ]; then
   echo "$fails failed"
   exit 1
