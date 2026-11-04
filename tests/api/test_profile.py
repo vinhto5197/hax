@@ -1,9 +1,9 @@
 """A member's note about themselves: GET /api/me/profile returns it (null when
 there is none); PUT stores the stripped text and returns what is stored; an
 empty or blank PUT deletes it; more than 1000 characters after the strip, or
-a C0 control character other than tab, newline or CR, is a 422 that leaves the stored note alone. A visitor gets
-the demo refusal on both. Deleting the user deletes the note. The note's text
-never reaches the log.
+a C0 control character other than tab, newline or CR, is a 422 that leaves
+the stored note alone. A visitor gets the demo refusal on both. Deleting the
+user deletes the note. The note's text never reaches the log.
 
 Seeds and asserts go through admin_engine; requests go through the app."""
 
