@@ -7,7 +7,8 @@
 #
 #   scripts/feature-worktree.sh <id>                    create .claude/worktrees/<id> on feat/<id> from origin/main
 #   scripts/feature-worktree.sh --remove [--force] <id> remove the worktree and the local branch;
-#                                                       without --force, refuses uncommitted changes or unpushed commits
+#                                                       without --force, refuses uncommitted changes or unpushed commits;
+#                                                       with --force, also deletes a directory that is not a registered worktree
 set -euo pipefail
 
 # The main checkout, never the current worktree: run from inside one,
@@ -28,25 +29,48 @@ path="$root/.claude/worktrees/$id"
 branch="feat/$id"
 
 if (( remove )); then
+  has_branch() { git -C "$root" show-ref --verify -q "refs/heads/$branch"; }
+  registered=0
+  git -C "$root" worktree list --porcelain | grep -qxF "worktree $path" && registered=1
   if (( ! force )); then
-    [[ -d "$path" ]] || { echo "no worktree at $path" >&2; exit 1; }
-    dirty=$(git -C "$path" status --porcelain --untracked-files=all)
-    if [[ -n "$dirty" ]]; then
-      { echo "refusing to remove $path: uncommitted changes (--force to discard):"; echo "$dirty"; } >&2
-      exit 1
+    # A directory deleted by hand still leaves the branch to clear; only a
+    # missing directory AND a missing branch is nothing to remove.
+    if [[ -d "$path" ]]; then
+      (( registered )) || { echo "refusing to remove $path: not a registered worktree (--force deletes it)" >&2; exit 1; }
+      dirty=$(git -C "$path" status --porcelain --untracked-files=all)
+      if [[ -n "$dirty" ]]; then
+        { echo "refusing to remove $path: uncommitted changes (--force to discard):"; echo "$dirty"; } >&2
+        exit 1
+      fi
+    elif ! has_branch; then
+      echo "no worktree at $path" >&2; exit 1
     fi
-    unpushed=$(git -C "$root" log --oneline "refs/heads/$branch" --not --remotes --)
-    if [[ -n "$unpushed" ]]; then
-      { echo "refusing to remove $branch: commits on no remote branch (--force to discard):"; echo "$unpushed"; } >&2
-      exit 1
+    if has_branch; then
+      unpushed=$(git -C "$root" log --oneline "refs/heads/$branch" --not --remotes --)
+      if [[ -n "$unpushed" ]]; then
+        { echo "refusing to remove $branch: commits on no remote branch (--force to discard):"; echo "$unpushed"; } >&2
+        exit 1
+      fi
     fi
   fi
   # A branch whose worktree is already gone (pruned, or deleted by hand) is
   # still removed: left behind, it would block the next `<id>`.
-  if git -C "$root" worktree list --porcelain | grep -qxF "worktree $path"; then
-    git -C "$root" worktree remove --force "$path"
+  if (( registered )); then
+    if [[ -d "$path" ]]; then
+      git -C "$root" worktree remove --force "$path"
+    else
+      git -C "$root" worktree prune
+    fi
+  elif (( force )) && [[ -e "$path" ]]; then
+    # Not a worktree (a half-made add): a plain directory, and inside
+    # .claude/worktrees/ by the id rule above.
+    rm -rf "$path"
   fi
   git -C "$root" branch -D "$branch" >/dev/null 2>&1 || true
+  if [[ -e "$path" ]] || has_branch; then
+    echo "could not remove $path and $branch" >&2
+    exit 1
+  fi
   echo "removed $path"
   exit 0
 fi

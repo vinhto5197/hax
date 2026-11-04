@@ -47,6 +47,9 @@ wt() { echo "$main/.claude/worktrees/$1"; }
 fw() { (cd "$main" && bash scripts/feature-worktree.sh "$@"); }
 has_branch() { git -C "$main" show-ref --verify -q "refs/heads/feat/$1"; }
 create() { fw "$1" >/dev/null 2>&1 && [ -d "$(wt "$1")" ]; }
+# A line-start match, not grep in a pipe: under pipefail an early grep exit can
+# fail the writer and flip a negated check.
+says_removed() { case $'\n'"$1" in *$'\n''removed '*) return 0 ;; esac; return 1; }
 
 for bad in '-rf' '-x'; do
   before=$(cd "$work" && find . -path ./main/.git -prune -o -print | LC_ALL=C sort | cksum)
@@ -131,6 +134,63 @@ if create orphan; then
 else
   report FAIL "could not create worktree 'orphan'"
 fi
+
+# W8: a hand-deleted worktree whose branch has nothing unpushed needs no --force;
+# the directory is already gone, so nothing uncommitted can be lost.
+if create gone; then
+  rm -rf "$(wt gone)" && git -C "$main" worktree prune
+  rc=0; fw --remove gone >/dev/null 2>&1 || rc=$?
+  [ "$rc" -eq 0 ] && ! has_branch gone \
+    && report PASS "--remove deletes a branch whose worktree was deleted by hand, nothing unpushed, exit 0" \
+    || report FAIL "--remove on a hand-deleted worktree: exit $rc, branch $(has_branch gone && echo kept || echo gone)"
+else
+  report FAIL "could not create worktree 'gone'"
+fi
+
+# W8: with the directory gone, unpushed commits still block a plain --remove;
+# the branch is then their only copy.
+if create goneahead; then
+  echo more >> "$(wt goneahead)/README" && git -C "$(wt goneahead)" commit -qam goneahead
+  rm -rf "$(wt goneahead)" && git -C "$main" worktree prune
+  rc=0; out=$(fw --remove goneahead 2>&1) || rc=$?
+  [ "$rc" -ne 0 ] && has_branch goneahead && ! says_removed "$out" \
+    && report PASS "--remove refuses a branch with unpushed commits whose worktree was deleted by hand, and keeps it" \
+    || report FAIL "--remove on a hand-deleted worktree with unpushed commits: exit $rc, branch $(has_branch goneahead && echo kept || echo gone), out '$out'"
+else
+  report FAIL "could not create worktree 'goneahead'"
+fi
+
+# W9: a directory at the worktree path that git does not know as a worktree
+# (a half-made add) is cleared by --force, and "removed" means both are gone.
+git -C "$main" branch -q feat/half origin/main
+mkdir -p "$(wt half)" && echo stray > "$(wt half)/file"
+rc=0; out=$(fw --remove --force half 2>&1) || rc=$?
+[ "$rc" -eq 0 ] && [ ! -e "$(wt half)" ] && ! has_branch half \
+  && report PASS "--remove --force deletes an unregistered directory at the worktree path and its branch, exit 0" \
+  || report FAIL "--remove --force on an unregistered directory: exit $rc, dir $([ -e "$(wt half)" ] && echo kept || echo gone), branch $(has_branch half && echo kept || echo gone)"
+says_removed "$out" && report PASS "--remove --force on an unregistered directory prints 'removed'" \
+  || report FAIL "--remove --force on an unregistered directory does not print 'removed': '$out'"
+
+# W9: the same after a real worktree was deleted, pruned and its path remade by hand.
+if create remade; then
+  rm -rf "$(wt remade)" && git -C "$main" worktree prune
+  mkdir -p "$(wt remade)" && echo stray > "$(wt remade)/file"
+  rc=0; out=$(fw --remove --force remade 2>&1) || rc=$?
+  [ "$rc" -eq 0 ] && [ ! -e "$(wt remade)" ] && ! has_branch remade && says_removed "$out" \
+    && report PASS "--remove --force deletes a remade unregistered directory and its branch, prints 'removed', exit 0" \
+    || report FAIL "--remove --force on a remade directory: exit $rc, dir $([ -e "$(wt remade)" ] && echo kept || echo gone), branch $(has_branch remade && echo kept || echo gone), out '$out'"
+else
+  report FAIL "could not create worktree 'remade'"
+fi
+
+# W9: without --force an unregistered directory is never deleted; it may hold
+# the only copy of work that git does not track.
+git -C "$main" branch -q feat/halfkeep origin/main
+mkdir -p "$(wt halfkeep)" && echo stray > "$(wt halfkeep)/file"
+rc=0; out=$(fw --remove halfkeep 2>&1) || rc=$?
+[ "$rc" -ne 0 ] && [ -f "$(wt halfkeep)/file" ] && ! says_removed "$out" \
+  && report PASS "--remove without --force keeps an unregistered directory, exits non-zero and does not claim 'removed'" \
+  || report FAIL "--remove on an unregistered directory: exit $rc, dir $([ -e "$(wt halfkeep)" ] && echo kept || echo gone), out '$out'"
 
 # W5: run from inside another worktree, both forms act on the main checkout.
 if create other && create inner; then
