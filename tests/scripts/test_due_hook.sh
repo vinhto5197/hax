@@ -3,6 +3,8 @@
 # names the digest when the marker's last_digest_date is not today; names the
 # retro from Friday on with the week file's tally, flagging a category seen
 # twice; `mark` records each; "BAU" with nothing due gets a one-line answer;
+# a week whose retro was never marked is named "(missed)" on the next week's
+# prompts until marked (a marker with no last_retro_week has no history);
 # from Friday it launches the week's explorer once, waits with the reason when
 # the runner's check fails, and reports the run's end until it is marked.
 # gh and scripts/explorer.sh are stubbed, the clock is pinned with DUE_TODAY.
@@ -203,5 +205,44 @@ out=$(run 2026-11-13 hello)
 kill "$live_pid" 2>/dev/null || true
 no_end_line "$out" && report PASS "running status with a live pid in .running prints no EXPLORER DONE/FAILED line" \
   || report FAIL "running status, live pid: got '$out'"
+
+# Missed retros. The marker is saved and restored around these cases. The
+# explorer is held off on Friday by last_explorer_week, as in (l2).
+cp "$marker" "$work/marker.saved"
+retro_due() { printf '%s' "$1" | grep -q 'RETRO DUE'; }
+
+# (o1) Monday 2026-11-09 (W46) after an unmarked W45: last week's retro is named
+# missed, and this week's is not named before Friday.
+set_marker '.last_digest_date = "2026-11-09" | .last_retro_week = "2026-W44"'
+out=$(run 2026-11-09 hello)
+case "$out" in *"RETRO DUE for 2026-W45 (missed)"*) report PASS "Monday names last week's unmarked retro as missed" ;; *) report FAIL "missed retro: got '$out'" ;; esac
+case "$out" in *"RETRO DUE for 2026-W46"*) report FAIL "this week's retro named on a Monday: '$out'" ;; *) report PASS "no current-week retro on a Monday" ;; esac
+out=$(run 2026-11-09 hello)
+case "$out" in *"RETRO DUE for 2026-W45 (missed)"*) report PASS "the missed retro is repeated until marked" ;; *) report FAIL "missed retro, second prompt: got '$out'" ;; esac
+
+# (o2) mark retro on a Monday records the previous week; the next prompt is quiet.
+CLAUDE_PROJECT_DIR="$work/proj" DUE_TODAY=2026-11-09 "$hook" mark retro
+got=$(jq -r '.last_retro_week // ""' "$marker")
+[ "$got" = 2026-W45 ] && report PASS "mark retro on a Monday records last week" || report FAIL "mark retro on a Monday: got '$got'"
+out=$(run 2026-11-09 hello)
+retro_due "$out" && report FAIL "retro still named after marking the missed week: '$out'" || report PASS "marking the missed week silences it"
+
+# (o3) Monday after a marked week: nothing.
+set_marker '.last_digest_date = "2026-11-09" | .last_retro_week = "2026-W45"'
+out=$(run 2026-11-09 hello)
+retro_due "$out" && report FAIL "retro named on a Monday after a marked week: '$out'" || report PASS "no retro on a Monday after a marked week"
+
+# (o4) No last_retro_week at all is no history: nothing is called missed.
+set_marker '.last_digest_date = "2026-11-09" | del(.last_retro_week)'
+out=$(run 2026-11-09 hello)
+retro_due "$out" && report FAIL "retro named with no retro history: '$out'" || report PASS "no retro history: nothing missed"
+
+# (o5) Friday 2026-11-13 (W46) with W45 marked: this week's retro, not missed.
+set_marker '.last_digest_date = "2026-11-13" | .last_retro_week = "2026-W45" | .last_explorer_week = "2026-W46"'
+out=$(run 2026-11-13 hello)
+case "$out" in *"RETRO DUE for 2026-W46"*) report PASS "Friday still names this week's retro" ;; *) report FAIL "Friday retro after a marked week: got '$out'" ;; esac
+case "$out" in *"(missed)"*) report FAIL "Friday retro called missed: '$out'" ;; *) report PASS "Friday's retro is not called missed" ;; esac
+
+mv "$work/marker.saved" "$marker"
 
 [ "$fails" -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }
