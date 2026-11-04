@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Stop hook: a final hand-off (it names a PR, a brief card's artifact link or a
-# gate block) that asks the maintainer for a review word ("merge", "commit",
-# "approved", "push", "go <id>", in straight or curly quotes, after an ask cue)
+# Stop hook: a final hand-off (it names a PR or a brief card's artifact link,
+# or carries a gate block heading) that asks the maintainer for a review word
+# ("merge", "commit", "approved", "push", "go <id>", in straight or curly
+# quotes, after an ask cue)
 # must carry a "Your review" section (skill gate-block, "Your review, on every
 # Ask"); without one the stop is refused and the reason sent back, so the
 # hand-off is fixed before anyone reads it. A plain ask with no hand-off (a
@@ -36,7 +37,13 @@ words='(merge|commit push|commit|approved|push|go [a-z0-9][a-z0-9._-]*)'
 asks=$(printf '%s' "$message" | grep -Eio "\\b(say|reply|respond|waits? for|waiting on|end(s)? the review)\\b[^\"“”]{0,24}[\"“]${words}[\"”]" \
   | grep -Eio "[\"“]${words}[\"”]" | head -1)
 [ -n "$asks" ] || exit 0
-printf '%s' "$message" | grep -Eiq '(\bPRs? #[0-9]+|\bpull requests? #[0-9]+|#[0-9]+\b.*\b(PR|pull request)\b|/pull/[0-9]+|claude\.ai/(code/)?artifact/|gate block)' || exit 0
+# A hand-off names a PR or an artifact, or carries a gate block as a heading
+# line (a Markdown heading or a whole bold line that names it, as the feature
+# template's "# <id> — gate block" does, or a line opening "Gate block:"); a
+# gate block mentioned in a sentence (a status note) is not one.
+printf '%s' "$message" | grep -Eiq '(\bPRs? #[0-9]+|\bpull requests? #[0-9]+|/pull/[0-9]+|claude\.ai/(code/)?artifact/)' \
+  || printf '%s\n' "$message" | grep -Eiq '^[[:space:]]*(#+[[:space:]].*gate block|\*\*[^*]*gate block[^*]*\*\*[[:space:]]*$|Gate block:)' \
+  || exit 0
 # The section is a heading line, never a mention inside a sentence.
 printf '%s\n' "$message" | grep -Eq '^[[:space:]]*([-*][[:space:]]+)?(\*\*Your review[^*]*\*\*|#+[[:space:]]*Your review\b|Your review[[:space:]:]*$)' && exit 0
 

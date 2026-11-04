@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # Proves .claude/hooks/review_gate.sh (a Stop hook): a final hand-off (it names
-# a PR, a brief card's artifact link or a gate block) that asks the maintainer
-# for a review word ("merge", "commit", "approved", "push", "go <id>") without
-# a "Your review" section is sent back; a plain ask with no hand-off passes; the same message
-# with the section, a message asking for nothing, and a second stop in a row
-# all pass. The final message is read from the transcript (the text after the
-# last user or tool-result entry), or from last_assistant_message when given.
+# a PR, a brief card's artifact link, or carries a gate block heading) that
+# asks the maintainer for a review word ("merge", "commit", "approved", "push",
+# "go <id>") without a "Your review" section is sent back; a plain ask with no
+# hand-off passes (a sentence that only mentions a gate block, or a "#N" beside
+# "PR", is no hand-off); the same message with the section, a message asking
+# for nothing, and a second stop in a row all pass. The final message is read
+# from the transcript (the text after the last user or tool-result entry), or
+# from last_assistant_message when given.
 # Run by hand:
 #   bash tests/scripts/test_review_gate.sh
 set -euo pipefail
@@ -63,7 +65,7 @@ out=$(run "$(transcript 'All checks passed.')" false)
 out=$(run "$(transcript 'The check looks for a quoted review word like "merge" or "commit".')" false)
 [ -z "$out" ] && report PASS "a mentioned word is not an ask" || report FAIL "a mention was blocked: '$out'"
 
-out=$(run "$(transcript 'The gate block is ready; it waits for your "merge".')" false)
+out=$(run "$(transcript $'Gate block: slice 2\nThe slice is ready; it waits for your "merge".')" false)
 blocked "$out" && report PASS "a word waiting on the maintainer is an ask" || report FAIL "waiting-on ask passed: '$out'"
 
 # Not a hand-off: no PR, card or gate block named. A plain ask passes.
@@ -120,7 +122,28 @@ expect_block "'PRs #44 and #45' is a hand-off" \
 expect_block "a two-word review word after a gate block is an ask" \
   $'**Gate block: slice 2**\nTests pass, the review found nothing.\n\nTo land it, say "commit push".'
 expect_block "a gate block asking for commit without the section is sent back" \
-  'The gate block for slice 2 is below. Tests pass. Say "commit" when ready.'
+  $'**Gate block: slice 2**\nTests pass. Say "commit" when ready.'
+
+# A gate block is a hand-off only as a heading line; a mention in a sentence is
+# a status note.
+expect_pass "a status note naming the gate block above passes" \
+  'F5c'"'"'s gate block above waits for "commit".'
+expect_pass "a gate block mentioned mid-sentence with an ask passes" \
+  'The gate block above is unchanged. Say "commit" when ready.'
+expect_block "a '## Gate block' heading is a hand-off" \
+  $'## Gate block\nTests pass.\n\nSay "commit" when ready.'
+expect_block "a '### Gate block' heading with a suffix is a hand-off" \
+  $'### Gate block — slice 3\nTests pass.\n\nSay "commit" when ready.'
+expect_block "a line starting 'Gate block:' is a hand-off" \
+  $'Tests pass.\nGate block: slice 3, two files.\n\nSay "commit" when ready.'
+expect_block "the feature template's '# <id> — gate block' heading is a hand-off" \
+  $'# F5c — gate block\nTests pass.\n\nSay "commit" when ready.'
+expect_block "a heading naming a bite's gate block is a hand-off" \
+  $'## Bite 2 gate block\nTests pass.\n\nSay "commit" when ready.'
+expect_pass "a bold phrase opening a sentence about the gate block passes" \
+  $'**F5c\'s gate block** above still waits. Say "commit" when ready.'
+expect_pass "a '#N' beside 'PR' in a sentence is not a hand-off" \
+  'I checked #3 in the PR list. Say "push"'
 
 expect_block "Your review mentioned mid-sentence is not the section" \
   'PR #12 is green. I will add Your review later. Reply "merge".'
