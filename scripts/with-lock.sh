@@ -54,9 +54,18 @@ trap 'on_signal TERM' TERM
 trap 'on_signal QUIT' QUIT
 exit_for() { case $1 in INT) exit 130 ;; QUIT) exit 131 ;; *) exit 143 ;; esac; }
 
+# The owner file is created in this shell, never a subshell: a subshell resets
+# the traps above to their defaults, so a signal between its O_EXCL open and
+# its exit would kill it, leave an empty owner file and no EXIT trap to remove
+# it, and every later caller would time out on it.
 SECONDS=0
-until mkdir -p "$lockdir" 2>/dev/null &&
-  (set -o noclobber && echo "$$ $*" >"$lockdir/owner") 2>/dev/null; do
+until mkdir -p "$lockdir" 2>/dev/null && {
+  set -C
+  { echo "$$ $*" >"$lockdir/owner"; } 2>/dev/null
+  created=$?
+  set +C
+  [ "$created" -eq 0 ]
+}; do
   [ -z "$signal" ] || exit_for "$signal"
   if [ "$SECONDS" -ge "$timeout" ]; then
     owner=$(cat "$lockdir/owner" 2>/dev/null || echo unknown)
