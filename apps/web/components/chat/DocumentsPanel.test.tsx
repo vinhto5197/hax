@@ -242,3 +242,77 @@ describe("DocumentsPanel loading", () => {
     expect(vi.mocked(listDocuments).mock.calls.length).toBe(settled);
   });
 });
+
+describe("DocumentsPanel upload during the first list", () => {
+  const OLD_ID = "00000000-0000-0000-0000-000000000001";
+  const FRESH_ID = "00000000-0000-0000-0000-000000000002";
+  const old = doc({ id: OLD_ID, filename: "old.pdf", status: "ready" });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  // Holds the first list, uploads fresh.txt (resolving while that list is
+  // still in flight), then lands the held list without the upload. No timer
+  // is advanced past 0, so no poll can run before the caller's assertions.
+  async function uploadThenLandStaleList() {
+    vi.useFakeTimers();
+    let resolveList: (docs: DocumentSummary[]) => void = () => {};
+    const held = new Promise<DocumentSummary[]>((r) => {
+      resolveList = r;
+    });
+    vi.mocked(listDocuments).mockReturnValueOnce(held);
+    vi.mocked(uploadDocument).mockResolvedValue(
+      doc({ id: FRESH_ID, filename: "fresh.txt", status: "pending" }),
+    );
+
+    const { container } = render(<DocumentsPanel />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    const input = container.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
+    const file = new File(["hello"], "fresh.txt", { type: "text/plain" });
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [file] } });
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(uploadDocument).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveList([old]);
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    return container;
+  }
+
+  it("an upload that resolves before the first list keeps its row when that list lands without it", async () => {
+    // Any later list never lands, so only the held list can be on screen.
+    vi.mocked(listDocuments).mockReturnValue(new Promise(() => {}));
+    await uploadThenLandStaleList();
+
+    expect(screen.getByText("fresh.txt")).toBeInTheDocument();
+    expect(screen.getByText("old.pdf")).toBeInTheDocument();
+  });
+
+  it("a later list that contains the uploaded document takes over its row", async () => {
+    vi.mocked(listDocuments).mockResolvedValue([
+      old,
+      doc({ id: FRESH_ID, filename: "fresh.txt", status: "ready" }),
+    ]);
+    await uploadThenLandStaleList();
+    expect(screen.getByText("fresh.txt")).toBeInTheDocument();
+    expect(screen.getByText("old.pdf")).toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_500);
+    });
+
+    const names = screen.getAllByText("fresh.txt");
+    expect(names).toHaveLength(1);
+    expect(names[0].closest("li")).not.toHaveAttribute("aria-busy", "true");
+    expect(screen.getByText("old.pdf")).toBeInTheDocument();
+  });
+});
