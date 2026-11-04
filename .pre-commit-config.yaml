@@ -46,14 +46,15 @@ repos:
         pass_filenames: false
         always_run: true
       # The whole tree, not the staged files: a change in one module can
-      # break the types of another. --pythonpath as in `make types-check`;
-      # needs the project's .venv (`make setup`).
+      # break the types of another, and a pin or config change alone can
+      # change the verdict. --pythonpath as in `make types-check`; needs the
+      # project's .venv (`make setup`).
       - id: pyright
         name: pyright (apps, packages)
         entry: env PYRIGHT_PYTHON_IGNORE_WARNINGS=1 .venv/bin/pyright
         args: [--pythonpath, .venv/bin/python]
         language: system
-        types: [python]
+        files: (\.pyi?|^pyproject\.toml|^constraints\.txt)$
         pass_filenames: false
       - id: eslint
         name: eslint (apps/web)

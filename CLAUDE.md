@@ -39,7 +39,7 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
      managed **RDS Postgres + pgvector**, **S3** for uploads — all provisioned
      with Terraform. No ALB, NAT, ElastiCache or SES yet: at this volume they
      add cost without capability, and each has a config-level upgrade path.
-   - CI/CD *(live)*: `.github/workflows/ci.yml` — lint, tests, web checks and a
+   - CI/CD *(live)*: `.github/workflows/ci.yml` — lint, Pyright, tests, web checks and a
      generated-types drift check on every push; a passing push to `main`
      rolls the box through `infra/deploy/deploy.sh` (OIDC role, no stored
      AWS key). The value of CI/CD is a running pipeline, not a one-off deploy.

@@ -81,7 +81,7 @@ jobs:
       # Redis; Postgres is the service above, for real RLS/pgvector), and the
       # generated-types drift check (the committed apps/web/lib/openapi.ts must
       # be what the current API emits).
-      - name: Pins, pytest and generated types
+      - name: Pins, Pyright, pytest and generated types
         run: make ci-test PY=python
 
   web:
