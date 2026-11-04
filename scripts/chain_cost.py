@@ -33,12 +33,20 @@ def main(run_id: str) -> int:
     for transcript in run.glob("agent-*.jsonl"):
         phase = phase_of.get(transcript.stem.removeprefix("agent-"), "?")
         agents[phase] += 1
+        # A transcript writes one line per content block, each repeating its
+        # API message's usage, so usage is counted once per message id.
+        seen: set[str] = set()
         for line in transcript.read_text().splitlines():
             try:
                 message = json.loads(line).get("message")
             except json.JSONDecodeError:
                 continue
             usage = message.get("usage") if isinstance(message, dict) else None
+            message_id = message.get("id") if isinstance(message, dict) else None
+            if usage and message_id:
+                if message_id in seen:
+                    continue
+                seen.add(message_id)
             if usage:
                 tokens_in[phase] += (
                     usage.get("input_tokens", 0)
@@ -52,7 +60,7 @@ def main(run_id: str) -> int:
         both = tokens_in[phase] + tokens_out[phase]
         print(
             f"{phase:<10} {agents[phase]:>6} {tokens_in[phase] / 1e6:>7.2f}M"
-            f" {tokens_out[phase] / 1e3:>7.1f}k {both / total:>6.0%}"
+            f" {tokens_out[phase] / 1e3:>7.1f}k {both / total if total else 0:>6.0%}"
         )
     print(f"{'total':<10} {sum(agents.values()):>6} {total / 1e6:>7.2f}M")
     return 0

@@ -41,6 +41,9 @@ jobs:
       # guard a shared test database and an rm -rf, so they run here too.
       - name: Shell tests
         run: for t in tests/scripts/*.sh; do bash "$t"; done
+      # The feature chain's control flow, driven by stubbed agents: no tokens.
+      - name: Workflow tests
+        run: node --test tests/workflows/feature-chain.test.mjs
       # The box fetches these two files at the deployed sha; a syntax error in
       # either would be found by the roll, after the images were built.
       - name: Validate the production compose file and Caddyfile

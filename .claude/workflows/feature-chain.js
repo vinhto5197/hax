@@ -1,7 +1,10 @@
-// The feature lane's build: one approved brief → implementation + blind
-// tests → gate → review (fresh-eyes + a five-lens adversarial pass) → fix →
-// gate → evidence → ship → gate block. Deterministic order, so no agent can
-// skip a review or ship over a red gate.
+// The feature lane's build: one approved brief → brief hash check →
+// implementation + blind tests → gate → review (fresh-eyes + a five-lens
+// adversarial pass) → fix → re-review of the fix → gate → evidence → ship →
+// gate block. Deterministic order, so no agent can skip a review or ship over
+// a red gate. Every stage that did not run, or ran without the result the
+// next stage depends on, stops the chain (fail closed); an agent's own
+// "passed" is never trusted over the results it reports.
 //
 // Launch contract: args = { id, brief, worktree, repoRoot, branch, date,
 // briefSha256, ship (default true), plan: "max-5x", rulings? }, with the turn's token
@@ -19,7 +22,9 @@
 // substring of its title, or every one of `keywords` is (case, _ and -
 // ignored; keywords never enter a prompt, so adding them keeps a resume's
 // cache) and `ruling` is "fix" or "defer"; at the gate's fix, a ruling names a
-// test and says to keep, rewrite or retire it; at Build, a ruling settles
+// test and says to keep, rewrite or retire it (such a ruling never settles a
+// review finding); any other Fix ruling value refuses the run (case and
+// surrounding space ignored); at Build, a ruling settles
 // the decision the implementer stopped on. They never enter through the
 // brief: changing the brief would change its hash, which every prompt
 // carries, and rerun the whole chain.
@@ -27,10 +32,11 @@ export const meta = {
   name: 'feature-chain',
   description: 'Build one feature-lane item from its approved brief: implement + blind tests, gate, review, fix, evidence, ship, gate block',
   phases: [
+    { title: 'Brief', detail: 'the brief hash, checked against the approved one' },
     { title: 'Build', detail: 'implementer + blind test writer, in parallel' },
     { title: 'Gate', detail: 'lint, types, unit, pytest and journeys under the lock' },
     { title: 'Review', detail: 'fresh-eyes reviewer + five adversarial lenses with one-vote verifiers' },
-    { title: 'Fix', detail: 'implementer applies confirmed findings' },
+    { title: 'Fix', detail: 'implementer applies confirmed findings; one fresh-eyes re-review of the fix' },
     { title: 'Evidence', detail: 'journeys named in the brief, screenshots at desktop and phone width' },
     { title: 'Ship', detail: 'commit, push, PR on feat/<id>' },
     { title: 'GateBlock', detail: 'gate.md and chain.json beside the brief' },
@@ -44,6 +50,15 @@ if (!args || !ALLOWED_PLANS.has(args.plan)) {
 }
 for (const k of ['id', 'brief', 'worktree', 'repoRoot', 'branch', 'date', 'briefSha256']) {
   if (!args[k]) { log(`Refusing to run: args.${k} is missing.`); return { refused: true, reason: `args.${k} missing` } }
+}
+const normRuling = v => (typeof v === 'string' ? v.trim().toLowerCase() : '')
+const FIX_RULINGS = new Set(['fix', 'defer', 'keep', 'rewrite', 'retire'])
+for (const r of args.rulings || []) {
+  if ((r.stage || 'Fix') === 'Fix' && !FIX_RULINGS.has(normRuling(r.ruling))) {
+    const reason = `ruling "${r.ruling}" (match "${r.match || (r.keywords || []).join(' ')}") is not one of fix, defer, keep, rewrite, retire`
+    log(`Refusing to run: ${reason}.`)
+    return { refused: true, reason }
+  }
 }
 const ship = args.ship !== false
 const out = `${args.repoRoot}/local/briefs/${args.id}`
@@ -117,33 +132,59 @@ async function tryAgent(prompt, opts) {
   try { return await agent(prompt, opts) } catch (e) { log(`${opts.label}: ${e && e.message ? e.message : e}`); return null }
 }
 
+const REQUIRED_CHECKS = ['ruff check', 'ruff format', 'web', 'make test', 'make e2e']
 const GATE_PROMPT = `${BASE}
 ## Stage: gate
-Run, in this order, and read every output: \`.venv/bin/ruff check .\`; \`.venv/bin/ruff format --check .\`; \`cd apps/web && npx tsc --noEmit && npx eslint . && npx vitest run\`; \`make test\`; \`make e2e\`. The last two take a shared lock (local/.gate.lock) and may wait for another chain; wait, do not skip. A check you did not run is reported as not passed. Report each check with its last five lines.`
+Run, in this order, and read every output: \`.venv/bin/ruff check .\` (check "ruff check"); \`.venv/bin/ruff format --check .\` ("ruff format"); \`cd apps/web && npx tsc --noEmit && npx eslint . && npx vitest run\` ("web"); \`make test\` ("make test"); \`make e2e\` ("make e2e"). The last two take a shared lock (local/.gate.lock) and may wait for another chain; wait, do not skip. Report one result per check, with \`check\` set to exactly the quoted name and its last five lines; a check you did not run is reported as not passed.`
 
+// The gate is green only when every required check is reported and passed;
+// a missing check is a red result, whatever the agent's own verdict.
 async function gate(label) {
   const r = await tryAgent(GATE_PROMPT, { label, phase: 'Gate', schema: GATE_SCHEMA, agentType: 'general-purpose', effort: 'low' })
-  return r || { passed: false, results: [{ check: 'gate agent', passed: false, tail: 'agent returned nothing' }] }
+  if (!r) return { passed: false, results: [{ check: 'gate agent', passed: false, tail: 'agent returned nothing' }] }
+  const results = [...r.results]
+  for (const c of REQUIRED_CHECKS) {
+    if (!results.some(x => x.check.trim().toLowerCase() === c)) results.push({ check: c, passed: false, tail: 'not reported by the gate agent' })
+  }
+  return { ...r, results, claimed: r.passed, passed: r.passed && results.every(x => x.passed) }
 }
 
-let build = null, tests = null, gate1 = null, gate2 = null, review = null, fix = null, gate3 = null, evidence = null, shipped = null
+let brief = null, build = null, tests = null, gate1 = null, gate2 = null, review = null, fix = null, recheck = null, gate3 = null, evidence = null, shipped = null
+
+// Brief: the approval's hash is otherwise only pasted into prompts, so an
+// edited brief would build unnoticed. A resume replays this cached check, so
+// it guards fresh launches; a resumed run's brief is the controller's to check.
+phase('Brief')
+brief = await tryAgent(`${BASE}
+## Stage: brief check
+Run \`shasum -a 256 ${args.brief}\` and return the hex digest exactly as printed. Do nothing else.`,
+  { label: 'precheck:brief', phase: 'Brief', schema: { type: 'object', required: ['sha256'], properties: { sha256: { type: 'string' } } }, agentType: 'general-purpose', effort: 'low' })
+if (!brief || !brief.sha256) { state.stoppedAt = 'Brief'; state.blockedOn = 'brief check returned nothing'; record('Brief', 'failed') }
+else if (brief.sha256.trim().toLowerCase() !== args.briefSha256.trim().toLowerCase()) {
+  state.stoppedAt = 'Brief'; state.blockedOn = `brief changed since approval: approved ${args.briefSha256}, now ${brief.sha256.trim()}`; record('Brief', 'changed')
+} else record('Brief', 'matches')
 
 // Build: implementer and blind test writer in parallel, both against the frozen Interface.
-phase('Build')
-const built = await parallel([
-  () => agent(`${BASE}
-## Stage: implementer
-Implement the brief exactly: its UX, Backend, Infra and Interface sections. Write no tests: a separate agent writes them from the Interface at the same time, so never bend the interface to make a test pass. The roadblock line: any choice that would appear in the brief's UX, Backend or Infra sections, or that changes user-visible behaviour, a public interface or a test expectation, is not yours to make — stop and return status "blocked" with blockedOn naming the decision; smaller choices (a helper's name or placement, wording within the brief's copy) you make and list under calls. Run the checks you can (ruff, tsc, eslint, the unit tests you did not write may fail until the test writer is done — that is expected). Return the files you touched and your calls.${rulingsText('Build', "The maintainer's rulings on decisions a previous run of this stage stopped on; each settles exactly the decision it names, and outranks the brief there (name each one you applied in your calls):")}`,
-    { label: 'build:implement', phase: 'Build', schema: BUILD_SCHEMA, agentType: 'implementer' }),
-  () => agent(`${BASE}
-## Stage: blind test writer
-Write the tests the brief's Verification plan names, from the brief's Interface and Verification plan sections ONLY. Do not open the implementation files beyond their exported names, and do not open an existing test of the same unit beyond its fixtures and mocking style (read ${args.repoRoot}/.claude/skills/blind-tests/SKILL.md for the rules). Name every test as the behaviour it checks. Create or extend exactly the test files the brief names. Run only those files; failures from an implementation still in progress are expected: report them, do not work around them. Return every test name, anything you could not express, and every assumption about the interface.`,
-    { label: 'build:tests', phase: 'Build', schema: TESTS_SCHEMA, agentType: 'general-purpose' }),
-])
-build = built[0]; tests = built[1]
-if (!build) { state.stoppedAt = 'Build'; state.blockedOn = 'implementer returned nothing'; record('Build', 'failed') }
-else if (build.status === 'blocked') { state.stoppedAt = 'Build'; state.blockedOn = build.blockedOn || 'unspecified'; record('Build', 'blocked') }
-else record('Build', 'done')
+if (!state.stoppedAt) {
+  phase('Build')
+  const built = await parallel([
+    () => agent(`${BASE}
+  ## Stage: implementer
+  Implement the brief exactly: its UX, Backend, Infra and Interface sections. Write no tests: a separate agent writes them from the Interface at the same time, so never bend the interface to make a test pass. The roadblock line: any choice that would appear in the brief's UX, Backend or Infra sections, or that changes user-visible behaviour, a public interface or a test expectation, is not yours to make — stop and return status "blocked" with blockedOn naming the decision; smaller choices (a helper's name or placement, wording within the brief's copy) you make and list under calls. Run the checks you can (ruff, tsc, eslint, the unit tests you did not write may fail until the test writer is done — that is expected). Return the files you touched and your calls.${rulingsText('Build', "The maintainer's rulings on decisions a previous run of this stage stopped on; each settles exactly the decision it names, and outranks the brief there (name each one you applied in your calls):")}`,
+      { label: 'build:implement', phase: 'Build', schema: BUILD_SCHEMA, agentType: 'implementer' }),
+    () => agent(`${BASE}
+  ## Stage: blind test writer
+  Write the tests the brief's Verification plan names, from the brief's Interface and Verification plan sections ONLY. Do not open the implementation files beyond their exported names, and do not open an existing test of the same unit beyond its fixtures and mocking style (read ${args.repoRoot}/.claude/skills/blind-tests/SKILL.md for the rules). Name every test as the behaviour it checks. Create or extend exactly the test files the brief names. Run only those files; failures from an implementation still in progress are expected: report them, do not work around them. Return every test name, anything you could not express, and every assumption about the interface.`,
+      { label: 'build:tests', phase: 'Build', schema: TESTS_SCHEMA, agentType: 'general-purpose' }),
+  ])
+  build = built[0]; tests = built[1]
+  if (!build) { state.stoppedAt = 'Build'; state.blockedOn = 'implementer returned nothing'; record('Build', 'failed') }
+  else if (build.status === 'blocked') { state.stoppedAt = 'Build'; state.blockedOn = build.blockedOn || 'unspecified'; record('Build', 'blocked') }
+  // No blind tests means the change would ship tested only by its author.
+  else if (!tests) { state.stoppedAt = 'Build'; state.blockedOn = 'blind test writer returned nothing'; record('Build', 'failed') }
+  else if (!tests.tests || !tests.tests.length) { state.stoppedAt = 'Build'; state.blockedOn = 'blind test writer wrote no tests'; record('Build', 'failed') }
+  else record('Build', 'done')
+}
 
 // Gate, with one fix attempt on red.
 if (!state.stoppedAt && !stop('Gate')) {
@@ -167,9 +208,9 @@ const LENSES = [
   { key: 'tests-claim-vs-check', prompt: 'Tests whose names promise more than their assertions check; tests that pass regardless of the code; behaviours in the brief with no test.' },
   { key: 'brief-conformance', prompt: 'Every section of the brief against the diff: a deviation the implementer did not report, an Interface bullet not implemented as written, copy that differs.' },
 ]
+const REVIEW_BASE = `${BASE}\nThe change is \`git diff origin/main\` inside the worktree (plus untracked files; \`git status --short\`). Read only the files the diff touches and their direct callers. Report ONLY findings you can substantiate with file:line and a concrete scenario; an empty list is a valid result. Severity: critical = exposure or corruption reachable today; high = same with an uncommon precondition; medium = a defense gap with a realistic trigger; low = hygiene. Mark needsDecision when fixing it would change what the brief specifies. Accessibility (ARIA, screen readers, keyboard-only navigation, focus management, contrast) is out of scope for a first implementation by the maintainer's rule: never report it as a finding; the controller queues such points separately.`
 if (!state.stoppedAt && !stop('Review')) {
   phase('Review')
-  const REVIEW_BASE = `${BASE}\nThe change is \`git diff origin/main\` inside the worktree (plus untracked files; \`git status --short\`). Read only the files the diff touches and their direct callers. Report ONLY findings you can substantiate with file:line and a concrete scenario; an empty list is a valid result. Severity: critical = exposure or corruption reachable today; high = same with an uncommon precondition; medium = a defense gap with a realistic trigger; low = hygiene. Mark needsDecision when fixing it would change what the brief specifies. Accessibility (ARIA, screen readers, keyboard-only navigation, focus management, contrast) is out of scope for a first implementation by the maintainer's rule: never report it as a finding; the controller queues such points separately.`
   const [fresh, ...lensResults] = await parallel([
     () => agent(`${REVIEW_BASE}\n## Stage: fresh-eyes reviewer\nWalk the change caller-first. Real defects only.`,
       { label: 'review:fresh-eyes', phase: 'Review', schema: FINDINGS_SCHEMA, agentType: 'general-purpose' }),
@@ -186,38 +227,52 @@ if (!state.stoppedAt && !stop('Review')) {
   if (fresh) tagged.push(...fresh.findings.map(f => ({ ...f, source: 'fresh-eyes' })))
   lensResults.forEach((r, i) => { if (r) tagged.push(...r.findings.map(f => ({ ...f, source: LENSES[i].key }))) })
   if (missing.length) { state.stoppedAt = 'Review'; state.blockedOn = `reviewer did not run: ${missing.join(', ')}` }
-  // Bounded verification keeps the chain's cost finite without a token directive.
+  // Bounded verification keeps the chain's cost finite without a token
+  // directive; the bound applies to medium and low only, so a critical or
+  // high finding is never left unverified.
   const MAX_VERIFY = 12
   const order = { critical: 0, high: 1, medium: 2, low: 3 }
   tagged.sort((a, b) => order[a.severity] - order[b.severity])
-  const raw = tagged.slice(0, MAX_VERIFY)
-  const unverified = tagged.slice(MAX_VERIFY)
-  if (unverified.length) log(`Verifying the ${MAX_VERIFY} most severe of ${tagged.length} findings; ${unverified.length} listed unverified.`)
+  const severe = tagged.filter(f => order[f.severity] <= order.high)
+  const rest = tagged.filter(f => order[f.severity] > order.high)
+  const room = Math.max(0, MAX_VERIFY - severe.length)
+  const raw = [...severe, ...rest.slice(0, room)]
+  const unverified = rest.slice(room)
+  if (unverified.length) log(`Verifying ${raw.length} of ${tagged.length} findings; ${unverified.length} medium/low listed unverified.`)
+  // A verifier that died leaves its finding unjudged, never dropped: the
+  // finding keeps verdict null and stops the chain below.
   const verified = await pipeline(raw, (f, _, i) =>
-    agent(`${REVIEW_BASE}\n## Stage: skeptic for finding #${i}\n${JSON.stringify(f, null, 1)}\nTry to refute it: read ONLY the files it cites (and their direct callers if the scenario depends on them). Confirm only if the scenario really produces the wrong outcome in this code.`,
+    tryAgent(`${REVIEW_BASE}\n## Stage: skeptic for finding #${i}\n${JSON.stringify(f, null, 1)}\nTry to refute it: read ONLY the files it cites (and their direct callers if the scenario depends on them). Confirm only if the scenario really produces the wrong outcome in this code.`,
       { label: `review:verify:#${i}`, phase: 'Review', schema: VERDICT_SCHEMA, agentType: 'general-purpose', effort: 'medium' })
       .then(v => ({ ...f, verdict: v })))
-  const confirmed = verified.filter(Boolean).filter(v => v.verdict && v.verdict.confirmed)
-  const refuted = verified.filter(Boolean).filter(v => v.verdict && !v.verdict.confirmed)
-  review = { raw: tagged.length, confirmed, refuted: refuted.map(r => ({ title: r.title, source: r.source, reason: r.verdict.reason })), unverified, deferred: [], missing }
-  record('Review', missing.length ? `incomplete: ${missing.join(', ')} did not run` : `${confirmed.length} confirmed / ${refuted.length} refuted of ${tagged.length}`)
+  const judged = verified.map((v, i) => v || { ...raw[i], verdict: null })
+  const confirmed = judged.filter(v => v.verdict && v.verdict.confirmed)
+  const refuted = judged.filter(v => v.verdict && !v.verdict.confirmed)
+  const unjudged = judged.filter(v => !v.verdict)
+  if (unjudged.length && !state.stoppedAt) { state.stoppedAt = 'Review'; state.blockedOn = `verifier did not run for: ${unjudged.map(f => f.title).join('; ')}` }
+  review = { raw: tagged.length, confirmed, refuted: refuted.map(r => ({ title: r.title, source: r.source, reason: r.verdict.reason })), unverified: [...unjudged, ...unverified], deferred: [], missing }
+  record('Review', missing.length ? `incomplete: ${missing.join(', ')} did not run`
+    : unjudged.length ? `incomplete: ${unjudged.length} finding(s) not verified`
+    : `${confirmed.length} confirmed / ${refuted.length} refuted of ${tagged.length}`)
 }
+
+// Reviewers reword the same finding on every run, so matching ignores case
+// and treats _ and - as spaces, and `keywords` (all present) catch
+// rewordings a phrase cannot.
+const norm = t => t.toLowerCase().replace(/[_-]+/g, ' ')
+// Only fix/defer settle a finding; keep/rewrite/retire are the gate fix's.
+const rulingFor = f => rulingsFor('Fix').filter(r => ['fix', 'defer'].includes(normRuling(r.ruling))).find(r =>
+  (r.match && norm(f.title).includes(norm(r.match))) ||
+  (r.keywords && r.keywords.length && r.keywords.every(k => norm(f.title).includes(norm(k)))))
 
 // Fix: apply confirmed findings. A finding that needs a decision blocks the chain
 // only above low severity; a low one is left for the maintainer as "Consider".
 if (!state.stoppedAt && review && review.confirmed.length && !stop('Fix')) {
   phase('Fix')
-  // Reviewers reword the same finding on every run, so matching ignores case
-  // and treats _ and - as spaces, and `keywords` (all present) catch
-  // rewordings a phrase cannot.
-  const norm = t => t.toLowerCase().replace(/[_-]+/g, ' ')
-  const rulingFor = f => rulingsFor('Fix').find(r =>
-    (r.match && norm(f.title).includes(norm(r.match))) ||
-    (r.keywords && r.keywords.length && r.keywords.every(k => norm(f.title).includes(norm(k)))))
   const ruled = review.confirmed.map(f => ({ ...f, ruling: rulingFor(f) }))
   const blocking = ruled.filter(f => f.needsDecision && f.severity !== 'low' && !f.ruling)
-  review.deferred = ruled.filter(f => f.ruling ? f.ruling.ruling === 'defer' : (f.needsDecision && f.severity === 'low'))
-  const fixable = ruled.filter(f => f.ruling ? f.ruling.ruling === 'fix' : !f.needsDecision)
+  review.deferred = ruled.filter(f => f.ruling ? normRuling(f.ruling.ruling) === 'defer' : (f.needsDecision && f.severity === 'low'))
+  const fixable = ruled.filter(f => f.ruling ? normRuling(f.ruling.ruling) === 'fix' : !f.needsDecision)
   if (blocking.length) {
     state.stoppedAt = 'Fix'; state.blockedOn = `review findings need a decision: ${blocking.map(d => d.title).join('; ')}`
     record('Fix', 'blocked')
@@ -226,12 +281,27 @@ if (!state.stoppedAt && review && review.confirmed.length && !stop('Fix')) {
   } else {
     fix = await tryAgent(`${BASE}
 ## Stage: fix (review findings)
-Apply these confirmed findings, each with the smallest change that removes the defect; add or adjust a test where the brief's Verification plan names one, or where the test pins behaviour the brief's Backend, UX or Interface sections already specify (a missing test for specified behaviour is a gap to close, not a decision), or where the finding carries a maintainer's ruling (its \`ruling.note\` says what is allowed, and it outranks the brief's test list for that finding only):\n${JSON.stringify(fixable.map(f => ({ title: f.title, file: f.file, line: f.line, claim: f.claim, scenario: f.scenario, ruling: f.ruling || undefined })), null, 1)}\nSame roadblock line as the implementer. Return status, files, calls.`,
+Apply these confirmed findings, each with the smallest change that removes the defect; add or adjust a test where the brief's Verification plan names one, or where the test pins behaviour the brief's Backend, UX or Interface sections already specify (a missing test for specified behaviour is a gap to close, not a decision), or where the finding carries a maintainer's ruling (its \`ruling.note\` says what is allowed, and it outranks the brief's test list for that finding only):\n${JSON.stringify(fixable.map(f => ({ title: f.title, file: f.file, line: f.line, claim: f.claim, scenario: f.scenario, ruling: f.ruling ? (({ keywords, stage, ...r }) => r)(f.ruling) : undefined })), null, 1)}\nSame roadblock line as the implementer. Return status, files, calls.`,
       { label: 'fix:review', phase: 'Fix', schema: BUILD_SCHEMA, agentType: 'implementer' })
     if (!fix || fix.status === 'blocked') { state.stoppedAt = 'Fix'; state.blockedOn = fix ? fix.blockedOn : 'fixer returned nothing'; record('Fix', 'blocked') }
     else {
       record('Fix', 'done')
-      if (!stop('Gate')) { gate3 = await gate('gate:3'); record('Gate', gate3.passed ? 'done after review fixes' : 'failed'); if (!gate3.passed) state.stoppedAt = 'Gate' }
+      // The fixer's own changes get one fresh-eyes pass before the last gate:
+      // without it, the review fix is the only code that ships unreviewed.
+      recheck = stop('Fix') ? null : await tryAgent(`${REVIEW_BASE}\n## Stage: fresh-eyes re-review of the review fixes\nThe review fixer applied these findings: ${JSON.stringify(fixable.map(f => f.title))}, touching ${JSON.stringify(fix.files)}. Review only the fixer's changes in those files: did each fix remove its defect, and did it introduce a new one? Real defects only.`,
+        { label: 'review:recheck', phase: 'Fix', schema: FINDINGS_SCHEMA, agentType: 'general-purpose' })
+      // Nothing runs after the re-review that could fix its findings, so a
+      // defer ruling is the only way past one; a fix ruling still stops.
+      const rechecked = recheck ? recheck.findings.map(f => ({ ...f, source: 'recheck', ruling: rulingFor(f) })) : []
+      const isDeferred = f => f.ruling ? normRuling(f.ruling.ruling) === 'defer' : f.severity === 'low'
+      const serious = rechecked.filter(f => !isDeferred(f))
+      if (state.stoppedAt) record('Fix', 'recheck skipped')
+      else if (!recheck) { state.stoppedAt = 'Fix'; state.blockedOn = 'the re-review of the review fixes did not run'; record('Fix', 'recheck missing') }
+      else if (serious.length) { state.stoppedAt = 'Fix'; state.blockedOn = `the re-review of the review fixes found: ${serious.map(f => f.title).join('; ')}`; record('Fix', 'recheck found issues') }
+      else {
+        review.deferred.push(...rechecked)
+        if (!stop('Gate')) { gate3 = await gate('gate:3'); record('Gate', gate3.passed ? 'done after review fixes' : 'failed'); if (!gate3.passed) state.stoppedAt = 'Gate' }
+      }
     }
   }
 }
@@ -243,7 +313,10 @@ if (!state.stoppedAt && !stop('Evidence')) {
 ## Stage: evidence
 Run the journeys the brief's Verification plan names (\`make e2e ARGS="<spec file names>"\`; the lock may make you wait). Then capture the screens the plan names at 1280×800 and 390×844 with a throwaway Playwright spec (as apps/web/e2e/*.member.spec.ts, deleted afterwards) that writes PNGs to local/briefs/${args.id}/evidence/ (create it). Return each journey's name and result and every screenshot path; passed is true only if every named journey passed.`,
     { label: 'evidence', phase: 'Evidence', schema: EVIDENCE_SCHEMA, agentType: 'general-purpose' })
-  if (!evidence || !evidence.passed) { state.stoppedAt = 'Evidence'; record('Evidence', 'failed') } else record('Evidence', `${evidence.journeys.length} journeys, ${evidence.screenshots.length} screenshots`)
+  // A brief may name no journeys (a backend-only change), so an empty list
+  // passes; any journey reported as failed does not.
+  const evidenced = evidence && evidence.passed && evidence.journeys.every(j => j.passed)
+  if (!evidenced) { state.stoppedAt = 'Evidence'; state.blockedOn = evidence ? 'a named journey did not pass' : 'evidence agent returned nothing'; record('Evidence', 'failed') } else record('Evidence', `${evidence.journeys.length} journeys, ${evidence.screenshots.length} screenshots`)
 }
 
 // Ship: commit, push, PR — only the shipper, only on the feature branch, only inside the worktree.
@@ -254,7 +327,11 @@ if (!state.stoppedAt && ship && !stop('Ship')) {
 You are the one stage allowed to use git write commands, under these refusals: if \`git branch --show-current\` is not "${args.branch}", or \`pwd\` is not ${args.worktree}, return shipped=false with the reason and do nothing else. Never force-push, never touch main, never merge.
 Otherwise: \`git add -A\` (local/ is gitignored and must not appear in the diff; verify with \`git status --short\`), commit with a conventional message whose subject is the brief's title line and whose body is two sentences from the brief's Goal, push with \`git push -u origin ${args.branch}\`, then open a PR against main with \`gh pr create\` whose title is the brief's title and whose body follows ${args.repoRoot}/.claude/skills/gate-block/pr-body.md exactly (public parts only: never review findings, cost or "new to you"). Return the PR URL and the commit sha.`,
     { label: 'ship', phase: 'Ship', schema: SHIP_SCHEMA, agentType: 'general-purpose' })
-  record('Ship', shipped && shipped.shipped ? 'shipped' : `not shipped: ${shipped ? shipped.reason : 'shipper returned nothing'}`)
+  if (shipped && shipped.shipped) record('Ship', 'shipped')
+  else {
+    state.stoppedAt = 'Ship'; state.blockedOn = (shipped && shipped.reason) || 'shipper returned nothing'
+    record('Ship', `not shipped: ${state.blockedOn}`)
+  }
 } else if (!state.stoppedAt && !ship) {
   record('Ship', 'skipped (ship=false)')
 }
@@ -264,7 +341,7 @@ phase('GateBlock')
 const summary = {
   id: args.id, date: args.date, brief: args.brief, briefSha256: args.briefSha256 || null, branch: args.branch, worktree: args.worktree,
   stoppedAt: state.stoppedAt, blockedOn: state.blockedOn,
-  build, tests, gates: [gate1, gate2, gate3].filter(Boolean), review, fix, evidence, shipped, phases, ship,
+  brief, build, tests, gates: [gate1, gate2, gate3].filter(Boolean), review, fix, recheck, evidence, shipped, phases, ship,
 }
 const gateBlock = await tryAgent(`${BASE}
 ## Stage: gate block
