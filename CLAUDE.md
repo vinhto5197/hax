@@ -176,7 +176,8 @@ this repo. Write prod-level comments only:
   fresh-eyes reviewer on every change, the adversarial review for a tier-1
   change (the three review tiers and the stated-skip rule: skill
   `blind-tests`);
-  one gate block per slice (skill `gate-block`).
+  the item cut into bites, each built, reviewed and committed before the
+  next, with its own gate block (skill `gate-block`, Bites).
 - Feature: a brief (skill `feature-brief`, approved on an artifact) built by
   the `feature-chain` workflow in its own worktree, with blind tests (skill
   `blind-tests`), embedded reviews, evidence and a PR; the approval covers

@@ -15,7 +15,7 @@ Every change is placed in one tier before any code or behaviour list is written,
 
 | Tier | When | Treatment |
 |---|---|---|
-| 1 | touches auth, security, isolation (RLS), concurrency, a pool, the deploy path or infra, a schema or migration, data deletion, a dependency change, or more than one store | blind tests first, one fresh-eyes reviewer, the adversarial review (never automatic: it runs on the maintainer's "go" after a cost preview) |
+| 1 | touches auth, security, isolation (RLS), concurrency, a pool, the deploy path or infra, a schema or migration, data deletion, a dependency change, or more than one store | blind tests first, one fresh-eyes reviewer, the adversarial review (never automatic: it runs on the maintainer's "go" after a cost preview; in the main lane, once per item over all its bites: skill `gate-block`, Bites) |
 | 2 | any other behaviour change | blind tests first, one fresh-eyes reviewer |
 | 3 | a pure refactor, comments, docs, test-only or config hygiene with no behaviour change (none of tier 1's surfaces) | one fresh-eyes reviewer; no new tests for product code (a test-only change's tests are written by a fresh agent from a behaviour list) |
 
@@ -45,5 +45,5 @@ A failure against the real code is one of two things, and the controller sorts i
 ## After
 
 - **Mutation check, by hand:** for each new test file, break the product code it covers in two or three deliberate ways, confirm the expected test fails each time, restore the file exactly (`cmp` against a backup).
-- **One fresh-eyes reviewer** over the whole change, as always.
+- **One fresh-eyes reviewer** over the whole change (in the main lane, the whole bite), as always.
 - **The maintainer reads test names and flagged behaviours only**, never bodies. Flag any test that pins a behaviour the controller is unsure is intended (a 404 counted as success, a merged consecutive turn), because a test written against current behaviour locks it in.

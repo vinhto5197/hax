@@ -1,6 +1,6 @@
 ---
 name: gate-block
-description: The hand-off format for a finished change, what the maintainer reads instead of the diff; the feature gate block (filled by the feature chain) and the main-lane gate block (one per slice), plus the public PR body
+description: The hand-off format for a finished change, what the maintainer reads instead of the diff; the feature gate block (filled by the feature chain) and the main-lane gate block (one per bite, bites built and reviewed in sequence), plus the public PR body
 ---
 
 # Gate block
@@ -46,9 +46,21 @@ Rules:
 - The PR body is `pr-body.md`, the public part only: never review findings or cost (the repository is public).
 - Test names, never bodies; flag any test that pins a behaviour the controller is unsure is intended.
 
+## Bites (main lane)
+
+A main-lane item is cut into bites when it is planned: a bite is one or more of the plan's tasks, small enough for the maintainer to read its gate block and diff in one sitting (10–15 minutes). Each bite is built, checked, reviewed and committed on the maintainer's word, one commit per bite, before the next bite starts. Bites are never combined into one review; when combining looks cheaper, say so and the maintainer decides.
+- **Order by what the reviewer needs in the tree to check the bite, never by risk tier.** For a fix-up item, for example:
+  - first what surfaces the problem: the tool and its config, reporting but not yet gated;
+  - then the fixes, each with its visible effect: a count that drops, a test that turns green (a failing test ships in the same bite as its fix);
+  - last the enforcement that requires the clean state: a CI step, a hook, a gate.
+- **Each bite leaves main green on its own:** `make ci` passes with this bite committed and the later bites still shelved.
+- **Only the current bite's files are in the tree;** the later bites wait under `local/shelf/<item>/`.
+- **Each bite carries its own review:** its tier, its fresh-eyes reviewer, blind tests where it changes behaviour, and its own gate block.
+- **The adversarial review runs once per item, not per bite:** when any bite is tier 1, one run over the item's whole commit range is offered after its last tier-1 bite (cost preview, the maintainer's "go"); its findings become a fix bite.
+
 ## The main-lane gate block
 
-One block per slice, never a message per task. In order:
+One block per bite, never a message per task. In order:
 1. Status table: each task, done or not, its test command and result.
 2. What shipped, one paragraph.
 3. Deep-read list, in caller → leaves order: `file:line`, what to look at, the paired test named first. Deep read = a schema or boundary, a policy decision, a mechanism others depend on, new test infrastructure, anything the controller chose that the maintainer might choose differently.
