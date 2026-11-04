@@ -87,7 +87,7 @@ web:
 	cd apps/web && npm run dev
 
 # ── Types (OpenAPI → TypeScript) ───────────────────────────────
-.PHONY: types
+.PHONY: types types-check
 
 # Regenerate the frontend's API types from the OpenAPI spec. Offline: dumps
 # the spec via app.openapi() (no running server needed), then runs
@@ -95,6 +95,9 @@ web:
 types:
 	.venv/bin/python -m apps.api.utils.export_openapi
 	cd apps/web && npm run generate:types
+
+types-check:
+	$(PYRIGHT)
 
 # ── Setup ─────────────────────────────────────────────────────
 .PHONY: setup sync sync-web constraints
@@ -222,6 +225,12 @@ lint:
 # personal-details check (CI passes the push's or PR's base).
 PY ?= .venv/bin/python
 RUFF ?= .venv/bin/ruff
+# Pyright resolves imports through --pythonpath, not the interpreter that
+# launched it, and joins a bare name (CI's PY=python) to the current folder
+# instead of searching PATH: the interpreter reports its own path. The
+# version is pinned, so the wrapper's "new version available" check (a PyPI
+# call per run) is turned off.
+PYRIGHT = PYRIGHT_PYTHON_IGNORE_WARNINGS=1 $(PY) -m pyright --pythonpath "$$($(PY) -c 'import sys; print(sys.executable)')"
 BASE ?= origin/main
 
 ci: ci-lint ci-test ci-web e2e
@@ -246,6 +255,7 @@ ci-pins:
 
 # The types drift check needs apps/web's node_modules (CI's `npm ci` step).
 ci-test: ci-pins
+	$(PYRIGHT)
 	$(GATE_LOCK) $(PY) -m pytest -W error
 	AUTH_SECRET=ci-not-a-real-secret-padding-32ch INTERNAL_API_SECRET=ci-not-a-real-secret \
 	  $(PY) -m apps.api.utils.export_openapi

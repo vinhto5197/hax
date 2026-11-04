@@ -3,8 +3,10 @@
 # exactly CI's checks, `make ci` runs them in CI's order, and ci.yml's check
 # steps are make calls (a guard over ci.yml, shown here to bite on a copy
 # with a stray check step), so the local run cannot drift from CI.
-# Dry runs (make -n) and static reads of ci.yml only: no suite runs, and
-# local/.gate.lock is never touched. Run by hand:
+# Dry runs (make -n), static reads of ci.yml, and one real types-check
+# against a stub python: no suite runs, and local/.gate.lock is never
+# touched; ci-test also carries the Pyright gate and types-check runs it
+# alone. Run by hand:
 #   bash tests/scripts/test_make_ci.sh
 set -euo pipefail
 
@@ -125,6 +127,54 @@ case "$out" in
   *".venv/bin/ruff check ."*".venv/bin/python"*) report PASS "the defaults are .venv/bin/ruff and .venv/bin/python" ;;
   *) report FAIL "the defaults do not use .venv/bin/ruff then .venv/bin/python" ;;
 esac
+
+# ── T3: ci-test runs pyright after the pin check, before pytest ──
+out=$(dry ci-test || true)
+l_of() { echo "$out" | grep -n -F -- "$1" | head -n 1 | cut -d: -f1 || true; }
+l_pin=$(l_of "check_constraints.sh constraints.txt")
+l_pyright=$(l_of "-m pyright")
+l_pytest=$(l_of "pytest -W error")
+if [ -n "$l_pin" ] && [ -n "$l_pyright" ] && [ -n "$l_pytest" ] \
+  && [ "$l_pin" -lt "$l_pyright" ] && [ "$l_pyright" -lt "$l_pytest" ]; then
+  report PASS "make -n ci-test runs -m pyright after the pin check and before pytest"
+else
+  report FAIL "ci-test pyright order (line of pin=${l_pin:-none} pyright=${l_pyright:-none} pytest=${l_pytest:-none})"
+fi
+
+# ── T4: make types-check runs pyright locally ────────────────
+if out=$(dry types-check); then
+  case "$out" in
+    *pyright*) report PASS "make -n types-check exits 0 and runs pyright" ;;
+    *) report FAIL "make -n types-check names no pyright: $(echo "$out" | tail -n 3)" ;;
+  esac
+else
+  report FAIL "make -n types-check failed: $(echo "$out" | tail -n 3)"
+fi
+
+# ── T4b: a bare PY (CI's PY=python) reaches Pyright as a path ──
+# Pyright joins a bare --pythonpath to the current folder instead of looking
+# it up on PATH, and then every third-party import reads as missing. A real
+# run with a stub python first on PATH: the stub records Pyright's arguments.
+stub=$work/stub-bin
+mkdir -p "$stub"
+cat > "$stub/python" <<STUB
+#!/bin/sh
+if [ "\$1" = -m ] && [ "\$2" = pyright ]; then
+  printf '%s\n' "\$@" > "$work/pyright-args"
+  exit 0
+fi
+exec python3 "\$@"
+STUB
+chmod +x "$stub/python"
+if PATH="$stub:$PATH" clean_make -s -C "$root" types-check PY=python >/dev/null 2>&1; then
+  pp=$(grep -A1 -x -- --pythonpath "$work/pyright-args" 2>/dev/null | tail -n 1 || true)
+  case "$pp" in
+    /*) report PASS "make types-check PY=python hands Pyright an absolute --pythonpath" ;;
+    *) report FAIL "make types-check PY=python hands Pyright --pythonpath '${pp:-none}', not a path" ;;
+  esac
+else
+  report FAIL "make types-check PY=python failed with the stub python"
+fi
 
 # ── M8/M9: ci.yml, parsed ────────────────────────────────────
 if [ -z "$py" ]; then

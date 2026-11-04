@@ -77,7 +77,7 @@ jobs:
       - name: Install web dependencies
         run: npm ci
         working-directory: apps/web
-      # `make ci-test`: every package pinned, pytest (fakeredis stands in for
+      # `make ci-test`: every package pinned, Pyright, pytest (fakeredis stands in for
       # Redis; Postgres is the service above, for real RLS/pgvector), and the
       # generated-types drift check (the committed apps/web/lib/openapi.ts must
       # be what the current API emits).

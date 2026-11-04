@@ -45,6 +45,16 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+      # The whole tree, not the staged files: a change in one module can
+      # break the types of another. --pythonpath as in `make types-check`;
+      # needs the project's .venv (`make setup`).
+      - id: pyright
+        name: pyright (apps, packages)
+        entry: env PYRIGHT_PYTHON_IGNORE_WARNINGS=1 .venv/bin/pyright
+        args: [--pythonpath, .venv/bin/python]
+        language: system
+        types: [python]
+        pass_filenames: false
       - id: eslint
         name: eslint (apps/web)
         entry: bash -c 'cd apps/web && npm run lint'
