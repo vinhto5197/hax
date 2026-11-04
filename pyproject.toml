@@ -60,6 +60,9 @@ dev = [
   "pytest-asyncio>=0.24.0",
   "pytest-cov>=7.1.0",
   "fakeredis>=2.26.0",
+  # Pin exact: a new Pyright release can add errors on unchanged code, and
+  # CI and pre-commit must judge the same way.
+  "pyright==1.1.407",
 ]
 
 [tool.ruff]
@@ -77,6 +80,12 @@ select = ["E", "F", "I"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["apps", "packages"]
+
+[tool.pyright]
+typeCheckingMode = "standard"
+pythonVersion = "3.14"
+include = ["apps", "packages"]
+exclude = ["apps/web", "**/node_modules", "**/__pycache__"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

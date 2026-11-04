@@ -107,6 +107,7 @@ pydantic_core==2.50.1
 Pygments==2.21.0
 PyJWT==2.15.1
 pypdf==6.21.4
+pyright==1.1.407
 pytest-asyncio==1.4.1
 pytest-cov==7.1.0
 pytest==9.2.0
