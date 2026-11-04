@@ -96,5 +96,7 @@ source = ["apps", "packages"]
 omit = ["*/migrations/*", "apps/web/*"]
 
 [tool.coverage.report]
+# Lists modules under directories without __init__.py that no test imports.
+include_namespace_packages = true
 skip_covered = true
 sort = "Cover"

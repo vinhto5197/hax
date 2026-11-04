@@ -73,4 +73,22 @@ describe("toTsv", () => {
   it("quotes a quote-led formula-looking cell, so it pastes as its literal text", () => {
     expect(toTsv(["cell"], [['"=1"']])).toBe('cell\n"""=1"""');
   });
+
+  it.each([
+    ["a tab", "a\tb"],
+    ["a newline", "a\nb"],
+    ["a carriage return", "a\rb"],
+  ])("turns %s inside a cell into a single space", (_, cell) => {
+    expect(toTsv(["cell"], [[cell]])).toBe("cell\na b");
+  });
+
+  it("keeps the table shape when cells hold tabs and newlines", () => {
+    const rows = toTsv(["h1", "h2"], [["x\ty", "p\nq"]]).split("\n");
+    expect(rows).toHaveLength(2);
+    expect(rows[1].split("\t")).toEqual(["x y", "p q"]);
+  });
+
+  it("neutralises a formula-looking body cell in the copied text", () => {
+    expect(toTsv(["ok"], [["=1+1"]])).toBe("ok\n'=1+1");
+  });
 });

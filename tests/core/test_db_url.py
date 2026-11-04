@@ -27,8 +27,8 @@ def test_engine_replaces_dead_pooled_connections():
 
 
 def test_the_app_engine_recycles_connections_after_thirty_minutes():
-    # Backlog 12 (2026-11-02): a connection older than 30 minutes is replaced
-    # at its next checkout. Pool sizes stay SQLAlchemy's defaults on purpose.
+    # A connection older than 30 minutes is replaced at its next checkout.
+    # Pool sizes stay SQLAlchemy's defaults on purpose.
     from packages.db.session import engine
 
     assert engine.pool._recycle == 1800

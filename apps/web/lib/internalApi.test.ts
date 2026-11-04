@@ -62,4 +62,24 @@ describe("internalFetch", () => {
     fetchMock.mockRejectedValue(failure);
     await expect(internalFetch("http://api/x", {})).rejects.toBe(failure);
   });
+
+  it("returns a slow answer that still lands before the limit", async () => {
+    const response = new Response("{}", { status: 200 });
+    // Answers a second before the limit unless the signal aborts first, so a
+    // limit armed too early turns this answer into a timeout.
+    fetchMock.mockImplementation(
+      (_url, init) =>
+        new Promise((resolve, reject) => {
+          setTimeout(() => resolve(response), INTERNAL_API_TIMEOUT_MS - 1_000);
+          init?.signal?.addEventListener("abort", () =>
+            reject(
+              new DOMException("The operation was aborted.", "AbortError"),
+            ),
+          );
+        }),
+    );
+    const pending = internalFetch("http://api/x", {});
+    await vi.advanceTimersByTimeAsync(INTERNAL_API_TIMEOUT_MS - 1_000);
+    await expect(pending).resolves.toBe(response);
+  });
 });

@@ -10,6 +10,28 @@ const CHIPS = [
 const BLURB =
   "Hax is a chat that answers from your own documents. Try it without an account: ask about Hax itself.";
 const NOTICE = "Hax is evolving. More specific capabilities coming soon.";
+// Every line lib/greeting.ts can pick for a member's new-chat screen, by its
+// fixed text ({weekday} as any weekday name, {, name} dropped).
+const WEEKDAY = "(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)";
+const GREETING = new RegExp(
+  [
+    "Good morning",
+    "Early bird gets the worm",
+    `Happy ${WEEKDAY}`,
+    "Good afternoon",
+    "Pushing through the day",
+    "Good evening",
+    "Winding down",
+    `How was your ${WEEKDAY}`,
+    "Staying up late",
+    "Burning the midnight oil",
+    "Still at it",
+  ].join("|"),
+  "i",
+);
+// A lowercase "hax" standing as a word: not part of a domain, an email, a
+// path or an identifier such as "hax-documents" or "hax.example".
+const LOWERCASE_NAME = /(?<![\w@./-])hax(?![\w@/-]|\.\w)/;
 
 async function expectReplies(page: Page, count: number) {
   const main = page.getByRole("main");
@@ -32,6 +54,7 @@ test("the landing page shows the notice, the blurb, three chips and the sign-in 
   await expect(signUp).toHaveAttribute("href", "/signup");
   const privacy = page.getByRole("link", { name: "Privacy", exact: true });
   await expect(privacy).toHaveAttribute("href", "/privacy");
+  expect(await page.locator("body").innerText()).not.toMatch(GREETING);
 });
 
 test("a visitor's empty composer asks what Hax is", async ({ page }) => {
@@ -128,3 +151,17 @@ test("after three turns the fourth is refused: the End of the demo modal, no tur
   await expect(composer(page)).toBeDisabled();
   await expectReplies(page, 3);
 });
+
+for (const path of ["/", "/login", "/signup", "/privacy"]) {
+  test(`the product name is written "Hax", never "hax", in the visible text of ${path}`, async ({
+    page,
+  }) => {
+    await page.goto(path);
+    await page.waitForLoadState("networkidle");
+    const lines = (await page.locator("body").innerText())
+      .split("\n")
+      .filter((line) => LOWERCASE_NAME.test(line))
+      .map((line) => line.trim());
+    expect(lines).toEqual([]);
+  });
+}

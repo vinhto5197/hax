@@ -220,7 +220,6 @@ lint:
 # and the explorer) queue instead of emptying each other's database; an opt-in
 # lock protected only the runs that remembered it. Without local/ (CI, a fresh
 # clone) there is nothing to share and nowhere for the lock, so no lock.
-# HAX_LOCK is no longer read.
 GATE_LOCK := $(if $(wildcard local),scripts/with-lock.sh local/.gate.lock 1800 --,)
 
 # -W error matches CI: a warning fails the run here as it does there.

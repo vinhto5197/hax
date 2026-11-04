@@ -33,7 +33,7 @@ test("the Google button reads Redirecting… and is disabled while sign-in is un
 
 // Without it, Google signs the browser's only Google session straight back in
 // after a logout, and the user cannot switch accounts.
-test("Continue with Google asks Google to show its account chooser", async ({
+test("Continue with Google opens Google's authorization endpoint and asks for its account chooser", async ({
   page,
 }) => {
   let googleUrl: URL | null = null;
@@ -48,4 +48,6 @@ test("Continue with Google asks Google to show its account chooser", async ({
   await expect
     .poll(() => googleUrl?.searchParams.get("prompt"))
     .toBe("select_account");
+  expect(googleUrl!.pathname).toMatch(/\/o\/oauth2\/(v2\/)?auth$/);
+  expect(googleUrl!.searchParams.get("response_type")).toBe("code");
 });

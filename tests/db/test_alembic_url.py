@@ -31,10 +31,8 @@ def test_migrations_run_with_a_percent_encoded_password():
     assert "(head)" in proc.stdout
 
 
-def test_offline_sql_mode_is_refused_before_emitting_anything():
-    # Data migrations read the database, which --sql cannot: without the
-    # refusal it prints a partial script, then fails midway with a traceback.
-    proc = subprocess.run(
+def offline_upgrade(env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
+    return subprocess.run(
         [
             sys.executable,
             "-m",
@@ -45,11 +43,35 @@ def test_offline_sql_mode_is_refused_before_emitting_anything():
             "head",
             "--sql",
         ],
+        env=env,
         capture_output=True,
         text=True,
         timeout=60,
     )
+
+
+def test_offline_sql_mode_is_refused_before_emitting_anything():
+    # Data migrations read the database, which --sql cannot: without the
+    # refusal it prints a partial script, then fails midway with a traceback.
+    proc = offline_upgrade()
     assert proc.returncode != 0
     assert proc.stdout == ""
     assert "offline mode is not supported" in proc.stderr
     assert "Traceback" not in proc.stderr
+
+
+def test_the_offline_refusal_points_at_make_migrate():
+    assert "make migrate" in offline_upgrade().stderr
+
+
+def test_offline_sql_mode_is_refused_with_no_database_reachable():
+    unreachable = "postgresql://hax:hax@localhost:1/hax_test"
+    env = {
+        **os.environ,
+        "DATABASE_URL": unreachable,
+        "MIGRATIONS_DATABASE_URL": unreachable,
+    }
+    proc = offline_upgrade(env)
+    assert proc.returncode != 0
+    assert proc.stdout == ""
+    assert "offline mode is not supported" in proc.stderr

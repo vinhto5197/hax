@@ -1,5 +1,9 @@
-"""The migrated schema is what the models declare: a model change without its
-migration (or the reverse) fails here, not at deploy."""
+"""The migrated schema matches the models in what alembic's compare_metadata
+compares: tables, columns, column types, nullability, indexes, unique
+constraints and foreign keys. A model change of that kind without its
+migration (or the reverse) fails here, not at deploy. It does not compare
+CHECK constraints, server defaults, RLS policies or grants: drift in those
+passes this test."""
 
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
