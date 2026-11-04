@@ -6,10 +6,12 @@ import json
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 _REPO = Path(__file__).resolve().parents[2]
-_PY = _REPO / ".venv/bin/python"
+# The interpreter running the suite: CI has no .venv.
+_PY = sys.executable
 _SCRIPT = _REPO / "scripts/chain_cost.py"
 _PROJECT_DIR = str(_REPO).replace("/", "-")
 _RUN = "wf_test-0001"
