@@ -56,7 +56,9 @@ async def verify_credentials(
     found = (
         None
         if user is None
-        else AuthUserOut(id=user.id, email=user.email, name=user.name)
+        else AuthUserOut(
+            id=user.id, email=users_repo.member_email(user), name=user.name
+        )
     )
     password_hash = user.password_hash if user else None
     unverified = user is not None and user.email_verified_at is None
@@ -126,7 +128,7 @@ async def oauth_upsert(
         # Publish AFTER commit: the cache must never lead the DB, or a reader
         # could see "revoked" for a cutoff that a crash then rolled back.
         await publish_sva(get_redis(), user.id, cutoff)
-    return AuthUserOut(id=user.id, email=user.email, name=user.name)
+    return AuthUserOut(id=user.id, email=users_repo.member_email(user), name=user.name)
 
 
 def _anon_per_ip_per_day() -> int:

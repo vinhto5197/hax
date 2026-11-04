@@ -227,7 +227,7 @@ async def verify_email(
     user = await _spend_token(session, body.token, "verify_email")
     await users_repo.mark_email_verified(session, user)
     await session.commit()
-    return EmailOut(email=user.email)
+    return EmailOut(email=users_repo.member_email(user))
 
 
 @router.post("/request-password-reset", status_code=202)
@@ -290,5 +290,6 @@ async def reset_password(
     await publish_sva(get_redis(), user.id, cutoff)
     # Inbox proof: the owner just set this password, so the guessing limiter
     # must not block the login that follows.
-    await rate_limit.clear(get_redis(), "login_email", user.email)
-    return EmailOut(email=user.email)
+    email = users_repo.member_email(user)
+    await rate_limit.clear(get_redis(), "login_email", email)
+    return EmailOut(email=email)

@@ -14,6 +14,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from packages.db.models import User
 
 
+def member_email(user: User) -> str:
+    """The email of a user the caller already knows is a member (an email
+    token, a password or a provider resolved them). Raises for a demo
+    visitor, whose missing email is their only marker, rather than letting
+    None reach a slot that needs an address."""
+    if user.email is None:
+        raise ValueError("user has no email: an anonymous visitor, not a member")
+    return user.email
+
+
 async def get_by_email(session: AsyncSession, email: str) -> User | None:
     result = await session.scalars(
         select(User).where(func.lower(User.email) == email.strip().lower())
