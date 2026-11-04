@@ -9,6 +9,18 @@ The agent that wrote the code must not write its tests: tests written beside the
 
 It is test-first with a different author, in every lane: the controller writes the behaviour list, the fresh agent writes the tests, the controller watches them fail, then the code is written until they pass. A pure refactor (no behaviour a user, a caller or a gate depends on changes) writes no new tests: the existing suite is its test, and it still gets the fresh-eyes reviewer.
 
+## Review tiers (main lane)
+
+Every change is placed in one tier before any code or behaviour list is written, and its gate block names the tier (skill `gate-block`, Provenance). The highest tier that applies wins: a pure refactor of auth or pool code is tier 1, writes no new tests, and keeps the adversarial review.
+
+| Tier | When | Treatment |
+|---|---|---|
+| 1 | touches auth, security, isolation (RLS), concurrency, a pool, the deploy path or infra, a schema or migration, data deletion, a dependency change, or more than one store | blind tests first, one fresh-eyes reviewer, the adversarial review (never automatic: it runs on the maintainer's "go" after a cost preview) |
+| 2 | any other behaviour change | blind tests first, one fresh-eyes reviewer |
+| 3 | a pure refactor, comments, docs, test-only or config hygiene with no behaviour change (none of tier 1's surfaces) | one fresh-eyes reviewer; no new tests for product code (a test-only change's tests are written by a fresh agent from a behaviour list) |
+
+A tier-1 change may skip the adversarial review only when the fresh-eyes review already covered that surface's specific risk (named: the guard, the test that pins it, what the reviewer checked); the gate block states the skip and that reason in one line, and the maintainer can overrule it. The feature chain keeps its own review steps (skill `feature-chain`); the routines' PRs are reviewed in the morning digest (skill `morning-digest`).
+
 ## Which suite
 
 The suite closest to the user that can observe the behaviour: a Playwright journey (`apps/web/e2e/`, against the e2e stack and its scripted model, `apps/web/e2e/fake-model/server.mjs`, whose prompt prefixes are the only way to script a reply) for anything a browser can observe; a Vitest or pytest unit test for what only a test can stage (a race, an ordering, a mocked boundary). The behaviour list names the suite per line.

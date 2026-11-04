@@ -35,7 +35,7 @@ Enforced, not remembered: a Stop hook (`.claude/hooks/review_gate.sh`) refuses t
 
 ## Provenance, per bite
 
-One line each: who wrote it (the controller, an implementer agent, a chain stage), who reviewed it (fresh-eyes, adversarial lenses, the final reviewer), which tests cover it and who wrote those, and whether the mutation check ran. A "no" is stated, never omitted: the maintainer decides what to read from this line.
+One line each: for a main-lane bite, its review tier (skill `blind-tests`, Review tiers) and, for a tier-1 change that skipped the adversarial review, the reason; who wrote it (the controller, an implementer agent, a chain stage), who reviewed it (fresh-eyes, adversarial lenses, the final reviewer), which tests cover it and who wrote those, and whether the mutation check ran. A "no" is stated, never omitted: the maintainer decides what to read from this line.
 
 ## The feature gate block
 
