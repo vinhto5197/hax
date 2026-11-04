@@ -2,7 +2,10 @@
 # Proves scripts/explorer.sh: the committed upload fixture is a real text file
 # and the runner copies it into the run's own directory, where its prompt names
 # it; `--check` treats a .running naming a
-# dead pid as a run that is over, not one still going. --check runs against a
+# dead pid as a run that is over, not one still going; a full run whose check
+# fails records this week as failed with the check's reason in .status.json
+# (the due hook reads it), except that an already-running failure leaves the
+# live run's status untouched. --check and full runs go against a
 # copy of the script in a temp project (a git repo of its own) with
 # CLAUDE_PROJECT_DIR pointed at it, so the real local/explorer/ is never read
 # or written and no stack is started.
@@ -99,5 +102,70 @@ else
     report PASS "--check with a dead pid in .running does not answer already running"
   fi
 fi
+
+# (E3) A full run whose check fails writes this week's status before exiting.
+# The temp project has local/, the persona files and no .running, but no root
+# .env, so the check's first failure is the .env one (the reason is asserted to
+# name it, so a failure earlier in the order cannot pass). The stale status is
+# last week's "done": the due hook stays silent all week if it survives.
+# DUE_TODAY=2026-11-06 is a Friday in ISO week 2026-W45.
+status=$proj/local/explorer/.status.json
+json_field() {
+  python3 -c 'import json,sys
+v = json.load(open(sys.argv[1])).get(sys.argv[2])
+print("" if v is None else v)' "$1" "$2" 2>/dev/null || echo "<unreadable>"
+}
+full_run() {
+  CLAUDE_PROJECT_DIR="$proj" DUE_TODAY=2026-11-06 timeout 60 \
+    bash "$proj/scripts/explorer.sh" >"$work/full.out" 2>&1
+}
+
+rm -f "$proj/local/explorer/.running"
+cat > "$status" <<'EOF'
+{"week": "2026-W44", "persona": "stale", "state": "done", "reason": "", "notes": "", "logs": "", "started": "2026-10-30T09:00:00Z", "updated": "2026-10-30T10:00:00Z"}
+EOF
+rc=0
+full_run || rc=$?
+week=$(json_field "$status" week)
+state=$(json_field "$status" state)
+reason=$(json_field "$status" reason)
+if [ "$rc" -eq 1 ]; then
+  report PASS "a full run with no .env exits 1"
+else
+  report FAIL "a full run with no .env exits 1: exit $rc, output '$(cat "$work/full.out")'"
+fi
+if [ "$week" = 2026-W45 ] && [ "$state" = failed ]; then
+  report PASS "a full run whose check fails records this week as failed"
+else
+  report FAIL "a full run whose check fails records this week as failed: week '$week', state '$state'"
+fi
+case "$reason" in
+  *.env*) report PASS "the recorded failure reason is the check's (.env)" ;;
+  *) report FAIL "the recorded failure reason is the check's (.env): got '$reason'" ;;
+esac
+
+# (E4) A full run that finds a live run leaves that run's status byte-identical:
+# the failed check is "already running", and the live run owns .status.json.
+# A fresh sleeper, so the earlier one's age cannot matter.
+kill "$live_pid" 2>/dev/null || true
+wait "$live_pid" 2>/dev/null || true
+sleep 120 &
+live_pid=$!
+echo "$live_pid" > "$proj/local/explorer/.running"
+cat > "$status" <<'EOF'
+{"week": "2026-W45", "persona": "live", "state": "running", "reason": "", "notes": "", "logs": "", "started": "2026-11-06T09:00:00Z", "updated": "2026-11-06T09:05:00Z"}
+EOF
+cp "$status" "$work/status.before"
+rc=0
+full_run || rc=$?
+if [ "$rc" -ne 0 ] && grep -qi 'already running' "$work/full.out" \
+  && cmp -s "$work/status.before" "$status"; then
+  report PASS "a full run during a live run leaves the live run's status untouched"
+else
+  report FAIL "a full run during a live run leaves the live run's status untouched: exit $rc, output '$(cat "$work/full.out")', status '$(cat "$status" 2>/dev/null)'"
+fi
+kill "$live_pid" 2>/dev/null || true
+wait "$live_pid" 2>/dev/null || true
+live_pid=
 
 [ "$fails" -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }
