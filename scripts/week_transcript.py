@@ -29,9 +29,15 @@ _DENIED = "Permission for this action was denied"
 
 
 def week_bounds(week: str) -> tuple[dt.datetime, dt.datetime]:
+    """Local midnight of the ISO week's Monday to the next one's: the due hook
+    and the week file name weeks by the local date, so the boundaries must be
+    local too. The end is computed from its own date, not start + 7 days, so a
+    DST change inside the week cannot shift it."""
     year, num = week.split("-W")
-    start = dt.datetime.fromisocalendar(int(year), int(num), 1).replace(tzinfo=dt.UTC)
-    return start, start + dt.timedelta(days=7)
+    monday = dt.date.fromisocalendar(int(year), int(num), 1)
+    start = dt.datetime.combine(monday, dt.time()).astimezone()
+    end = dt.datetime.combine(monday + dt.timedelta(days=7), dt.time()).astimezone()
+    return start, end
 
 
 def typed_text(content) -> str:
@@ -73,7 +79,7 @@ def events(path: Path, start: dt.datetime, end: dt.datetime):
             ts = d.get("timestamp")
             if not ts:
                 continue
-            when = dt.datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            when = dt.datetime.fromisoformat(ts.replace("Z", "+00:00")).astimezone()
             if not start <= when < end:
                 continue
             content = d.get("message", {}).get("content")
