@@ -100,11 +100,17 @@ fi
 # prompt carries a pointer to its source, and the day's first prompt carries the
 # state itself (scripts/state.sh, which also prints the ordered next list), so
 # an answer about what is open or what comes next starts from the files, not
-# from recall.
+# from recall. The date is recorded only for a state actually printed, so a
+# failed or timed-out state.sh is retried on the next prompt.
 full=""
+state_failed=""
 if [ -x "$root/scripts/state.sh" ] && [ "$(jq -r '.last_state_date // ""' "$marker")" != "$today" ]; then
-  full=$(cd "$root" && DUE_TODAY=$today perl -e 'alarm 12; exec @ARGV' "$root/scripts/state.sh" 2>/dev/null) || full=""
-  tmp=$(mktemp) && jq --arg v "$today" '.last_state_date = $v' "$marker" > "$tmp" && mv "$tmp" "$marker"
+  if full=$(cd "$root" && DUE_TODAY=$today perl -e 'alarm 12; exec @ARGV' "$root/scripts/state.sh" 2>/dev/null) && [ -n "$full" ]; then
+    tmp=$(mktemp) && jq --arg v "$today" '.last_state_date = $v' "$marker" > "$tmp" && mv "$tmp" "$marker"
+  else
+    full=""
+    state_failed=1
+  fi
 fi
 
 if [ ${#lines[@]} -eq 0 ]; then
@@ -113,4 +119,5 @@ fi
 for l in ${lines[@]+"${lines[@]}"}; do echo "[due] $l"; done
 echo "[state] For the day's state, what is open or what comes next: \`scripts/state.sh\` prints it live: the ordered next list from the backlog's START HERE, then every open item. Read it before answering; never answer from recall."
 [ -n "$full" ] && printf '%s\n' "$full"
+[ -n "$state_failed" ] && echo "[due] STATE FAILED: scripts/state.sh failed or printed nothing; the next prompt retries it."
 exit 0
