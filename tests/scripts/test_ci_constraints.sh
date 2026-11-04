@@ -37,6 +37,14 @@ grep -qE 'pip install -r requirements.txt -c constraints.txt' "$docker" && repor
 ci_py=$(grep -oE 'python-version: "3\.14[^"]*"' "$ci" | sort -u | sed -E 's/.*"(.*)"/\1/')
 img_py=$(grep -oE '^FROM python:[0-9.]+-slim' "$docker" | sort -u | sed -E 's/FROM python:(.*)-slim/\1/')
 [ "$ci_py" = "$img_py" ] && report PASS "CI and the image run the same Python ($img_py)" || report FAIL "Python differs: CI '$ci_py', image '$img_py'"
-grep -q 'scripts/check_constraints.sh constraints.txt' "$ci" && report PASS "CI checks every installed package is pinned" || report FAIL "CI does not run the pin check"
+# The pin check lives in the Makefile's ci-pins target, which ci.yml calls
+# (directly, and through ci-test).
+make=$root/Makefile
+if grep -qE '^ci-pins:' "$make" && awk '/^ci-pins:/{f=1;next} f&&/^[^\t]/{f=0} f' "$make" | grep -q 'scripts/check_constraints.sh constraints.txt' \
+  && grep -qE 'make ci-(pins|test)' "$ci"; then
+  report PASS "CI checks every installed package is pinned"
+else
+  report FAIL "CI does not run the pin check"
+fi
 
 [ "$fails" -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }

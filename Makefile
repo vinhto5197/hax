@@ -212,6 +212,49 @@ status:
 lint:
 	.venv/bin/ruff check . && .venv/bin/ruff format --check .
 
+# ── CI ───────────────────────────────────────────────────────
+.PHONY: ci ci-lint ci-pins ci-test ci-web
+
+# CI's jobs call these targets (.github/workflows/ci.yml), so `make ci` runs
+# exactly what CI runs; tests/scripts/test_make_ci.sh fails a check step added
+# to ci.yml outside them. PY and RUFF default to the venv; CI sets them where
+# it installs into the system interpreter. BASE is the range start for the
+# personal-details check (CI passes the push's or PR's base).
+PY ?= .venv/bin/python
+RUFF ?= .venv/bin/ruff
+BASE ?= origin/main
+
+ci: ci-lint ci-test ci-web e2e
+
+ci-lint:
+	scripts/check_personal.sh --range "$(BASE)..HEAD"
+	$(RUFF) check . && $(RUFF) format --check .
+	for t in tests/scripts/*.sh; do bash "$$t" || exit 1; done
+	node --test tests/workflows/feature-chain.test.mjs
+	docker run --rm -v "$$PWD/infra/compose/Caddyfile:/etc/caddy/Caddyfile:ro" \
+	  -e SITE_ADDRESS=example.com caddy:2-alpine \
+	  caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+	@# The compose plugin (CI's runner) or the standalone docker-compose (this
+	@# Makefile's dev targets): whichever is installed.
+	compose=$$(docker compose version >/dev/null 2>&1 && echo "docker compose" || echo docker-compose); \
+	  HAX_ENV_FILE="$$PWD/.env.prod.example" SITE_ADDRESS=example.com \
+	  $$compose -f infra/compose/compose.prod.yml config -q
+
+# Every installed package is pinned (constraints.txt).
+ci-pins:
+	$(PY) -m pip freeze --exclude-editable | scripts/check_constraints.sh constraints.txt
+
+# The types drift check needs apps/web's node_modules (CI's `npm ci` step).
+ci-test: ci-pins
+	$(GATE_LOCK) $(PY) -m pytest -W error
+	AUTH_SECRET=ci-not-a-real-secret-padding-32ch INTERNAL_API_SECRET=ci-not-a-real-secret \
+	  $(PY) -m apps.api.utils.export_openapi
+	cd apps/web && npm run generate:types && git diff --exit-code -- lib/openapi.ts
+
+ci-web:
+	cd apps/web && npx tsc --noEmit && npm run lint && npm test
+	npx prettier@3.3.3 --check "apps/web/**/*.{ts,tsx,js,jsx,mjs,mts,css,json,md}"
+
 # ── Test ─────────────────────────────────────────────────────
 .PHONY: test test-web coverage e2e
 

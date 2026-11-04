@@ -19,7 +19,7 @@ Every PR and every bite is classed, and the class decides who merges:
 - **Ask** — schema, auth, isolation, infra, deploy, data deletion, anything irreversible, any design decision: nothing merges until the maintainer has read it; the full block (problem, fix, tests, flags, the hunks to read) and its review section; the main lane's bite review.
 A merge to main deploys, so Ship still means CI green and the post-deploy health check watched.
 
-Where a change lands depends on who wrote it, not on its class. Work done with the maintainer in the main lane goes straight to `main` on their word ("commit", "push"), whatever its class, once the same checks CI runs have passed locally: the maintainer's word is the permission, and CI still gates the deploy, so a red push never reaches production (it only holds main red until fixed). A pull request is for authors who may not push to `main`: the unattended routines and the feature chain's agents.
+Where a change lands depends on who wrote it, not on its class. Work done with the maintainer in the main lane goes straight to `main` on their word ("commit", "push"), whatever its class, once `make ci` (the same commands CI runs; Docker running, `make infra-up` done) has passed locally on a clean tree, so it checked the commit being pushed and nothing uncommitted: the maintainer's word is the permission, and CI still gates the deploy, so a red push never reaches production (it only holds main red until fixed). A pull request is for authors who may not push to `main`: the unattended routines and the feature chain's agents.
 
 ## Your review, on every Ask
 
