@@ -6,10 +6,13 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
+import { readFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 
 import { runWorkflow, stubAgent, defaultArgs, extractRecord, PR_URL, REQUIRED_CHECKS } from './harness.mjs'
 
 const SCRIPT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.claude/workflows/feature-chain.js')
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 
 async function run(overrides = {}, argsOver = {}) {
   const args = defaultArgs(argsOver)
@@ -528,4 +531,26 @@ test('39. a Build ruling\'s keywords appear in no prompt except gate-block\'s', 
   for (const c of others) {
     for (const kw of kws) assert.ok(!c.prompt.includes(kw), `${c.label} prompt carries keyword ${kw}`)
   }
+})
+
+// --- Throwaway evidence specs never reach a commit ---
+
+// The shipper stages with `git add -A`, so a spec the evidence agent forgets
+// to delete is safe only if its name matches the root .gitignore pattern.
+test('40. the evidence prompt names the throwaway spec apps/web/e2e/_evidence.*, never the bare *.member.spec.ts form', async () => {
+  const { result, calls } = await run()
+  assert.notEqual(result.refused, true)
+  const ev = called(calls, (l) => l === 'evidence')
+  assert.ok(ev.length >= 1, 'evidence ran')
+  for (const c of ev) {
+    assert.ok(c.prompt.includes('apps/web/e2e/_evidence.'), 'evidence prompt names the _evidence. prefix')
+    assert.ok(!c.prompt.includes('apps/web/e2e/*.member.spec.ts'), 'evidence prompt no longer offers the bare form')
+  }
+})
+
+test('41. the repo-root .gitignore ignores apps/web/e2e/_evidence.*', () => {
+  const lines = readFileSync(path.join(REPO_ROOT, '.gitignore'), 'utf8').split(/\r?\n/).map((l) => l.trim())
+  assert.ok(lines.includes('apps/web/e2e/_evidence.*'), '.gitignore holds the pattern')
+  // check-ignore exits 0 only when the path is ignored; non-zero throws.
+  execFileSync('git', ['check-ignore', '-q', 'apps/web/e2e/_evidence.screens.member.spec.ts'], { cwd: REPO_ROOT })
 })

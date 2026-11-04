@@ -17,6 +17,8 @@ coverage/
 apps/web/test-results/
 apps/web/playwright-report/
 apps/web/e2e/.auth/
+# the feature chain's throwaway evidence specs: a leftover can never be staged
+apps/web/e2e/_evidence.*
 
 # next.js
 .next/
