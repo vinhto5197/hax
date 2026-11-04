@@ -24,7 +24,20 @@ has() { # $1 = name, $2 = needle
 
 p=$work/proj
 mkdir -p "$work/bin" "$p/local/retro" "$p/local/explorer"
-printf '#!/bin/sh\necho "2 routine, 1 journey, 0 feature"\n' > "$work/bin/gh"
+# The gh stub answers `pr list` with canned JSON and applies a `-q` expression
+# with jq, as real gh does, so state.sh's own counting expression is what the
+# assertions exercise; anything else it is asked fails.
+cat > "$work/bin/gh" <<'GH'
+#!/usr/bin/env bash
+[ "${1:-} ${2:-}" = "pr list" ] || { echo "gh stub: unexpected: $*" >&2; exit 2; }
+shift 2
+q=""
+while [ $# -gt 0 ]; do
+  case $1 in -q | --jq) q=$2; shift 2 ;; *) shift ;; esac
+done
+json='[{"headRefName":"routine/m5-1"},{"headRefName":"routine/m5-2"},{"headRefName":"journey/sweep"},{"headRefName":"feat/about-you"},{"headRefName":"fix/other"}]'
+if [ -n "$q" ]; then jq -r "$q" <<<"$json"; else echo "$json"; fi
+GH
 chmod +x "$work/bin/gh"
 git -C "$p" init -q -b main
 git -C "$p" -c user.email=t@t -c user.name=t commit -q --allow-empty -m "first: the start"
@@ -63,7 +76,7 @@ run() { PATH="$work/bin:$PATH" CLAUDE_PROJECT_DIR="$p" DUE_TODAY=2026-10-27 "$sc
 out=$(run)
 has "main's head is named" "main at $(git -C "$p" rev-parse --short HEAD)"
 has "the latest commit's subject is shown" "second: the latest"
-has "the open PRs are counted" "2 routine, 1 journey, 0 feature"
+has "the open PRs are counted by branch prefix from gh's JSON" "open PRs: 2 routine, 1 journey, 1 feature, 5 in all"
 has "each feature is listed with its state" "server-turn: brief"
 has "the nightly queue is counted with its ids" "2 items (m5-1, m5-2)"
 has "the last digest is named" "digest 2026-10-27"
