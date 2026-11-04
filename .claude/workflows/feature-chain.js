@@ -321,7 +321,7 @@ if (!state.stoppedAt && !stop('Evidence')) {
   phase('Evidence')
   evidence = await tryAgent(`${BASE}
 ## Stage: evidence
-Run the journeys the brief's Verification plan names (\`make e2e ARGS="<spec file names>"\`; the lock may make you wait). Then capture the screens the plan names at 1280×800 and 390×844 with a throwaway Playwright spec (as apps/web/e2e/*.member.spec.ts, deleted afterwards) that writes PNGs to local/briefs/${args.id}/evidence/ (create it). Return each journey's name and result and every screenshot path; passed is true only if every named journey passed.`,
+Run the journeys the brief's Verification plan names (\`make e2e ARGS="<spec file names>"\`; the lock may make you wait). Then capture the screens the plan names at 1280×800 and 390×844 with a throwaway Playwright spec (as apps/web/e2e/_evidence.<anything>.member.spec.ts, a name .gitignore keeps out of any commit; delete it afterwards) that writes PNGs to local/briefs/${args.id}/evidence/ (create it). Return each journey's name and result and every screenshot path; passed is true only if every named journey passed.`,
     { label: 'evidence', phase: 'Evidence', schema: EVIDENCE_SCHEMA, agentType: 'general-purpose' })
   // A brief may name no journeys (a backend-only change), so an empty list
   // passes; any journey reported as failed does not.
