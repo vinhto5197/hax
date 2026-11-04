@@ -1,9 +1,9 @@
 """A member's note about themselves: GET /api/me/profile returns it (null when
 there is none); PUT stores the stripped text and returns what is stored; an
 empty or blank PUT deletes it; more than 1000 characters after the strip, or
-a NUL character, is a 422 that leaves the stored note alone. A visitor gets
-the demo refusal on both. Deleting the user deletes the note. The note's text
-never reaches the log.
+a C0 control character other than tab, newline or CR, is a 422 that leaves
+the stored note alone. A visitor gets the demo refusal on both. Deleting the
+user deletes the note. The note's text never reaches the log.
 
 Seeds and asserts go through admin_engine; requests go through the app."""
 
@@ -125,6 +125,14 @@ async def test_a_nul_character_is_refused_with_422_and_nothing_is_stored(
     client, admin_engine, user_a
 ):
     r = await _put(client, user_a, "before\x00after")
+    assert r.status_code == 422
+    assert await _stored(admin_engine, user_a.id) == []
+
+
+async def test_a_non_nul_control_character_is_refused_with_422_and_nothing_is_stored(
+    client, admin_engine, user_a
+):
+    r = await _put(client, user_a, "before\x07after")
     assert r.status_code == 422
     assert await _stored(admin_engine, user_a.id) == []
 

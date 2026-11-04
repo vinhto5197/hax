@@ -1,7 +1,8 @@
 // Placeholder rows for a list whose first fetch is in flight. Each row's box
 // matches the real row it stands in for (Sidebar's conversation row: 56 px;
 // DocumentsPanel's row: 22 px), so the list does not shift when it lands.
-// Reduced motion is handled by the global rule in globals.css.
+// Reduced motion is handled by the global rule in globals.css. Hidden from
+// assistive tech: the list it sits in carries aria-busy while it shows.
 
 const CONVERSATION_WIDTHS = ["w-3/4", "w-1/2", "w-5/6", "w-2/3", "w-2/5"];
 const DOCUMENT_WIDTHS = ["w-2/3", "w-1/2", "w-3/5"];
@@ -14,7 +15,11 @@ export function SkeletonRows({
   kind: "conversations" | "documents";
 }) {
   return (
-    <div data-skeleton={kind} className="flex animate-pulse flex-col gap-1">
+    <div
+      data-skeleton={kind}
+      aria-hidden="true"
+      className="flex animate-pulse flex-col gap-1"
+    >
       {kind === "conversations"
         ? CONVERSATION_WIDTHS.map((width) => (
             <div

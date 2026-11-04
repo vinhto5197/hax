@@ -74,8 +74,18 @@ export function DocumentsPanel() {
   const [toggled, setToggled] = useState<boolean | null>(null);
   const open = toggled ?? !short;
 
+  // Ids of documents this session's uploads added that no list has carried
+  // yet. A list fetched before an upload resolved would otherwise erase that
+  // row, and with nothing pending left no poll would bring it back. Once a list
+  // carries the id, the list is authoritative for it.
+  const uploadedIdsRef = useRef<Set<string>>(new Set());
+
   function applyList(list: DocumentSummary[]) {
-    setDocuments(list);
+    setDocuments((prev) => {
+      for (const d of list) uploadedIdsRef.current.delete(d.id);
+      const unlisted = prev.filter((d) => uploadedIdsRef.current.has(d.id));
+      return [...unlisted, ...list];
+    });
     setLoaded(true);
     setLoadFailed(false);
   }
@@ -142,6 +152,7 @@ export function DocumentsPanel() {
     try {
       const doc = await uploadDocument(file);
       // Upload returns at 'pending'; the polling effect settles the status.
+      uploadedIdsRef.current.add(doc.id);
       setDocuments((prev) => [doc, ...prev]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed.");
@@ -170,6 +181,7 @@ export function DocumentsPanel() {
       onToggle={(e) => setToggled(e.currentTarget.open)}
       className="group flex shrink-0 flex-col gap-2 border-t border-border pt-3"
       data-documents-panel
+      aria-busy={(!loaded && !loadFailed) || undefined}
     >
       <summary className="flex cursor-pointer list-none items-center justify-between px-1 text-body font-medium text-ink-2 [&::-webkit-details-marker]:hidden">
         <span className="flex items-center gap-1.5">

@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  type MouseEvent,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
 import { Markdown } from "@/components/chat/Markdown";
 import { SourcesFooter } from "@/components/chat/SourcesFooter";
@@ -152,7 +158,7 @@ export function MessageList({
     lastTopRef.current = top;
   }
 
-  function jumpToLatest() {
+  function jumpToLatest(event: MouseEvent<HTMLButtonElement>) {
     const el = scrollRef.current;
     if (!el) return;
     stuckRef.current = true;
@@ -162,6 +168,16 @@ export function MessageList({
     // smooth scroll, per CSSOM; an engine that kept animating would end short
     // of the new bottom, and its next scroll event would release the follow.
     el.scrollTo({ top: el.scrollHeight, behavior: reduce ? "auto" : "smooth" });
+    // The button unmounts once the view is back at the bottom, which would drop
+    // keyboard focus to <body>. A click with detail 0 came from Enter or Space
+    // (or assistive tech), never a pointer: focusing the composer on a phone
+    // tap would open the on-screen keyboard. Looked up by its label because
+    // the composer lives in ChatInput, outside this list.
+    if (event.detail === 0) {
+      document
+        .querySelector<HTMLTextAreaElement>('textarea[aria-label="Message"]')
+        ?.focus();
+    }
   }
 
   return (

@@ -186,7 +186,7 @@ function ChatSession({
           </p>
         ) : null}
         {stoppedNotice ? (
-          <p className="mb-2 text-small text-ink-3">
+          <p role="status" className="mb-2 text-small text-ink-3">
             You stopped this reply.
             {canRetry ? (
               <>
