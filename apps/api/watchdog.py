@@ -1,4 +1,4 @@
-"""Logs requests that are slow to start answering (backlog 81).
+"""Logs requests that are slow to start answering.
 
 A request that has sent no response after the threshold is logged while it is
 still waiting, so a hang shows up in the logs before anything times out; when
@@ -22,6 +22,25 @@ logger = logging.getLogger(__name__)
 DEFAULT_THRESHOLD = float(os.getenv("SLOW_REQUEST_SECONDS", "2"))
 
 
+def route_label(scope) -> str:
+    """`<METHOD> <public route pattern>` for a matched request, e.g.
+    `GET /api/conversations/{conversation_id}`; never the raw path."""
+    # The router writes the matched route into the scope. An included
+    # router's route carries its path relative to the include's prefix
+    # (FastAPI keeps the full pattern only in a private scope key), so the
+    # prefix is the request path's leading segments that the pattern's own
+    # segments do not account for. No route here takes a multi-segment
+    # {x:path} parameter, which would break the count.
+    route = scope.get("route")
+    pattern = getattr(route, "path", None)
+    if pattern is None:
+        return f"{scope['method']} (unmatched)"
+    actual = scope["path"].rstrip("/").split("/")
+    own = pattern.rstrip("/").split("/")
+    prefix = "/".join(actual[: len(actual) - len(own) + 1])
+    return f"{scope['method']} {prefix}{pattern}"
+
+
 class SlowRequestWatchdog:
     def __init__(self, app: ASGIApp, threshold: float = DEFAULT_THRESHOLD) -> None:
         self.app = app
@@ -37,9 +56,7 @@ class SlowRequestWatchdog:
         answered = False
 
         def label() -> str:
-            # The router writes the matched route into this same scope dict.
-            route = scope.get("route")
-            return f"{scope['method']} {getattr(route, 'path', '(unmatched)')}"
+            return route_label(scope)
 
         async def warn_while_waiting() -> None:
             await asyncio.sleep(self.threshold)

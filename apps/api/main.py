@@ -7,6 +7,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import DBAPIError
 
 from apps.api.routers.auth import router as auth_router
 from apps.api.routers.chat import router as chat_router
@@ -15,7 +16,7 @@ from apps.api.routers.documents import router as documents_router
 from apps.api.routers.internal_auth import router as internal_auth_router
 from apps.api.routers.profile import router as profile_router
 from apps.api.turns import drain_turns
-from apps.api.watchdog import SlowRequestWatchdog
+from apps.api.watchdog import SlowRequestWatchdog, route_label
 from packages.db.session import assert_rls_bound_role
 
 
@@ -41,6 +42,8 @@ logging.basicConfig(
 
 app = FastAPI(lifespan=lifespan)
 
+logger = logging.getLogger(__name__)
+
 
 # FastAPI's default 422 echoes the rejected body in each error's `input` (a
 # bad sign-up sends the password back) and copies input into `ctx`. Only
@@ -52,6 +55,31 @@ async def _validation_error(_request: Request, exc: RequestValidationError):
         {"loc": e["loc"], "msg": e["msg"], "type": e["type"]} for e in exc.errors()
     ]
     return JSONResponse(status_code=422, content={"detail": jsonable_encoder(detail)})
+
+
+# lock_not_available (the app's lock_timeout) and query_canceled (its
+# statement_timeout, packages/db/session.py): the request lost to contention
+# or load, not to a bug, so it is retryable. The body is fixed text; the log
+# carries the route pattern and SQLSTATE only, never the SQL, its parameters
+# or the driver's message. Every other database error is re-raised to the default
+# 500. The request's session has already rolled back by the time this runs:
+# get_session's `async with` exits on the exception before the handler.
+_BUSY_SQLSTATES = frozenset({"55P03", "57014"})
+
+
+@app.exception_handler(DBAPIError)
+async def _database_busy(request: Request, exc: DBAPIError):
+    sqlstate = getattr(exc.orig, "sqlstate", None)
+    if sqlstate not in _BUSY_SQLSTATES:
+        raise exc
+    logger.warning(
+        "database busy: %s sqlstate=%s", route_label(request.scope), sqlstate
+    )
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "The server is busy right now. Try again in a moment."},
+        headers={"Retry-After": "5"},
+    )
 
 
 # Dev only: the browser talks to FastAPI cross-origin (ADR 0005 — Next's dev

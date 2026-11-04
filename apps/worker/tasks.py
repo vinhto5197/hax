@@ -306,27 +306,45 @@ def _async_redis():
     )
 
 
+# Visitors per DELETE: each one cascades into its conversations, messages,
+# documents and chunks, so a batch bounds the statement's locks and runtime
+# inside the app connection's lock_timeout / statement_timeout
+# (packages/db/session.py).
+ANON_SWEEP_BATCH = 1000
+
+
 async def sweep_anonymous_users_async(now: datetime | None = None) -> int:
     """Delete every demo visitor older than ANON_RETENTION_DAYS, with everything
-    it owns (foreign-key cascade); returns how many went. Rows with an email
-    are never candidates: the repo's statement carries that guard itself.
+    it owns (foreign-key cascade), in batches, a commit per batch; returns how
+    many went. Rows with an email are never candidates: the repo's statement
+    carries that guard itself.
 
     A swept visitor's live token must read as revoked at once, not when the
-    revocation cache's entry for it expires, so those entries go after the
-    commit (fail-open on a Redis error: the TTL still ends them)."""
+    revocation cache's entry for it expires, so each batch's entries go after
+    that batch's commit (fail-open on a Redis error: the TTL still ends them)."""
     cutoff = (now or datetime.now(UTC)) - _anon_retention()
+    total = 0
     async with AsyncSessionLocal() as session:
-        swept = await users_repo.delete_stale_anonymous(session, cutoff)
-        await session.commit()
-    if swept:
-        client = _async_redis()
-        try:
-            await client.delete(*(sva_cache_key(uid) for uid in swept))
-        except RedisError:
-            logger.warning("sweep: could not purge the revocation cache", exc_info=True)
-        finally:
-            await client.aclose()
-    return len(swept)
+        while True:
+            batch = ANON_SWEEP_BATCH
+            swept = await users_repo.delete_stale_anonymous(session, cutoff, batch)
+            await session.commit()
+            await _purge_revocation_cache(swept)
+            total += len(swept)
+            if len(swept) < batch:
+                return total
+
+
+async def _purge_revocation_cache(user_ids: list[UUID]) -> None:
+    if not user_ids:
+        return
+    client = _async_redis()
+    try:
+        await client.delete(*(sva_cache_key(uid) for uid in user_ids))
+    except RedisError:
+        logger.warning("sweep: could not purge the revocation cache", exc_info=True)
+    finally:
+        await client.aclose()
 
 
 # No retries: beat runs it again tomorrow and the work is idempotent.

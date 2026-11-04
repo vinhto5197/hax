@@ -146,20 +146,30 @@ async def reset_password(
 
 
 async def delete_stale_anonymous(
-    session: AsyncSession, cutoff: datetime
+    session: AsyncSession, cutoff: datetime, limit: int
 ) -> list[uuid.UUID]:
-    """Delete every demo visitor (no email) created before `cutoff`; returns
-    their ids (the caller purges their revocation-cache entries).
+    """Delete at most `limit` demo visitors (no email) created before `cutoff`,
+    oldest first; returns their ids (the caller purges their revocation-cache
+    entries). The caller owns the commit.
 
     The `email IS NULL` guard is in the statement itself, so this can never
-    delete an account. `users` is outside RLS; the cascade into the policied
-    tables (conversations, documents, chunks; messages via conversations) runs
+    delete an account. SKIP LOCKED: a visitor row a request holds is left for
+    the next run, so the sweep never waits on a request for the user row.
+    `users` is outside RLS; the cascade into the policied tables
+    (conversations, documents, chunks; messages via conversations) runs
     through referential-integrity triggers, which Postgres exempts from row
     security, so the caller needs no announced identity.
     """
+    stale = (
+        select(User.id)
+        .where(User.email.is_(None), User.created_at < cutoff)
+        .order_by(User.created_at)
+        .limit(limit)
+        .with_for_update(skip_locked=True)
+    )
     result = await session.execute(
         delete(User)
-        .where(User.email.is_(None), User.created_at < cutoff)
+        .where(User.id.in_(stale))
         .returning(User.id)
         .execution_options(synchronize_session=False)
     )

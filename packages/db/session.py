@@ -34,11 +34,14 @@ MIGRATIONS_DATABASE_URL_ASYNC = to_async_url(
 # pool_recycle: a connection older than 30 minutes is replaced at its next
 # checkout, at the cost of one fresh connect. Pool sizes are SQLAlchemy's
 # defaults on purpose: wrong sizes against RDS's connection limit queue
-# requests, which looks like a hang (backlog 12).
+# requests, which looks like a hang.
 # lock_timeout / statement_timeout bound how long an app statement waits for
 # someone else's lock and how long it runs, so a hang fails in seconds instead
-# of holding a request for minutes (backlog 82). App connections only: the
-# migrations engine (alembic env.py) builds its own without them.
+# of holding a request for minutes; the API answers either one as a 503
+# (apps/api/main.py). They cover the worker too: its tasks open sessions from
+# the same AsyncSessionLocal, so a task's batches must fit inside them. App
+# connections only: the migrations engine (alembic env.py) builds its own
+# without them.
 engine = create_async_engine(
     DATABASE_URL_ASYNC,
     hide_parameters=True,

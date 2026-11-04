@@ -1,7 +1,7 @@
 """The app's database connections bound how long a statement may wait for a
-lock and how long it may run (backlog 82): a hang behind someone else's lock
-fails in seconds instead of holding a request for minutes. Exercised through
-packages.db.engine on real connections, as the app uses them.
+lock and how long it may run: a hang behind someone else's lock fails in
+seconds instead of holding a request for minutes. Exercised through
+AsyncSessionLocal on real connections, as the routes and the worker use them.
 """
 
 import asyncio
@@ -12,13 +12,14 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from packages.db import engine
+from packages.db import AsyncSessionLocal, engine
 from packages.db.session import MIGRATIONS_DATABASE_URL_ASYNC
 
 
 async def _show(name: str) -> str:
-    async with engine.connect() as conn:
-        return (await conn.execute(text(f"SHOW {name}"))).scalar_one()
+    async with AsyncSessionLocal() as session:
+        assert session.bind is engine
+        return (await session.execute(text(f"SHOW {name}"))).scalar_one()
 
 
 async def test_an_app_connection_waits_at_most_five_seconds_for_a_lock():
@@ -44,17 +45,19 @@ async def test_a_statement_blocked_by_another_sessions_lock_fails_instead_of_han
             started = time.monotonic()
             # wait_for: without the limit this would wait forever, so a
             # regression fails the test instead of hanging the suite.
-            with pytest.raises(DBAPIError, match="lock timeout"):
-                async with engine.connect() as conn:
+            with pytest.raises(DBAPIError) as caught:
+                async with AsyncSessionLocal() as session:
                     await asyncio.wait_for(
-                        conn.execute(text("SELECT * FROM lock_probe")), 20
+                        session.execute(text("SELECT * FROM lock_probe")), 20
                     )
             assert 4 < time.monotonic() - started < 15
             await hold.rollback()
+        # lock_not_available: the SQLSTATE the API answers as a 503.
+        assert caught.value.orig.sqlstate == "55P03"
+    finally:
         async with holder.connect() as cleanup:
             await cleanup.execute(text("DROP TABLE IF EXISTS lock_probe"))
             await cleanup.commit()
-    finally:
         await holder.dispose()
 
 
@@ -65,5 +68,8 @@ async def test_migrations_keep_their_own_connection_without_the_app_limits():
     try:
         async with owner.connect() as conn:
             assert (await conn.execute(text("SHOW lock_timeout"))).scalar_one() == "0"
+            assert (
+                await conn.execute(text("SHOW statement_timeout"))
+            ).scalar_one() == "0"
     finally:
         await owner.dispose()

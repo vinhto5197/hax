@@ -149,3 +149,68 @@ async def test_the_sweep_purges_the_swept_visitors_revocation_cache(
 
 async def _noop():
     return None
+
+
+async def test_a_sweep_larger_than_one_batch_deletes_every_aged_visitor_in_batches(
+    admin_engine, fake_redis, monkeypatch
+):
+    monkeypatch.setattr(tasks, "ANON_SWEEP_BATCH", 2)
+    monkeypatch.setattr(tasks, "_async_redis", lambda: fake_redis)
+    monkeypatch.setattr(fake_redis, "aclose", _noop, raising=False)
+
+    real_delete = tasks.users_repo.delete_stale_anonymous
+    limits: list[int] = []
+
+    async def spy(session, cutoff, limit):
+        limits.append(limit)
+        return await real_delete(session, cutoff, limit)
+
+    monkeypatch.setattr(tasks.users_repo, "delete_stale_anonymous", spy)
+
+    aged = [await _seed_full_visitor(admin_engine, days=4) for _ in range(5)]
+    for visitor, _, _ in aged:
+        await fake_redis.set(sva_cache_key(visitor.id), "0")
+    fresh = await make_visitor(admin_engine)
+    fresh_conv = await make_conversation(admin_engine, fresh.id)
+    await fake_redis.set(sva_cache_key(fresh.id), "0")
+    member = await make_user(admin_engine, "old@test.local")
+    await _age(admin_engine, member.id, 30)
+    member_conv = await make_conversation(admin_engine, member.id)
+    await fake_redis.set(sva_cache_key(member.id), "0")
+
+    assert await tasks.sweep_anonymous_users_async() == 5
+
+    for visitor, conv, doc in aged:
+        assert await _owned_rows(admin_engine, visitor, conv, doc) == {
+            "users": 0,
+            "conversations": 0,
+            "messages": 0,
+            "documents": 0,
+            "chunks": 0,
+        }
+        assert await fake_redis.get(sva_cache_key(visitor.id)) is None
+    assert await _count(admin_engine, "users", "id", fresh.id) == 1
+    assert await _count(admin_engine, "conversations", "id", fresh_conv) == 1
+    assert await _count(admin_engine, "users", "id", member.id) == 1
+    assert await _count(admin_engine, "conversations", "id", member_conv) == 1
+    assert await fake_redis.get(sva_cache_key(fresh.id)) == "0"
+    assert await fake_redis.get(sva_cache_key(member.id)) == "0"
+    # 2 + 2 + 1: no batch asks for more than the batch size, and the short
+    # third batch ends the sweep.
+    assert limits and all(limit == 2 for limit in limits)
+    assert len(limits) == 3
+
+
+async def test_a_sweep_with_no_aged_visitors_returns_zero_and_deletes_nothing(
+    admin_engine,
+):
+    fresh = await make_visitor(admin_engine)
+    fresh_conv = await make_conversation(admin_engine, fresh.id)
+    member = await make_user(admin_engine, "old@test.local")
+    await _age(admin_engine, member.id, 30)
+
+    assert await tasks.sweep_anonymous_users_async() == 0
+
+    assert await _count(admin_engine, "users", "id", fresh.id) == 1
+    assert await _count(admin_engine, "conversations", "id", fresh_conv) == 1
+    assert await _count(admin_engine, "users", "id", member.id) == 1
