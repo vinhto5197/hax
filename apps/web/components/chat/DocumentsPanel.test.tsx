@@ -121,6 +121,47 @@ describe("DocumentsPanel loading", () => {
     expect(screen.queryByText(EMPTY)).toBeNull();
   });
 
+  it("hides the skeleton from assistive tech", async () => {
+    vi.mocked(listDocuments).mockReturnValue(new Promise(() => {}));
+    const { container } = render(<DocumentsPanel />);
+    await act(async () => {});
+
+    expect(skeletonIn(container)).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("marks the panel aria-busy while the first list is in flight", async () => {
+    vi.mocked(listDocuments).mockReturnValue(new Promise(() => {}));
+    const { container } = render(<DocumentsPanel />);
+    await act(async () => {});
+
+    expect(container.querySelector("[data-documents-panel]")).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+  });
+
+  it("clears the panel's aria-busy once the first list has loaded", async () => {
+    serve([doc({})]);
+    const { container } = render(<DocumentsPanel />);
+    await within(summaryOf(container)).findByText("1", { exact: true });
+
+    const panel = container.querySelector("[data-documents-panel]");
+    expect(panel).not.toBeNull();
+    expect(panel).not.toHaveAttribute("aria-busy", "true");
+  });
+
+  it("clears the panel's aria-busy after a failed first list", async () => {
+    vi.mocked(listDocuments).mockRejectedValue(new Error("API 500"));
+    const { container } = render(<DocumentsPanel />);
+    await act(async () => {});
+    await act(async () => {});
+
+    expect(skeletonIn(container)).toBeNull();
+    const panel = container.querySelector("[data-documents-panel]");
+    expect(panel).not.toBeNull();
+    expect(panel).not.toHaveAttribute("aria-busy", "true");
+  });
+
   it("a failed first list shows no skeleton, no count and no empty line", async () => {
     vi.mocked(listDocuments).mockRejectedValue(new Error("API 500"));
     const { container } = render(<DocumentsPanel />);

@@ -170,6 +170,7 @@ export function DocumentsPanel() {
       onToggle={(e) => setToggled(e.currentTarget.open)}
       className="group flex shrink-0 flex-col gap-2 border-t border-border pt-3"
       data-documents-panel
+      aria-busy={(!loaded && !loadFailed) || undefined}
     >
       <summary className="flex cursor-pointer list-none items-center justify-between px-1 text-body font-medium text-ink-2 [&::-webkit-details-marker]:hidden">
         <span className="flex items-center gap-1.5">
