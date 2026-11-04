@@ -469,3 +469,63 @@ test('35. a medium-or-above recheck finding matched by a Fix-stage fix ruling st
   assert.ok(text(out.result.blockedOn).includes('Recheck Wib-Wobble regression'))
   assertNoShip(out)
 })
+
+// --- Rulings reach the stages that judge against them ---
+
+function reachesEveryStage(rulings) {
+  const f = finding(1, 'high')
+  return run(
+    { 'review:fresh-eyes': { findings: [f] }, 'review:verify:*': verifier({ [f.title]: CONFIRMED }) },
+    { rulings },
+  )
+}
+
+const BUILD_NOTE = 'NOTE-ZETA-36'
+const FIX_NOTE = 'NOTE-ETA-37'
+
+test('36. a Build-stage ruling\'s note appears in the prompt of every stage that judges the build against the brief', async () => {
+  const { result, calls } = await reachesEveryStage([
+    { stage: 'Build', match: 'storage layout', ruling: 'use option B', note: BUILD_NOTE },
+  ])
+  assert.notEqual(result.refused, true)
+  const exact = ['precheck:brief', 'build:implement', 'build:tests', 'review:fresh-eyes', 'review:recheck', 'evidence', 'gate-block']
+  const prefixes = ['gate:', 'review:find:', 'review:verify:#']
+  for (const l of exact) assert.ok(labels(calls).includes(l), `${l} ran`)
+  for (const p of prefixes) assert.ok(called(calls, startsWith(p)).length >= 1, `${p}* ran`)
+  const judged = calls.filter((c) => exact.includes(c.label) || prefixes.some((p) => (c.label ?? '').startsWith(p)))
+  for (const c of judged) {
+    assert.ok(c.prompt.includes(BUILD_NOTE), `${c.label} prompt carries the Build ruling's note`)
+  }
+})
+
+test('37. a Fix-stage ruling\'s note appears in no prompt before Fix', async () => {
+  const { result, calls } = await reachesEveryStage([{ stage: 'Fix', match: 'Q01x', ruling: 'fix', note: FIX_NOTE }])
+  assert.notEqual(result.refused, true)
+  const exact = ['precheck:brief', 'build:implement', 'build:tests', 'gate:1', 'review:fresh-eyes']
+  const prefixes = ['review:find:', 'review:verify:#']
+  const early = calls.filter((c) => exact.includes(c.label) || prefixes.some((p) => (c.label ?? '').startsWith(p)))
+  assert.ok(early.length >= 6, 'the early stages ran')
+  for (const c of early) assert.ok(!c.prompt.includes(FIX_NOTE), `${c.label} prompt carries the Fix ruling's note`)
+})
+
+test('38. the record passed to gate-block carries a rulings array equal to args.rulings, both stages', async () => {
+  const rulings = [
+    { stage: 'Build', match: 'storage layout', ruling: 'use option B', note: 'NOTE-THETA-38a' },
+    { stage: 'Fix', match: 'Q01x', ruling: 'fix', note: 'NOTE-THETA-38b' },
+  ]
+  const { calls } = await reachesEveryStage(rulings)
+  assert.deepEqual(record(calls).rulings, rulings)
+})
+
+test('39. a Build ruling\'s keywords appear in no prompt except gate-block\'s', async () => {
+  const kws = ['frobnitz_kw39', 'QUUXLY_kw39']
+  const { result, calls } = await reachesEveryStage([
+    { stage: 'Build', keywords: kws, ruling: 'use option B', note: 'NOTE-IOTA-39' },
+  ])
+  assert.notEqual(result.refused, true)
+  const others = calls.filter((c) => c.label !== 'gate-block')
+  assert.ok(others.length > 0)
+  for (const c of others) {
+    for (const kw of kws) assert.ok(!c.prompt.includes(kw), `${c.label} prompt carries keyword ${kw}`)
+  }
+})
