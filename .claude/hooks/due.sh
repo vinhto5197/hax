@@ -29,11 +29,13 @@ if [ -n "${DUE_TODAY:-}" ]; then
 else
   today=$(date +%F) dow=$(date +%u) week=$(date +%G-W%V)
 fi
+prev_week=$(python3 -c "import datetime,sys;y,w,_=(datetime.date.fromisoformat(sys.argv[1])-datetime.timedelta(7)).isocalendar();print(f'{y}-W{w:02d}')" "$today")
 
 if [ "${1:-}" = mark ]; then
   case "${2:-}" in
     digest) key=last_digest_date val=$today ;;
-    retro) key=last_retro_week val=$week ;;
+    # Before Friday the only retro that can be due is last week's missed one.
+    retro) key=last_retro_week; if [ "$dow" -ge 5 ]; then val=$week; else val=$prev_week; fi ;;
     explorer) key=explorer_reported_week val=$week ;;
     *) echo "usage: due.sh mark digest|retro|explorer" >&2; exit 64 ;;
   esac
@@ -57,11 +59,23 @@ if [ "$last_digest" != "$today" ]; then
   lines+=("DIGEST DUE (skill morning-digest; last digest: ${last_digest:-never}). Open PRs: $prs. Briefs waiting: $briefs. New explorer notes: ${explorer:-none}. Read every routine run newer than the marker's last_reported_run / journeys_last_reported_run before anything else; finish with \`.claude/hooks/due.sh mark digest\`.")
 fi
 
+retro_tally() { # $1 = week file, relative to the root
+  grep -oE '^- [0-9]{4}-[0-9]{2}-[0-9]{2} \[[a-z-]+\]' "$root/$1" 2>/dev/null \
+    | sed -E 's/.*\[([a-z-]+)\]/\1/' | sort | uniq -c | sort -rn \
+    | awk '{printf "%s%s %d%s", (NR>1?", ":""), $2, $1, ($1>=2?" (recurring)":"")}'
+}
+# A week with no prompt from Friday to Sunday would drop its retro silently, so
+# last week's stays due all this week until marked. ISO week strings compare in
+# date order. An empty last_retro_week is a marker with no retro history yet:
+# nothing to call missed.
+if [ -n "$last_retro" ] && [ "$last_retro" \< "$prev_week" ]; then
+  wf="local/retro/$prev_week.md"
+  tally=$(retro_tally "$wf")
+  lines+=("RETRO DUE for $prev_week (missed) (skill morning-digest). Week file $wf tally: ${tally:-empty}. Run scripts/week_transcript.py first so the tally includes what the context forgot; finish with \`.claude/hooks/due.sh mark retro\`.")
+fi
 if [ "$dow" -ge 5 ] && [ "$last_retro" != "$week" ]; then
   wf="local/retro/$week.md"
-  tally=$(grep -oE '^- [0-9]{4}-[0-9]{2}-[0-9]{2} \[[a-z-]+\]' "$root/$wf" 2>/dev/null \
-    | sed -E 's/.*\[([a-z-]+)\]/\1/' | sort | uniq -c | sort -rn \
-    | awk '{printf "%s%s %d%s", (NR>1?", ":""), $2, $1, ($1>=2?" (recurring)":"")}')
+  tally=$(retro_tally "$wf")
   lines+=("RETRO DUE for $week (skill morning-digest, Friday). Week file $wf tally: ${tally:-empty}. Run scripts/week_transcript.py first so the tally includes what the context forgot; finish with \`.claude/hooks/due.sh mark retro\`.")
 fi
 
