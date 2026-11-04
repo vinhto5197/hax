@@ -29,7 +29,7 @@ What the e2e stack can stage today, and what it cannot:
 | 11 | Copy message; timestamp on hover | `chat-thread.member` (the hover look: L) | – |
 | 12 | Remote image src removed; code highlighted | `rich-replies.member` (the highlighting look: L) | – |
 | 13 | View follows the bottom while streaming; scrolling up stops it | `chat-thread.member`, MessageList.test (re-pin on resize) | – |
-| 13a | Jump to latest: shown while the view does not follow; press returns to the bottom and re-engages the follow; instant under reduced motion; a send re-engages the follow | `jump-to-latest.member`, MessageList.test | – |
+| 13a | Jump to latest: shown while the view does not follow; press returns to the bottom and re-engages the follow; instant under reduced motion; a send re-engages the follow; a keyboard press moves focus to the message box, a pointer press does not | `jump-to-latest.member`, MessageList.test | – |
 | 14 | New chat clears the screen and starts a separate conversation | newchat | – |
 | 15 | New chat during a reply keeps that reply out of the new chat | switch | – |
 | 16 | Switch via the sidebar; reload, back and forward | hist | – |
