@@ -35,7 +35,12 @@ if [ "${1:-}" = mark ]; then
   case "${2:-}" in
     digest) key=last_digest_date val=$today ;;
     # Before Friday the only retro that can be due is last week's missed one.
-    retro) key=last_retro_week; if [ "$dow" -ge 5 ]; then val=$week; else val=$prev_week; fi ;;
+    # From Friday a missed week is still recorded first, so marking this week
+    # never silently clears it; a second mark then records this week.
+    retro)
+      key=last_retro_week
+      last=$(jq -r '.last_retro_week // ""' "$marker")
+      if [ "$dow" -ge 5 ] && { [ -z "$last" ] || ! [ "$last" \< "$prev_week" ]; }; then val=$week; else val=$prev_week; fi ;;
     explorer) key=explorer_reported_week val=$week ;;
     *) echo "usage: due.sh mark digest|retro|explorer" >&2; exit 64 ;;
   esac
