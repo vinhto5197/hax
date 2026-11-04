@@ -86,6 +86,9 @@ run_id="$today-$persona"
 notes="$dir/$run_id.md"
 run_dir="$dir/$run_id"
 mkdir -p "$run_dir"
+# The browser tool reads uploads only from the run's own directories, so the
+# committed fixture is copied into this run's.
+cp "$root/.claude/skills/product-explorer/fixture.txt" "$run_dir/fixture.txt"
 started=$(date +%s)
 
 write_status() { # state [reason]
@@ -104,8 +107,9 @@ finish() {
   # The Playwright MCP server outlives a killed agent; its args name this run's
   # directory, which nothing else on the machine does.
   pkill -f -- "--output-dir $run_dir" 2>/dev/null || true
+  # From the main checkout: the run's cwd may be inside the worktree it removes.
   if [[ -z "${EXPLORER_CHECKOUT:-}" && -n "$checkout" ]]; then
-    "$root/scripts/feature-worktree.sh" --remove explorer >/dev/null 2>&1 || true
+    (cd "$root" && "$root/scripts/feature-worktree.sh" --remove --force explorer >/dev/null 2>&1) || true
   fi
   if (( code != 0 )) && [[ "$(jq -r .state "$status" 2>/dev/null)" == running ]]; then
     write_status failed "the runner stopped with exit $code; see $run_dir/runner.log"
@@ -125,7 +129,7 @@ if [[ -n "${EXPLORER_CHECKOUT:-}" ]]; then
   checkout=$EXPLORER_CHECKOUT
 else
   step "making a worktree of origin/main"
-  "$root/scripts/feature-worktree.sh" --remove explorer >/dev/null 2>&1 || true
+  (cd "$root" && "$root/scripts/feature-worktree.sh" --remove --force explorer >/dev/null 2>&1) || true
   checkout=$("$root/scripts/feature-worktree.sh" explorer | tail -1)
 fi
 cd "$checkout"
@@ -207,7 +211,7 @@ prompt="You are the product explorer for hax, a chat product that answers questi
 The run:
 - The site: http://localhost:$WEB. The only other page you may open is the email inbox at http://localhost:$MAILPIT_UI, where every email the site sends arrives, whatever the address.
 - Signing up: use the fresh address explorer+$run_id@example.com and a password of your choosing; the verification email lands in that inbox. If signing up stops you for good, note it as a finding and log in instead as explorer@example.com with the password explorer-password-123.
-- The file to upload: $dir/fixture.txt
+- The file to upload: $run_dir/fixture.txt
 - The notes file: $notes. Write it as you go; it is your memory between steps. Start it with a line naming the persona and the date $today.
 - Screenshots: save each with a short numbered name (01-front-page.png, ...); they land in local/explorer/$run_id/. Name that path in the notes.
 - Bounds: at most $turns messages sent to hax's chat. Stop early after three failed actions in a row (a click that did nothing, a page that did not load) and say so.

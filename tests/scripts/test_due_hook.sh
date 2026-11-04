@@ -130,10 +130,15 @@ case "$out" in *"EXPLORER LAUNCHED for 2026-W45: persona busy"*) report PASS "Fr
 
 # (j) Later prompts that week never launch again; while it runs, nothing is said.
 explorer_status '{"week": "2026-W45", "state": "running"}'
+sleep 60 &
+j_pid=$!
+echo "$j_pid" > "$work/proj/local/explorer/.running"
 run 2026-11-06 hello >/dev/null
 set_marker '.last_digest_date = "2026-11-07"'
 out=$(run 2026-11-07 hello)
 sleep 0.5
+kill "$j_pid" 2>/dev/null || true
+rm -f "$work/proj/local/explorer/.running"
 no_due "$out" && [ "$(launches)" = 1 ] && report PASS "one launch a week, silent while it runs" || report FAIL "relaunch: got '$out', launches $(launches)"
 
 # (k) A failed run names its reason and its logs.
@@ -160,5 +165,43 @@ set_marker '.last_digest_date = "2026-11-12" | del(.last_explorer_week)'
 out=$(printf '{"prompt": "go"}' | PATH="$work/bin:$PATH" CLAUDE_PROJECT_DIR="$work/proj" DUE_TODAY=2026-11-13 HAX_EXPLORER_RUN=1 "$hook")
 sleep 0.5
 [ -z "$out" ] && [ "$(launches)" = 1 ] && report PASS "the explorer's own session is silent" || report FAIL "inside the explorer: got '$out', launches $(launches)"
+
+# (n) A status left at "running" by a runner that is gone. Friday 2026-11-13
+# (W46), digest done, this week's explorer already launched, so the hook
+# launches nothing and only reads the status against .running.
+set_marker '.last_digest_date = "2026-11-13" | .last_explorer_week = "2026-W46"'
+running_file=$work/proj/local/explorer/.running
+# A FAILED line that says the run stopped without finishing.
+stopped_line() {
+  printf '%s\n' "$1" | grep '\[due\] EXPLORER FAILED for 2026-W46' | grep -i 'stop' | grep -qi 'finish'
+}
+no_end_line() { ! printf '%s' "$1" | grep -Eq '\[due\] EXPLORER (DONE|FAILED)'; }
+
+# (n1) No .running at all.
+rm -f "$running_file"
+explorer_status '{"week": "2026-W46", "persona": "busy", "state": "running"}'
+out=$(run 2026-11-13 hello)
+stopped_line "$out" && report PASS "running status with no .running is reported failed: stopped without finishing" \
+  || report FAIL "running status, no .running: got '$out'"
+
+# (n2) .running names a pid that has exited.
+sh -c 'exit 0' &
+dead_pid=$!
+wait "$dead_pid" 2>/dev/null || true
+echo "$dead_pid" > "$running_file"
+explorer_status '{"week": "2026-W46", "persona": "busy", "state": "running"}'
+out=$(run 2026-11-13 hello)
+stopped_line "$out" && report PASS "running status with a dead pid in .running is reported failed: stopped without finishing" \
+  || report FAIL "running status, dead pid $dead_pid: got '$out'"
+
+# (n3) pin: .running names a live pid, so the run is still going: no end line.
+sleep 60 &
+live_pid=$!
+echo "$live_pid" > "$running_file"
+explorer_status '{"week": "2026-W46", "persona": "busy", "state": "running"}'
+out=$(run 2026-11-13 hello)
+kill "$live_pid" 2>/dev/null || true
+no_end_line "$out" && report PASS "running status with a live pid in .running prints no EXPLORER DONE/FAILED line" \
+  || report FAIL "running status, live pid: got '$out'"
 
 [ "$fails" -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }

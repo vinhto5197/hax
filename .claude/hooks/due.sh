@@ -84,6 +84,13 @@ if [ "$dow" -ge 5 ] && [ -x "$runner" ]; then
       case "$(jq -r '.state' "$st")" in
         done) lines+=("EXPLORER DONE for $week: $(jq -r '"persona \(.persona), notes \(.notes)"' "$st"). Triage per skill product-explorer (After the run); finish with \`.claude/hooks/due.sh mark explorer\`.") ;;
         failed) lines+=("EXPLORER FAILED for $week: $(jq -r '"\(.reason). Logs: \(.logs)"' "$st"). A week-file line [routine-abandon]; rerun by hand or let it go; finish with \`.claude/hooks/due.sh mark explorer\`.") ;;
+        # The runner writes its pid before it writes "running", so a running
+        # state with no live pid is a run killed before its own exit trap.
+        running)
+          pid=$(cat "$root/local/explorer/.running" 2>/dev/null || true)
+          if [ -z "$pid" ] || ! kill -0 "$pid" 2>/dev/null; then
+            lines+=("EXPLORER FAILED for $week: the run stopped without finishing (its runner is gone; last step: $(jq -r '.reason // "unknown"' "$st")). Logs: $(jq -r '.logs // "local/explorer/"' "$st"). A week-file line [routine-abandon]; rerun by hand or let it go; finish with \`.claude/hooks/due.sh mark explorer\`.")
+          fi ;;
       esac
     fi
   fi
