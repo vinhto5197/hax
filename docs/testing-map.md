@@ -29,7 +29,7 @@ What the e2e stack can stage today, and what it cannot:
 | 11 | Copy message; timestamp on hover | `chat-thread.member` (the hover look: L) | – |
 | 12 | Remote image src removed; code highlighted | `rich-replies.member` (the highlighting look: L) | – |
 | 13 | View follows the bottom while streaming; scrolling up stops it | `chat-thread.member`, MessageList.test (re-pin on resize) | – |
-| 13a | Jump to latest: shown while the view does not follow; press returns to the bottom and re-engages the follow; instant under reduced motion; a send re-engages the follow | `jump-to-latest.member`, MessageList.test | – |
+| 13a | Jump to latest: shown while the view does not follow; press returns to the bottom and re-engages the follow; instant under reduced motion; a send re-engages the follow; a keyboard press moves focus to the message box, a pointer press does not | `jump-to-latest.member`, MessageList.test | – |
 | 14 | New chat clears the screen and starts a separate conversation | newchat | – |
 | 15 | New chat during a reply keeps that reply out of the new chat | switch | – |
 | 16 | Switch via the sidebar; reload, back and forward | hist | – |
@@ -41,8 +41,8 @@ What the e2e stack can stage today, and what it cannot:
 | 21b | Connection lost mid-reply (or silent for 45 s): no error, the partial replaced by "Still answering…", then the whole reply; a message that never arrived: "Your message wasn't sent…" and the text back in the composer | `still-answering.member` (connection cut, never sent), useChat.test, chatApi.test (silence limit), py:test_server_turn | – |
 | 22 | Stream ends without `[DONE]`: a lost connection (row 21b); the reply finishes on the server and is stored whole, never partial (a Stop: row 22b) | `still-answering.member` (connection cut, then reload), chatApi.test, useChat.test, py:test_server_turn, py:test_turn_guard | – |
 | 22a | Coming back mid-reply (reload, switching back): the question, "Still answering…" and a disabled composer, then the whole reply; a conversation left free with the user's message last shows "The reply was interrupted." with Try again (row 22c) | `still-answering.member` (reload, switch), useChat.test, py:test_server_turn | – |
-| 22b | Stop while a reply streams (member and visitor): enabled after the prelude; the reply stops, what was written is kept and stored, no error line, the composer busy until the stop request settles (no activity line meanwhile), then free; a stop before any text stores nothing and shows no error line, even if the stream is then lost or the stop request times out; a failed stop offers Stop again; no Stop while "Still answering…" | `stop.member`, `stop.guest`, `chat-basics.member` (Stop shown while streaming), useChat.test, ChatInput.test, chatApi.test, py:test_stop | – |
-| 22c | Try again (member and visitor), on "The reply was interrupted." and on "You stopped this reply." (live only, until the next send or retry or a reload), never on other errors: writes a new reply under the stored question without sending it again, streamed as for a send; after a Stop the kept reply is replaced (kept shown when the retry is refused, e.g. the demo cap); a retry that fails again shows the line again; another page's reply or turn meanwhile is shown, never deleted; a visitor's retry counts as a turn | `try-again.member`, demo (a visitor's retry counts as a turn; the kept reply stays shown on the demo cap), useChat.test, chatApi.test, py:test_retry | – |
+| 22b | Stop while a reply streams (member and visitor): enabled after the prelude; the reply stops, what was written is kept and stored, no error line, the composer busy until the stop request settles (no activity line meanwhile), then free; a stop before any text stores nothing and shows no error line, even if the stream is then lost or the stop request times out; a failed stop offers Stop again; no Stop while "Still answering…"; "You stopped this reply." is a polite status | `stop.member`, `stop.guest`, `chat-basics.member` (Stop shown while streaming), ChatWindow.test (the status role), useChat.test, ChatInput.test, chatApi.test, py:test_stop | – |
+| 22c | Try again (member and visitor), on "The reply was interrupted." and on "You stopped this reply." (live only, until the next send or retry or a reload), never on other errors: writes a new reply under the stored question without sending it again, streamed as for a send; after a Stop the kept reply is replaced (kept shown when the retry is refused, e.g. the demo cap); a retry that fails again shows the line again; another page's reply or turn meanwhile is shown, never deleted; a visitor's retry counts as a turn; after a keyboard press, focus is on the message box once the retry ends | `try-again.member`, demo (a visitor's retry counts as a turn; the kept reply stays shown on the demo cap), useChat.test, chatApi.test, py:test_retry | – |
 | 23 | Model picker has 4 options; the choice travels with the first turn | `chat-basics.member`, chatApi.test, py:test_demo_limits | – |
 | 24 | A 401 signs out to `/login` (or `/` on the landing page) | chatApi.test | – |
 | 25 | 20 000-character cap; composer grows on resize | ChatInput.test | – |
@@ -72,6 +72,7 @@ What the e2e stack can stage today, and what it cannot:
 |---|---|---|---|
 | 35 | Upload opens the panel, shows "Uploading…", adds a pending row | `documents-lifecycle.member`, chatApi.test | – |
 | 36 | Pending becomes ready via a 2.5 s poll that then stops | `documents-lifecycle.member`, DocumentsPanel.test (stops polling once every document is ready) | – |
+| 86 | An upload that resolves while the first list is in flight keeps its row when that list lands without it; a later list carrying it takes over | DocumentsPanel.test (upload during the first list) | – |
 | 37 | Failed status; tapping it shows the reason | `documents-lifecycle.member`, py:test_ingest_status, py:test_authz_documents | – |
 | 38 | Order: failed, then in progress, then ready | `documents-lifecycle.member` | – |
 | 39 | Upload refusals (type, 5 MB, 256 KB, hourly and daily caps) shown | `documents-panel.member` (type, 5 MB, 256 KB), chatApi.test, py:test_upload_limits (caps), py:test_authz_documents | – |
@@ -99,7 +100,7 @@ What the e2e stack can stage today, and what it cannot:
 | 74 | Phone: the menu opens inside the drawer; the dialog fills the width less the gutter; Escape closes only the menu or the dialog; a backdrop tap does nothing and leaves focus in the dialog; saving keeps the drawer open | `about-you.member`, AboutYouDialog.test, Shell.test | – |
 | 75 | The dialog and its text survive a resize across the breakpoint and a remount of the sidebar; it closes when the signed-in member changes, and a save under another member's cookie does not go out | `about-you.member` (resize), AboutYouProvider.test, Shell.test (route change: no journey can open the dialog in time) | – |
 | 77 | Delete targets (conversation and document rows) are at least 44 px wide, conversation ones 44 px tall, and never overlap a neighbour; AA contrast at rest | `chat-basics.member`, `documents-panel.member` (the contrast: L) | – |
-| 83 | Skeleton rows match the real rows' height and spacing; still under reduced motion | `chat-basics.member` (the documents geometry and the look: L) | – |
+| 83 | Skeleton rows match the real rows' height and spacing; still under reduced motion; hidden from assistive tech, the list aria-busy until its first fetch lands or fails | `chat-basics.member` (the documents geometry and the look: L), Sidebar.test, DocumentsPanel.test (aria-hidden, aria-busy) | – |
 
 ## Auth
 
@@ -135,4 +136,4 @@ What the e2e stack can stage today, and what it cannot:
 
 Produced by `python scripts/testing_map_counts.py` from the tables above; rerun it after editing a row and paste its output here.
 
-90 behaviours; 88 covered; 2 gaps: J 0 (J\* 0, J† 0), U 0, L 2.
+91 behaviours; 89 covered; 2 gaps: J 0 (J\* 0, J† 0), U 0, L 2.

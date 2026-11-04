@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ChatWindow } from "@/components/chat/ChatWindow";
@@ -7,6 +7,8 @@ import { ChatWindow } from "@/components/chat/ChatWindow";
 // would clear a queued return value before each test.
 let chatError: string | null = null;
 let restoreDraft: string | null = null;
+let stoppedNotice = false;
+let canRetry = false;
 
 vi.mock("@/components/chat/ConversationsProvider", () => ({
   useConversations: () => ({
@@ -28,12 +30,19 @@ vi.mock("@/hooks/useChat", () => ({
     stillAnswering: false,
     restoreDraft,
     send: async () => {},
+    stop: async () => {},
+    canStop: false,
+    stoppedNotice,
+    retry: async () => {},
+    canRetry,
   }),
 }));
 
 beforeEach(() => {
   chatError = null;
   restoreDraft = null;
+  stoppedNotice = false;
+  canRetry = false;
   // jsdom has no layout; auto-scroll calls must not throw.
   Element.prototype.scrollIntoView = () => {};
   Element.prototype.scrollTo = () => {};
@@ -59,5 +68,30 @@ describe("ChatWindow composer", () => {
     expect(screen.getByRole("textbox", { name: "Message" })).toHaveValue(
       "my unsent question",
     );
+  });
+});
+
+describe("ChatWindow stopped notice", () => {
+  it("is announced as a polite status with a Try again button", () => {
+    stoppedNotice = true;
+    canRetry = true;
+    render(<ChatWindow conversationId="c1" demo={false} />);
+    const status = screen.getByRole("status");
+    expect(status).toHaveTextContent("You stopped this reply.");
+    expect(
+      within(status).getByRole("button", { name: "Try again" }),
+    ).toBeInTheDocument();
+  });
+
+  it("is not an alert", () => {
+    stoppedNotice = true;
+    canRetry = true;
+    render(<ChatWindow conversationId="c1" demo={false} />);
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("is absent without a stop", () => {
+    render(<ChatWindow conversationId="c1" demo={false} />);
+    expect(screen.queryByText("You stopped this reply.")).toBeNull();
   });
 });

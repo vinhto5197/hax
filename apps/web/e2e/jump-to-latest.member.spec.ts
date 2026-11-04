@@ -219,6 +219,31 @@ test("With reduced motion, Jump to latest lands at the bottom at once", async ({
   expect(distance).toBeLessThan(3);
 });
 
+test("Pressing Jump to latest from the keyboard moves focus to the message box", async ({
+  page,
+}) => {
+  const scroller = await tallConversation(page, "keyboard press");
+  await releaseFollow(scroller);
+  await expect(jumpButton(page)).toBeVisible();
+
+  await jumpButton(page).focus();
+  await page.keyboard.press("Enter");
+  await expect(jumpButton(page)).toHaveCount(0);
+  await expect(composer(page)).toBeFocused();
+});
+
+test("Clicking Jump to latest with the pointer leaves focus off the message box", async ({
+  page,
+}) => {
+  const scroller = await tallConversation(page, "pointer press");
+  await releaseFollow(scroller);
+  await expect(jumpButton(page)).toBeVisible();
+
+  await jumpButton(page).click();
+  await expect(jumpButton(page)).toHaveCount(0);
+  await expect(composer(page)).not.toBeFocused();
+});
+
 test.describe("phone", () => {
   test.use({ viewport: PHONE });
 

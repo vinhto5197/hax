@@ -89,7 +89,10 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 
       {error && <p className="px-1 text-small text-status-failed">{error}</p>}
 
-      <nav className="flex flex-1 flex-col gap-1 overflow-y-auto">
+      <nav
+        aria-busy={(!loaded && !loadFailed) || undefined}
+        className="flex flex-1 flex-col gap-1 overflow-y-auto"
+      >
         {conversations.length === 0 && !loaded && !loadFailed && (
           <SkeletonRows kind="conversations" />
         )}
