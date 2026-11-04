@@ -365,3 +365,24 @@ test("Try again that fails again shows the interrupted line with Try again", asy
   await expect(main.getByText(text, { exact: true })).toHaveCount(1);
   await expect(composer(page)).toBeEnabled();
 });
+
+test("After Try again is pressed with the keyboard, the composer has focus once the reply lands, so the next key press types", async ({
+  page,
+}) => {
+  const text = "flaky: try again journey, keyboard focus after the retry";
+  const main = page.getByRole("main");
+
+  await page.goto("/chat");
+  await send(page, text);
+  await expectInterrupted(page);
+
+  await tryAgain(page).focus();
+  await page.keyboard.press("Enter");
+  await expect(main.getByText(RECOVERED, { exact: true })).toBeVisible({
+    timeout: REPLY_LANDS_MS,
+  });
+  await expect(composer(page)).toBeFocused();
+
+  await page.keyboard.type("x");
+  await expect(composer(page)).toHaveValue("x");
+});
