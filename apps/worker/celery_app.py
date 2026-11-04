@@ -8,8 +8,10 @@ Broker + result backend are both Redis (``REDIS_URL``). The worker runs as a
 import asyncio
 import logging
 import os
+from collections.abc import Callable
+from typing import Any, cast
 
-from celery import Celery
+from celery import Celery, Task
 from celery.schedules import crontab
 from celery.signals import worker_process_init
 
@@ -96,6 +98,14 @@ celery_app.conf.update(
         },
     },
 )
+
+
+def task(**options: Any) -> Callable[[Callable[..., Any]], Task]:
+    """`celery_app.task` with the type it has at runtime. Celery ships no
+    annotations, so a type checker reads a function under the bare decorator
+    as still a plain function, and a publish (`apps/api/enqueue.py`) of it as
+    a type error."""
+    return cast(Callable[[Callable[..., Any]], Task], celery_app.task(**options))
 
 
 @worker_process_init.connect

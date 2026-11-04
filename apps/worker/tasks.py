@@ -15,7 +15,7 @@ from celery.exceptions import SoftTimeLimitExceeded
 from redis.exceptions import RedisError
 from sqlalchemy.exc import InterfaceError, OperationalError
 
-from apps.worker.celery_app import celery_app
+from apps.worker.celery_app import task
 from packages.core import titles
 from packages.core.auth.revocation import sva_cache_key
 from packages.core.email import smtp, templates
@@ -116,9 +116,7 @@ def _record_failed(doc_id: UUID, error: str) -> None:
 
 
 # ignore_result: see generate_title.
-@celery_app.task(
-    bind=True, name="ingest_document", max_retries=MAX_RETRIES, ignore_result=True
-)
+@task(bind=True, name="ingest_document", max_retries=MAX_RETRIES, ignore_result=True)
 def ingest_document(self, document_id: str, user_id: str) -> None:
     """Sync Celery entrypoint: run the async pipeline and own retry + terminal status.
 
@@ -200,9 +198,7 @@ EMAIL_MAX_RETRIES = 3
 
 
 # ignore_result: see generate_title.
-@celery_app.task(
-    bind=True, name="send_email", max_retries=EMAIL_MAX_RETRIES, ignore_result=True
-)
+@task(bind=True, name="send_email", max_retries=EMAIL_MAX_RETRIES, ignore_result=True)
 def send_email(self, to: str, template: str, params: dict[str, str]) -> None:
     # Sync on purpose: smtplib is blocking and the worker is a prefork process.
     # Rendering errors are ours (bad template/params) — no retry. Transport
@@ -255,9 +251,7 @@ async def generate_title_async(conversation_id: UUID, user_id: UUID) -> None:
 # also subscribes to the result backend — which is what makes an enqueue hang
 # for many seconds when Redis is unreachable. Consequence: this task's state
 # is never visible in the result backend.
-@celery_app.task(
-    bind=True, name="generate_title", max_retries=MAX_RETRIES, ignore_result=True
-)
+@task(bind=True, name="generate_title", max_retries=MAX_RETRIES, ignore_result=True)
 def generate_title(self, conversation_id: str, user_id: str) -> None:
     """Write a conversation's title from its first user message, once.
 
@@ -349,7 +343,7 @@ async def _purge_revocation_cache(user_ids: list[UUID]) -> None:
 
 # No retries: beat runs it again tomorrow and the work is idempotent.
 # ignore_result: see generate_title.
-@celery_app.task(name="sweep_anonymous_users", ignore_result=True)
+@task(name="sweep_anonymous_users", ignore_result=True)
 def sweep_anonymous_users() -> None:
     """Scheduled by celery_app's beat_schedule, daily. Logs counts and ids
     only: a visitor has no email, and content is never logged."""
@@ -379,7 +373,7 @@ async def sweep_email_tokens_async() -> int:
 
 # No retries: beat runs it again tomorrow and the work is idempotent.
 # ignore_result: see generate_title.
-@celery_app.task(name="sweep_email_tokens", ignore_result=True)
+@task(name="sweep_email_tokens", ignore_result=True)
 def sweep_email_tokens() -> None:
     """Scheduled by celery_app's beat_schedule, daily. Logs the count only:
     a row holds a user id and a token hash."""
