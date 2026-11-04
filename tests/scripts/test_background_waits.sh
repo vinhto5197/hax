@@ -55,4 +55,59 @@ denied "$out" && report PASS "a missing run_in_background counts as foreground" 
 out=$(echo '{}' | "$hook"; echo "exit=$?")
 [ "$out" = "exit=0" ] && report PASS "bad input: silent, exit 0" || report FAIL "bad input: '$out'"
 
+# Waits that poll in a loop or reach the journey suite by another spelling.
+waits=(
+  'while true; do gh pr checks 12; sleep 5; done'
+  'while ! gh run view 7 --exit-status; do sleep 5; done'
+  'for i in $(seq 1 30); do gh pr checks 12 && break; sleep 10; done'
+  'time make e2e'
+  'make -C apps/web e2e'
+  'E2E_WORKERS=2 make e2e'
+  'npx playwright test'
+  'cd apps/web && npx playwright test'
+  'cd x && make e2e'
+)
+for cmd in "${waits[@]}"; do
+  out=$(run "$cmd" false)
+  denied "$out" && report PASS "foreground wait refused: $cmd" || report FAIL "foreground wait allowed: $cmd: '$out'"
+  out=$(run "$cmd" true)
+  [ -z "$out" ] && report PASS "background wait allowed: $cmd" || report FAIL "background wait refused: $cmd: '$out'"
+done
+
+# Commands whose quoted text or heredoc body merely names a wait.
+heredoc=$(cat <<'OUTER'
+cat > f <<'EOF'
+cd x && make e2e
+EOF
+OUTER
+)
+mentions=(
+  "$heredoc"
+  'echo "a; make e2e"'
+  'git commit -m "make e2e; done"'
+  'echo "run make e2e later"'
+  'grep -n "make e2e" Makefile'
+)
+for cmd in "${mentions[@]}"; do
+  out=$(run "$cmd" false)
+  [ -z "$out" ] && report PASS "a mention is allowed: $(printf '%s' "$cmd" | head -1)" || report FAIL "a mention was refused: $cmd: '$out'"
+done
+
+# One-shot looks, in loops or not, that never wait.
+oneshots=(
+  'for pr in 44 45; do gh pr checks $pr; done'
+  'for id in 1 2; do gh run view $id --json conclusion; done'
+  "gh run list --json databaseId -q '.[].databaseId' | while read x; do gh run view \"\$x\" --log-failed | tail -5; done"
+  'npx playwright test --list'
+  $'for f in a b; do echo $f; done\ngh run view 12 --log | grep done'
+)
+for cmd in "${oneshots[@]}"; do
+  out=$(run "$cmd" false)
+  [ -z "$out" ] && report PASS "a one-shot command is allowed in the foreground: $(printf '%s' "$cmd" | tr '\n' ' ')" \
+    || report FAIL "a one-shot command was refused: $cmd: '$out'"
+done
+
+out=$(run 'make test' false)
+[ -z "$out" ] && report PASS "make test passes" || report FAIL "make test refused: '$out'"
+
 [ "$fails" -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }

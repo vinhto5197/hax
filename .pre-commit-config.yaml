@@ -64,4 +64,4 @@ repos:
         name: no screenshots, traces or recordings
         entry: test artifacts must not be committed
         language: fail
-        files: \.(png|jpe?g|gif|webp|webm|mp4|zip|har)$
+        files: (?i)\.(png|jpe?g|gif|webp|avif|heic|webm|mp4|mov|mkv|zip|har)$

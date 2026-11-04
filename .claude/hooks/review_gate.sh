@@ -6,7 +6,7 @@
 # Ask"); without one the stop is refused and the reason sent back, so the
 # hand-off is fixed before anyone reads it. A plain ask with no hand-off (a
 # status answer, "say commit" for a small edit) passes: the section is for
-# real hand-offs only (the maintainer, 2026-11-02, backlog 107 (c)).
+# real hand-offs only.
 # The final message is `last_assistant_message` when the input has it, else
 # the assistant text after the transcript's last user or tool-result entry. A
 # second stop in a row (stop_hook_active) always passes, so the hook can never
@@ -30,11 +30,15 @@ fi
 # characters ("Reply "merge"", "waits for your "commit"", "To end the review:
 # "commit""). A word only quoted as an example, or an earlier ask recounted
 # ("asked for your "commit""), does not fire.
-asks=$(printf '%s' "$message" | grep -Eio '\b(say|reply|respond|waits? for|waiting on|end(s)? the review)\b[^"\n]{0,24}["“](merge|commit|approved|push|go [a-z0-9][a-z0-9._-]*)["”]' \
-  | grep -Eio '["“](merge|commit|approved|push|go [a-z0-9][a-z0-9._-]*)["”]' | head -1)
+# The gap excludes quotes (a quote earlier on the line must not bridge to a
+# later word); grep matches per line, so it never spans a line break.
+words='(merge|commit push|commit|approved|push|go [a-z0-9][a-z0-9._-]*)'
+asks=$(printf '%s' "$message" | grep -Eio "\\b(say|reply|respond|waits? for|waiting on|end(s)? the review)\\b[^\"“”]{0,24}[\"“]${words}[\"”]" \
+  | grep -Eio "[\"“]${words}[\"”]" | head -1)
 [ -n "$asks" ] || exit 0
-printf '%s' "$message" | grep -Eiq '(\bPR #[0-9]+|#[0-9]+\b.*\b(PR|pull request)\b|/pull/[0-9]+|claude\.ai/artifact/|gate block)' || exit 0
-printf '%s' "$message" | grep -q 'Your review' && exit 0
+printf '%s' "$message" | grep -Eiq '(\bPRs? #[0-9]+|\bpull requests? #[0-9]+|#[0-9]+\b.*\b(PR|pull request)\b|/pull/[0-9]+|claude\.ai/(code/)?artifact/|gate block)' || exit 0
+# The section is a heading line, never a mention inside a sentence.
+printf '%s\n' "$message" | grep -Eq '^[[:space:]]*([-*][[:space:]]+)?(\*\*Your review[^*]*\*\*|#+[[:space:]]*Your review\b|Your review[[:space:]:]*$)' && exit 0
 
-jq -n --arg w "$asks" '{decision: "block", reason: ("Your last message asks the maintainer for " + $w + " but has no **Your review** section (skill gate-block). It is already on their screen: add only the missing section now, and do not repeat anything already said. The section: one line on what is already proven; what to look at; the judgment calls to accept or refuse; code worth raising or \"no code to read\"; the word that ends the review.")}'
+jq -n --arg w "$asks" '{decision: "block", reason: ("Your last message asks the maintainer for " + $w + " but has no **Your review** section (skill gate-block). It is already on their screen: add only the missing section now, and do not repeat anything already said. The section: one line on what is already proven; then numbered: what to look at; **Decisions for you**; **Adds to the stack**; **Calls I made**; code worth raising or \"no code to read\"; the word that ends the review.")}'
 exit 0

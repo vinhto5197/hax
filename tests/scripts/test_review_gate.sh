@@ -95,4 +95,66 @@ blocked "$out" && report PASS "last_assistant_message is used when given" || rep
 out=$(echo '{}' | "$hook"; echo "exit=$?")
 [ "$out" = "exit=0" ] && report PASS "no transcript: silent, exit 0" || report FAIL "no transcript: '$out'"
 
+# The final message given directly; $2 = stop_hook_active (default false).
+msg() {
+  jq -cn --arg m "$1" --argjson a "${2:-false}" \
+    '{hook_event_name:"Stop", stop_hook_active:$a, last_assistant_message:$m}' | "$hook"
+}
+expect_block() { # $1 = name, $2 = message
+  local out; out=$(msg "$2")
+  blocked "$out" && report PASS "$1" || report FAIL "$1: '$out'"
+}
+expect_pass() { # $1 = name, $2 = message
+  local out; out=$(msg "$2")
+  [ -z "$out" ] && report PASS "$1" || report FAIL "$1: '$out'"
+}
+
+expect_block "a gap holding the letter n before the quoted word is still an ask" \
+  'PR #12 is green and reviewed. It waits for the maintainer'"'"'s "merge".'
+expect_block "a claude.ai/code/artifact link is a hand-off" \
+  'The card is at https://claude.ai/code/artifact/3f1c2a9e-7b4d-4e2a-9c1f-0a1b2c3d4e5f. Reply "merge".'
+expect_block "'Pull request #12' is a hand-off" \
+  'Pull request #12 is up and green. Reply "merge".'
+expect_block "'PRs #44 and #45' is a hand-off" \
+  'PRs #44 and #45 are up and green. Reply "merge".'
+expect_block "a two-word review word after a gate block is an ask" \
+  $'**Gate block: slice 2**\nTests pass, the review found nothing.\n\nTo land it, say "commit push".'
+expect_block "a gate block asking for commit without the section is sent back" \
+  'The gate block for slice 2 is below. Tests pass. Say "commit" when ready.'
+
+expect_block "Your review mentioned mid-sentence is not the section" \
+  'PR #12 is green. I will add Your review later. Reply "merge".'
+expect_block "Your review at a line start but running on into a sentence is not the section" \
+  $'PR #12 is green.\nYour review is not needed on this one.\nReply "merge".'
+expect_pass "a '## Your review' heading counts as the section" \
+  $'PR #12 is green.\n\n## Your review\n1. Look at the sidebar.\n\nReply "merge".'
+expect_pass "a bare 'Your review' line counts as the section" \
+  $'PR #12 is green.\n\nYour review\n1. Look at the sidebar.\n\nReply "merge".'
+expect_pass "a '**Your review**' heading counts as the section" \
+  $'PR #12 is green.\n\n**Your review**\n1. Look at the sidebar.\n\nReply "merge".'
+
+expect_pass "a '**Your review (two minutes)**' heading counts as the section" \
+  $'PR #12 is green.\n\n**Your review (two minutes)**\n1. Look at the sidebar.\n\nReply "merge".'
+expect_pass "a '- **Your review**' list-item heading counts as the section" \
+  $'PR #12 is green.\n\n- **Your review**\n  1. Look at the sidebar.\n\nReply "merge".'
+expect_pass "a '# Your review' heading counts as the section" \
+  $'PR #12 is green.\n\n# Your review\n1. Look at the sidebar.\n\nReply "merge".'
+
+out=$(msg 'PR #12 is green. Reply "merge".')
+reason=$(echo "$out" | jq -r '.reason // empty' 2>/dev/null)
+for part in 'Decisions for you' 'Adds to the stack' 'Calls I made'; do
+  case "$reason" in *"$part"*) report PASS "the reason lists the section part '$part'" ;; *) report FAIL "reason lacks '$part': '$reason'" ;; esac
+done
+
+out=$(msg 'PR #12 is green. It waits for the maintainer'"'"'s "merge".' true)
+[ -z "$out" ] && report PASS "stop_hook_active passes even a hand-off with no section" || report FAIL "stop_hook_active blocked: '$out'"
+expect_pass "a plain 'say \"commit\"' with no hand-off passes" 'The edit is in. Say "commit".'
+expect_pass "a word used as a noun on a PR is not an ask" \
+  'PR #42 is open. The answer "merge" in the old FAQ was wrong; I fixed the doc.'
+expect_pass "an earlier word recounted with 'said' is not an ask" \
+  'You said "commit" earlier on PR #42, so I committed it and pushed; CI is running.'
+
+out=$(msg 'PR #12: reply "merge".'; echo "exit=$?")
+case "$out" in *"exit=0") report PASS "a block still exits 0" ;; *) report FAIL "block exit: '$out'" ;; esac
+
 [ "$fails" -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }
