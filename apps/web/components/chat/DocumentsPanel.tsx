@@ -3,6 +3,7 @@
 import {
   type ChangeEvent,
   type MouseEvent,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -84,12 +85,9 @@ export function DocumentsPanel() {
   const uploadedIdsRef = useRef<Map<string, number>>(new Map());
   const listRequestsRef = useRef(0);
 
-  function fetchList(): Promise<void> {
-    const request = ++listRequestsRef.current;
-    return listDocuments().then((list) => applyList(list, request));
-  }
-
-  function applyList(list: DocumentSummary[], request: number) {
+  // Both read only refs and state setters, so one instance serves every
+  // render and the effects below depend on it without re-running.
+  const applyList = useCallback((list: DocumentSummary[], request: number) => {
     const listed = new Set(list.map((d) => d.id));
     for (const [id, requestsAtUpload] of uploadedIdsRef.current) {
       if (listed.has(id) || request > requestsAtUpload) {
@@ -103,14 +101,19 @@ export function DocumentsPanel() {
     });
     setLoaded(true);
     setLoadFailed(false);
-  }
+  }, []);
+
+  const fetchList = useCallback((): Promise<void> => {
+    const request = ++listRequestsRef.current;
+    return listDocuments().then((list) => applyList(list, request));
+  }, [applyList]);
 
   useEffect(() => {
     fetchList().catch(() => {
       // A failed list shouldn't break the chat; leave the panel blank.
       setLoadFailed(true);
     });
-  }, []);
+  }, [fetchList]);
 
   // Poll while any doc is ingesting. Keyed off the boolean so the interval is
   // created when ingestion starts and torn down when everything settles — not
@@ -125,7 +128,7 @@ export function DocumentsPanel() {
       });
     }, POLL_INTERVAL_MS);
     return () => clearInterval(id);
-  }, [hasPending]);
+  }, [hasPending, fetchList]);
 
   async function handleDelete(doc: DocumentSummary) {
     // Irreversible (drops the stored file + chunks) — confirm first.
