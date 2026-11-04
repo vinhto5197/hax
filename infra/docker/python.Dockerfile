@@ -13,8 +13,9 @@ COPY pyproject.toml constraints.txt ./
 # so site-packages never holds a second, build-time snapshot of packages/ that
 # could shadow the COPYed tree. /app is the only copy of the code in the image.
 RUN python -c "import pathlib,tomllib;pathlib.Path('requirements.txt').write_text(chr(10).join(tomllib.load(open('pyproject.toml','rb'))['project']['dependencies']))"
+# The venv's pip is the one the pinned base image ships: an upgrade here would
+# fetch whatever pip is newest at build time, outside constraints.txt.
 RUN python -m venv /venv \
-    && /venv/bin/pip install --upgrade pip \
     && /venv/bin/pip install -r requirements.txt -c constraints.txt
 
 FROM python:3.14.8-slim AS runtime

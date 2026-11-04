@@ -121,7 +121,9 @@ sync-web:
 # versions (scripts/check_constraints.sh fails CI on any package outside
 # them), so an upstream release cannot turn CI red overnight (2026-10-28: langsmith 0.14.14 and
 # pytest-asyncio 1.4.1). Refresh on purpose, from a dev venv whose suite is
-# green, and land the new file in its own commit.
+# green, and land the new file in its own commit. The build toolchain sits
+# outside this file: setuptools in pyproject.toml's [build-system], pip with
+# the Python image's tag; bump those by hand in the same refresh.
 constraints:
 	@{ echo "# Python versions for CI and the production image, from \`make constraints\` ($$(date +%F)). Refresh on purpose; never edit by hand."; \
 	  .venv/bin/pip freeze --exclude-editable | grep -E '^[A-Za-z0-9._-]+==' | sort -f; } > constraints.txt

@@ -1,5 +1,8 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+# Exact: every build of the project runs in an isolated env that ignores
+# constraints.txt, so a range would fetch whatever setuptools is newest.
+# Bump it by hand with `make constraints` (pip comes with the base image tag).
+requires = ["setuptools==84.2.1"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
