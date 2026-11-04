@@ -70,9 +70,7 @@ describe("Sidebar loading", () => {
     list.state = { conversations: [], loaded: false, loadFailed: false };
     const { container } = render(<Sidebar />);
 
-    const skeleton = container.querySelector(
-      '[data-skeleton="conversations"]',
-    );
+    const skeleton = container.querySelector('[data-skeleton="conversations"]');
     expect(skeleton).not.toBeNull();
     expect(skeleton).toHaveAttribute("aria-hidden", "true");
   });
