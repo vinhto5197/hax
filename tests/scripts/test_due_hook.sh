@@ -5,6 +5,9 @@
 # twice; `mark` records each; "BAU" with nothing due gets a one-line answer;
 # from Friday it launches the week's explorer once, waits with the reason when
 # the runner's check fails, and reports the run's end until it is marked.
+# The day's first prompt prints scripts/state.sh's output and records the
+# date; a state.sh that fails or prints nothing is named STATE FAILED and the
+# date stays unrecorded, so the next prompt retries.
 # gh and scripts/explorer.sh are stubbed, the clock is pinned with DUE_TODAY.
 # Run by hand:
 #   bash tests/scripts/test_due_hook.sh
@@ -203,5 +206,52 @@ out=$(run 2026-11-13 hello)
 kill "$live_pid" 2>/dev/null || true
 no_end_line "$out" && report PASS "running status with a live pid in .running prints no EXPLORER DONE/FAILED line" \
   || report FAIL "running status, live pid: got '$out'"
+
+# (o) A failed state print is retried. Tuesday 2026-11-17, digest done, the
+# state last printed yesterday; the explorer's files are cleared so only the
+# state is in play. The hook must still exit 0 (a failing hook would block
+# the prompt), so each run's status is captured rather than left to set -e.
+rm -f "$running_file" "$work/proj/local/explorer/.status.json"
+state_sh=$work/proj/scripts/state.sh
+echo '{"last_digest_date": "2026-11-17", "last_state_date": "2026-11-16", "last_retro_week": "2026-W47", "last_explorer_week": "2026-W47"}' > "$marker"
+state_date() { jq -r '.last_state_date // ""' "$marker"; }
+# Exactly one [due] STATE FAILED line.
+failed_once() { [ "$(printf '%s\n' "$1" | grep -c '\[due\] STATE FAILED')" = 1 ]; }
+
+# (o1) state.sh prints, then exits 1: the failure is named instead of the
+# partial output, and the date stays unrecorded.
+printf '#!/bin/sh\necho "STATE-BROKEN partial"\nexit 1\n' > "$state_sh"
+chmod +x "$state_sh"
+out=$(run 2026-11-17 hello) && rc=0 || rc=$?
+[ "$rc" = 0 ] && report PASS "a failing state.sh leaves the hook exiting 0" || report FAIL "failing state.sh: hook exited $rc"
+failed_once "$out" && report PASS "a failing state.sh prints one STATE FAILED line" || report FAIL "failing state.sh: got '$out'"
+case "$out" in *"STATE-BROKEN"*) report FAIL "a failing state.sh's output was printed as the state" ;; *) report PASS "a failing state.sh's output is not printed" ;; esac
+[ "$(state_date)" = 2026-11-16 ] && report PASS "a failing state.sh leaves last_state_date unchanged" || report FAIL "failing state.sh: last_state_date '$(state_date)'"
+
+# (o2) The next prompt the same day retries, and fails again the same way.
+out=$(run 2026-11-17 hello) && rc=0 || rc=$?
+failed_once "$out" && [ "$(state_date)" = 2026-11-16 ] && report PASS "a failed state is retried on the next prompt" \
+  || report FAIL "retry after failure: rc $rc, got '$out', last_state_date '$(state_date)'"
+
+# (o3) state.sh exits 0 but prints nothing: an empty state is a failure too.
+printf '#!/bin/sh\nexit 0\n' > "$state_sh"
+chmod +x "$state_sh"
+out=$(run 2026-11-17 hello) && rc=0 || rc=$?
+[ "$rc" = 0 ] && failed_once "$out" && report PASS "an empty state.sh output prints one STATE FAILED line" \
+  || report FAIL "empty state.sh: rc $rc, got '$out'"
+[ "$(state_date)" = 2026-11-16 ] && report PASS "an empty state.sh output leaves last_state_date unchanged" || report FAIL "empty state.sh: last_state_date '$(state_date)'"
+
+# (o4) The original stub restored: the same day's next prompt prints the state
+# and records today.
+printf '#!/bin/sh\necho "STATE-STUB for $DUE_TODAY"\n' > "$state_sh"
+chmod +x "$state_sh"
+out=$(run 2026-11-17 hello)
+case "$out" in *"STATE-STUB for 2026-11-17"*) report PASS "after a failure, a working state.sh prints the state" ;; *) report FAIL "recovery: got '$out'" ;; esac
+case "$out" in *"STATE FAILED"*) report FAIL "STATE FAILED printed by a working state.sh" ;; *) report PASS "a working state.sh prints no STATE FAILED" ;; esac
+[ "$(state_date)" = 2026-11-17 ] && report PASS "a successful state print records today" || report FAIL "recovery: last_state_date '$(state_date)'"
+
+# (o5) Once recorded, the rest of the day carries neither the state nor a failure.
+out=$(run 2026-11-17 hello)
+case "$out" in *"STATE-STUB"*|*"STATE FAILED"*) report FAIL "state repeated after a successful retry: '$out'" ;; *) report PASS "after a successful retry the state comes once" ;; esac
 
 [ "$fails" -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }
