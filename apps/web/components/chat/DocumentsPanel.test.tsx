@@ -315,4 +315,28 @@ describe("DocumentsPanel upload during the first list", () => {
     expect(names[0].closest("li")).not.toHaveAttribute("aria-busy", "true");
     expect(screen.getByText("old.pdf")).toBeInTheDocument();
   });
+
+  it("a list requested after the upload that lacks it drops the row and stops polling", async () => {
+    // The document was deleted elsewhere before any list carried it.
+    vi.mocked(listDocuments).mockResolvedValue([old]);
+    await uploadThenLandStaleList();
+    expect(screen.getByText("fresh.txt")).toBeInTheDocument();
+    expect(screen.getByText("old.pdf")).toBeInTheDocument();
+
+    // The pending row keeps the poll running; this tick's list was
+    // requested after the upload resolved.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_500);
+    });
+    expect(screen.queryByText("fresh.txt")).toBeNull();
+    expect(screen.getByText("old.pdf")).toBeInTheDocument();
+    const settled = vi.mocked(listDocuments).mock.calls.length;
+
+    for (let tick = 0; tick < 12; tick++) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2_500);
+      });
+    }
+    expect(vi.mocked(listDocuments).mock.calls.length).toBe(settled);
+  });
 });

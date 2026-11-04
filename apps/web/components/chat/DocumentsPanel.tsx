@@ -74,16 +74,31 @@ export function DocumentsPanel() {
   const [toggled, setToggled] = useState<boolean | null>(null);
   const open = toggled ?? !short;
 
-  // Ids of documents this session's uploads added that no list has carried
-  // yet. A list fetched before an upload resolved would otherwise erase that
-  // row, and with nothing pending left no poll would bring it back. Once a list
-  // carries the id, the list is authoritative for it.
-  const uploadedIdsRef = useRef<Set<string>>(new Set());
+  // Documents this session's uploads added that no list has carried yet,
+  // each mapped to the number of list requests sent before its upload
+  // resolved. A list requested before then may predate the row, so it never
+  // erases it (with nothing pending left no poll would bring it back); a list
+  // requested after it that lacks the id means the document is gone (deleted
+  // elsewhere), so the row goes too. Once a list carries the id, the list is
+  // authoritative for it.
+  const uploadedIdsRef = useRef<Map<string, number>>(new Map());
+  const listRequestsRef = useRef(0);
 
-  function applyList(list: DocumentSummary[]) {
+  function fetchList(): Promise<void> {
+    const request = ++listRequestsRef.current;
+    return listDocuments().then((list) => applyList(list, request));
+  }
+
+  function applyList(list: DocumentSummary[], request: number) {
+    const listed = new Set(list.map((d) => d.id));
+    for (const [id, requestsAtUpload] of uploadedIdsRef.current) {
+      if (listed.has(id) || request > requestsAtUpload) {
+        uploadedIdsRef.current.delete(id);
+      }
+    }
+    const kept = new Set(uploadedIdsRef.current.keys());
     setDocuments((prev) => {
-      for (const d of list) uploadedIdsRef.current.delete(d.id);
-      const unlisted = prev.filter((d) => uploadedIdsRef.current.has(d.id));
+      const unlisted = prev.filter((d) => kept.has(d.id));
       return [...unlisted, ...list];
     });
     setLoaded(true);
@@ -91,12 +106,10 @@ export function DocumentsPanel() {
   }
 
   useEffect(() => {
-    listDocuments()
-      .then(applyList)
-      .catch(() => {
-        // A failed list shouldn't break the chat; leave the panel blank.
-        setLoadFailed(true);
-      });
+    fetchList().catch(() => {
+      // A failed list shouldn't break the chat; leave the panel blank.
+      setLoadFailed(true);
+    });
   }, []);
 
   // Poll while any doc is ingesting. Keyed off the boolean so the interval is
@@ -106,12 +119,10 @@ export function DocumentsPanel() {
   useEffect(() => {
     if (!hasPending) return;
     const id = setInterval(() => {
-      listDocuments()
-        .then(applyList)
-        .catch(() => {
-          // Transient list failure; the next tick retries.
-          setLoadFailed(true);
-        });
+      fetchList().catch(() => {
+        // Transient list failure; the next tick retries.
+        setLoadFailed(true);
+      });
     }, POLL_INTERVAL_MS);
     return () => clearInterval(id);
   }, [hasPending]);
@@ -152,7 +163,7 @@ export function DocumentsPanel() {
     try {
       const doc = await uploadDocument(file);
       // Upload returns at 'pending'; the polling effect settles the status.
-      uploadedIdsRef.current.add(doc.id);
+      uploadedIdsRef.current.set(doc.id, listRequestsRef.current);
       setDocuments((prev) => [doc, ...prev]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed.");
