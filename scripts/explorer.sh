@@ -80,10 +80,13 @@ esac
 # The due hook marks the week as launched once its own --check passes, so a
 # full run whose check then fails must leave this week's failed status, or the
 # hook reads last week's and stays silent all week. Same shape as write_status.
-# Not when another run holds the lock: its status is the live one.
+# Not when another run holds the lock: its status is the live one. Not over
+# this week's "done" either: a hand run after the week's run worked must not
+# turn its untriaged notes into a reported failure.
 if ! verdict=$(check); then
   echo "explorer: $verdict" >&2
-  if [[ -d "$root/local" ]] && ! { [[ -f "$lock" ]] && kill -0 "$(cat "$lock")" 2>/dev/null; }; then
+  if [[ -d "$root/local" ]] && ! { [[ -f "$lock" ]] && kill -0 "$(cat "$lock")" 2>/dev/null; } \
+    && [[ "$(jq -r '"\(.week // "")/\(.state // "")"' "$status" 2>/dev/null)" != "$week/done" ]]; then
     mkdir -p "$dir"
     now=$(date +%FT%T%z)
     jq -n --arg week "$week" --arg persona "$(pick_persona)" --arg reason "$verdict" \
