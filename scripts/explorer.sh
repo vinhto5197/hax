@@ -77,7 +77,22 @@ case "${1:-}" in
   *) echo "usage: $0 [--check|--persona]" >&2; exit 64 ;;
 esac
 
-verdict=$(check) || { echo "explorer: $verdict" >&2; exit 1; }
+# The due hook marks the week as launched once its own --check passes, so a
+# full run whose check then fails must leave this week's failed status, or the
+# hook reads last week's and stays silent all week. Same shape as write_status.
+# Not when another run holds the lock: its status is the live one.
+if ! verdict=$(check); then
+  echo "explorer: $verdict" >&2
+  if [[ -d "$root/local" ]] && ! { [[ -f "$lock" ]] && kill -0 "$(cat "$lock")" 2>/dev/null; }; then
+    mkdir -p "$dir"
+    now=$(date +%FT%T%z)
+    jq -n --arg week "$week" --arg persona "$(pick_persona)" --arg reason "$verdict" \
+      --arg logs "local/explorer/" --arg now "$now" \
+      '{week: $week, persona: $persona, state: "failed", reason: $reason, notes: "", logs: $logs, started: $now, updated: $now}' \
+      > "$status.tmp" && mv "$status.tmp" "$status"
+  fi
+  exit 1
+fi
 persona=${verdict#ok }
 turns=${EXPLORER_TURNS:-40}
 budget=${EXPLORER_BUDGET_USD:-15}
