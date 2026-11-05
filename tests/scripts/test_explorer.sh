@@ -5,7 +5,8 @@
 # dead pid as a run that is over, not one still going; a full run whose check
 # fails records this week as failed with the check's reason in .status.json
 # (the due hook reads it), except that an already-running failure leaves the
-# live run's status untouched. --check and full runs go against a
+# live run's status untouched and a check failure keeps this week's "done"
+# (still exiting 1). --check and full runs go against a
 # copy of the script in a temp project (a git repo of its own) with
 # CLAUDE_PROJECT_DIR pointed at it, so the real local/explorer/ is never read
 # or written and no stack is started.
@@ -167,5 +168,48 @@ fi
 kill "$live_pid" 2>/dev/null || true
 wait "$live_pid" 2>/dev/null || true
 live_pid=
+
+# (E5) A check failure keeps this week's "done" byte-identical: the week's run
+# already happened, so a later failed attempt must not unrecord it. Same
+# failing check as E3 (no root .env, no .running).
+rm -f "$proj/local/explorer/.running"
+cat > "$status" <<'EOF'
+{"week": "2026-W45", "persona": "done-persona", "state": "done", "reason": "", "notes": "three findings filed", "logs": "", "started": "2026-11-06T09:00:00Z", "updated": "2026-11-06T10:00:00Z"}
+EOF
+cp "$status" "$work/status.before"
+rc=0
+full_run || rc=$?
+if [ "$rc" -eq 1 ]; then
+  report PASS "a full run with no .env after this week's done exits 1"
+else
+  report FAIL "a full run with no .env after this week's done exits 1: exit $rc, output '$(cat "$work/full.out")'"
+fi
+if cmp -s "$work/status.before" "$status"; then
+  report PASS "a full run whose check fails keeps this week's done status byte-identical"
+else
+  report FAIL "a full run whose check fails keeps this week's done status byte-identical: status '$(cat "$status" 2>/dev/null)'"
+fi
+if grep -q '\.env' "$work/full.out"; then
+  report PASS "a full run after this week's done still names the check's reason (.env)"
+else
+  report FAIL "a full run after this week's done still names the check's reason (.env): output '$(cat "$work/full.out")'"
+fi
+
+# (E6) With no status file at all, a check failure records this week as failed.
+rm -f "$proj/local/explorer/.running" "$status"
+rc=0
+full_run || rc=$?
+week=$(json_field "$status" week)
+state=$(json_field "$status" state)
+if [ "$rc" -eq 1 ]; then
+  report PASS "a full run with no .env and no status file exits 1"
+else
+  report FAIL "a full run with no .env and no status file exits 1: exit $rc, output '$(cat "$work/full.out")'"
+fi
+if [ "$week" = 2026-W45 ] && [ "$state" = failed ]; then
+  report PASS "a full run whose check fails with no status file records this week as failed"
+else
+  report FAIL "a full run whose check fails with no status file records this week as failed: week '$week', state '$state'"
+fi
 
 [ "$fails" -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }
