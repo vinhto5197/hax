@@ -1,7 +1,9 @@
 """scripts/week_transcript.py slices a Claude Code transcript into one ISO week.
 The week is bounded by local midnights (the due hook and the week file use the
 local date), so the tests pin TZ to a zone with a non-zero UTC offset and place
-messages either side of the local Monday midnight, where UTC and local disagree."""
+messages either side of the local Monday midnight, where UTC and local disagree.
+A zone west of UTC can only make a local Sunday fall in UTC's Monday, so the
+local-Monday case runs in a zone east of UTC."""
 
 import importlib.util
 import json
@@ -16,6 +18,8 @@ import pytest
 _REPO = Path(__file__).resolve().parents[2]
 _SCRIPT = _REPO / "scripts/week_transcript.py"
 _NY = ZoneInfo("America/New_York")
+# JST (UTC+9, no DST): a local Monday 00:30 is still Sunday 15:30 in UTC.
+_TOKYO_MONDAY_EARLY = "2026-11-08T15:30:00Z"  # Mon 2026-11-09 00:30 local: W46
 
 # EST (UTC-5) on both sides of the 2026-W45/W46 boundary; DST ended 2026-11-01.
 _SUNDAY_LATE = "2026-11-09T03:00:00Z"  # Sun 2026-11-08 22:00 local: W45
@@ -26,10 +30,9 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-@pytest.fixture
-def new_york(monkeypatch):
+def _pinned_tz(monkeypatch, zone: str):
     previous = os.environ.get("TZ")
-    monkeypatch.setenv("TZ", "America/New_York")
+    monkeypatch.setenv("TZ", zone)
     time.tzset()
     yield
     # monkeypatch restores TZ only after this fixture finishes, so tzset must
@@ -42,13 +45,32 @@ def new_york(monkeypatch):
 
 
 @pytest.fixture
-def week_transcript(new_york):
+def new_york(monkeypatch):
+    yield from _pinned_tz(monkeypatch, "America/New_York")
+
+
+@pytest.fixture
+def tokyo(monkeypatch):
+    yield from _pinned_tz(monkeypatch, "Asia/Tokyo")
+
+
+def _load():
     # Loaded after TZ is set, in case the module resolves the local zone at import.
     spec = importlib.util.spec_from_file_location("week_transcript", _SCRIPT)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+@pytest.fixture
+def week_transcript(new_york):
+    return _load()
+
+
+@pytest.fixture
+def week_transcript_tokyo(tokyo):
+    return _load()
 
 
 def _human(timestamp: str, text: str) -> dict:
@@ -87,10 +109,14 @@ def test_sunday_evening_local_stays_in_its_own_week(week_transcript, transcript)
 
 
 def test_monday_after_local_midnight_belongs_to_the_new_week(
-    week_transcript, transcript
+    week_transcript_tokyo, tmp_path
 ):
-    w45 = _texts(week_transcript, transcript, "2026-W45")
-    w46 = _texts(week_transcript, transcript, "2026-W46")
+    # 15:30Z Sunday is already Monday in Tokyo: a UTC week start puts it in W45.
+    path = tmp_path / "session.jsonl"
+    event = _human(_TOKYO_MONDAY_EARLY, "monday-early-message")
+    path.write_text(json.dumps(event) + "\n")
+    w45 = _texts(week_transcript_tokyo, path, "2026-W45")
+    w46 = _texts(week_transcript_tokyo, path, "2026-W46")
     assert _contains(w46, "monday-early-message")
     assert not _contains(w45, "monday-early-message")
 
