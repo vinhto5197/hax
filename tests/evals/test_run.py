@@ -38,7 +38,8 @@ def _case(
         "documents": documents,
         "note": note,
         "history": history,
-        "expect": expect if expect is not None else Expect(),
+        # One check by default: a case that checks nothing is an error.
+        "expect": expect if expect is not None else Expect(contains_none=("zzz",)),
         "line_hash": "abc123def456",
     }
     fields.update(overrides)
@@ -172,7 +173,13 @@ async def test_run_case_collects_answer_tools_and_seen(monkeypatch):
         ],
     )
     monkeypatch.setattr(run, "stream_completion_agentic", stream)
-    judge = FakeJudge()
+    judge = FakeJudge(
+        JudgeResult(
+            checks=[Check("key_point", True, detail="rent is 1200", reason="stated")],
+            usage=None,
+            error=None,
+        )
+    )
     case = _case(
         note="I rent in Austin",
         expect=Expect(key_points=("rent is 1200",), grounded=True),
@@ -356,15 +363,16 @@ async def test_failed_check_makes_the_case_fail(monkeypatch):
     ]
 
 
-async def test_case_without_checks_passes(monkeypatch):
+async def test_case_without_checks_is_an_error(monkeypatch):
+    # all([]) would pass any answer.
     _no_retrieve(monkeypatch)
     monkeypatch.setattr(run, "stream_completion_agentic", FakeStream())
 
     result = await run.run_case(_case(expect=Expect()), USER, MODEL, FakeJudge())
 
     assert result["checks"] == []
-    assert result["outcome"] == "pass"
-    assert result["error"] is None
+    assert result["outcome"] == "error"
+    assert result["error"] == "the case names nothing to check"
 
 
 async def test_retrieval_rank_and_distances_recorded(monkeypatch):
@@ -514,17 +522,25 @@ def test_exit_codes(cases, code):
 
 
 def test_stack_problem_refuses_anything_but_the_eval_stack():
-    assert run.stack_problem("hax_eval", "hax-eval") is None
-    assert "make eval" in (run.stack_problem("hax", "hax-eval") or "")
-    assert "make eval" in (run.stack_problem("hax_eval", "hax-documents") or "")
-    assert run.stack_problem(None, "hax-eval") is not None
+    local = "http://localhost:9000"
+    assert run.stack_problem("hax_eval", "hax-eval", local) is None
+    assert run.stack_problem("hax_eval", "hax-eval", "http://127.0.0.1:9000") is None
+    assert "make eval" in (run.stack_problem("hax", "hax-eval", local) or "")
+    assert "make eval" in (run.stack_problem("hax_eval", "hax-documents", local) or "")
+    assert run.stack_problem(None, "hax-eval", local) is not None
+    # An unset endpoint is real AWS S3; any other host is not the stand-in.
+    assert run.stack_problem("hax_eval", "hax-eval", None) is not None
+    assert (
+        run.stack_problem("hax_eval", "hax-eval", "https://s3.amazonaws.com")
+        is not None
+    )
 
 
 def _start_from(monkeypatch, tmp_path, lines: list[str]):
     cases = tmp_path / "cases.jsonl"
     cases.write_text("".join(line + "\n" for line in lines))
     monkeypatch.setenv("EVAL_CASES", str(cases))
-    monkeypatch.setattr(run, "stack_problem", lambda database, bucket: None)
+    monkeypatch.setattr(run, "stack_problem", lambda *stack: None)
 
 
 def test_dev_stack_exits_2_before_anything_runs(monkeypatch, capsys):
@@ -536,7 +552,7 @@ def test_dev_stack_exits_2_before_anything_runs(monkeypatch, capsys):
 
 def test_missing_case_file_exits_2(monkeypatch, tmp_path, capsys):
     monkeypatch.setenv("EVAL_CASES", str(tmp_path / "nope.jsonl"))
-    monkeypatch.setattr(run, "stack_problem", lambda database, bucket: None)
+    monkeypatch.setattr(run, "stack_problem", lambda *stack: None)
 
     assert run._evaluate() == 2
     assert "nope.jsonl" in capsys.readouterr().err
@@ -683,3 +699,164 @@ def test_concurrency_reads_the_environment(monkeypatch):
     assert run.concurrency() == run.CONCURRENCY
     monkeypatch.setenv("EVAL_CONCURRENCY", "2")
     assert run.concurrency() == 2
+
+
+# ── Review fixes (adversarial review, 2026-11-05) ────────────────────────────
+
+
+def test_storage_outside_the_stand_in_exits_2_before_any_case(monkeypatch, capsys):
+    # An unset endpoint is real AWS S3: the run must refuse, not ingest there.
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(
+        run, "engine", SimpleNamespace(url=SimpleNamespace(database="hax_eval"))
+    )
+    monkeypatch.setattr(run.storage, "S3_BUCKET", "hax-eval")
+    monkeypatch.setattr(run.storage, "_ENDPOINT_URL", None)
+    monkeypatch.setattr(run, "load_cases", lambda path: pytest.fail("loaded"))
+
+    assert run._evaluate() == 2
+    assert "AWS" in capsys.readouterr().err
+
+
+def test_dev_bucket_exits_2_before_any_case(monkeypatch, capsys):
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(
+        run, "engine", SimpleNamespace(url=SimpleNamespace(database="hax_eval"))
+    )
+    monkeypatch.setattr(run.storage, "S3_BUCKET", "hax-documents")
+    monkeypatch.setattr(run.storage, "_ENDPOINT_URL", "http://localhost:9000")
+    monkeypatch.setattr(run, "load_cases", lambda path: pytest.fail("loaded"))
+
+    assert run._evaluate() == 2
+    assert "hax-documents" in capsys.readouterr().err
+
+
+def test_make_eval_pins_the_stack_the_runner_requires():
+    from pathlib import Path
+
+    makefile = (Path(run.ROOT) / "Makefile").read_text()
+    env = makefile[makefile.index("EVAL_ENV :=") : makefile.index(".PHONY: eval")]
+    assert f"localhost:5432/{run.EVAL_DATABASE}" in env
+    assert f"S3_BUCKET={run.EVAL_BUCKET}" in env
+    assert "S3_ENDPOINT_URL=http://localhost:9000" in env
+    for key in ("S3_REGION=", "S3_ACCESS_KEY_ID=", "S3_SECRET_ACCESS_KEY="):
+        assert key in env, key
+
+
+async def test_empty_search_for_the_corpus_owner_is_a_stack_error(monkeypatch):
+    # retrieve() turns any fault into "nothing found"; with no cutoff the
+    # owner always has passages, so it is the stack failing, not the model.
+    _retrieve_returning(monkeypatch, [_chunk("Rent is 1200", "lease.md", 0.3)])
+    stream = FakeStream(
+        tool_results=[_tool("search_documents", run.NO_PASSAGES + " in the documents.")]
+    )
+    monkeypatch.setattr(run, "stream_completion_agentic", stream)
+
+    result = await run.run_case(
+        _case(documents=("lease.md",)), USER, MODEL, FakeJudge()
+    )
+
+    assert result["outcome"] == "error"
+    assert "stack fault" in result["error"]
+
+
+async def test_empty_retrieval_score_for_the_corpus_owner_is_a_stack_error(monkeypatch):
+    _retrieve_returning(monkeypatch, [])
+    monkeypatch.setattr(run, "stream_completion_agentic", FakeStream())
+
+    result = await run.run_case(
+        _case(documents=("lease.md",)), USER, MODEL, FakeJudge()
+    )
+
+    assert result["outcome"] == "error"
+    assert "stack fault" in result["error"]
+
+
+async def test_empty_search_under_a_cutoff_is_not_a_stack_error(monkeypatch):
+    monkeypatch.setattr(run.retrieval, "MAX_DISTANCE", 0.5)
+    _retrieve_returning(monkeypatch, [])
+    stream = FakeStream(tool_results=[_tool("search_documents", run.NO_PASSAGES + ".")])
+    monkeypatch.setattr(run, "stream_completion_agentic", stream)
+
+    result = await run.run_case(
+        _case(documents=("lease.md",)), USER, MODEL, FakeJudge()
+    )
+
+    assert result["outcome"] == "pass"
+
+
+async def test_no_passages_matches_what_the_search_tool_says(monkeypatch):
+    from packages.core.agent import tools
+
+    async def nothing(query, user_id):
+        return []
+
+    monkeypatch.setattr(tools, "retrieve", nothing)
+    out = await tools._run_search_documents(
+        tools.SearchDocumentsInput(query="q"), tools.ToolContext(user_id=USER)
+    )
+
+    assert isinstance(out, str) and out.startswith(run.NO_PASSAGES)
+
+
+async def test_each_concurrent_case_runs_as_its_own_member(monkeypatch):
+    # The RLS identity a case's model calls and retrieval run under is its
+    # own member's, even with cases from both members in flight together.
+    from packages.db.user_context import current_user_id
+
+    seen: list[tuple[str, Any, Any]] = []
+
+    async def stream(
+        messages,
+        system=None,
+        model=MODEL,
+        *,
+        ctx,
+        tools=True,
+        on_usage=None,
+        on_tool_result=None,
+    ):
+        await asyncio.sleep(0.01)
+        seen.append(("stream", ctx.user_id, current_user_id.get()))
+        yield {"content": "ok"}
+
+    async def fake_retrieve(query, user_id):
+        await asyncio.sleep(0.01)
+        seen.append(("retrieve", user_id, current_user_id.get()))
+        return [_chunk("text", "lease.md", 0.3)]
+
+    monkeypatch.setattr(run, "stream_completion_agentic", stream)
+    monkeypatch.setattr(run, "retrieve", fake_retrieve)
+    cases = [
+        _case(id=f"c{i}", documents=("lease.md",) if i % 2 else ()) for i in range(6)
+    ]
+
+    await run.run_cases(cases, OWNER, EMPTY, MODEL, FakeJudge(), 3)
+
+    assert len(seen) == 6 + 3  # every stream, and the owner cases' retrieval
+    assert all(asked == bound for _, asked, bound in seen)
+    assert {asked for _, asked, _ in seen} == {OWNER, EMPTY}
+    assert current_user_id.get() is None
+
+
+async def test_a_rejected_search_call_is_graded_not_a_stack_error(monkeypatch):
+    _retrieve_returning(monkeypatch, [_chunk("Rent is 1200", "lease.md", 0.3)])
+    bad_call = {
+        "name": "search_documents",
+        "input": {},
+        "output": "Invalid input",
+        "is_error": True,
+    }
+    stream = FakeStream(
+        tool_results=[bad_call, _tool("search_documents", "[1] Rent is 1200")]
+    )
+    monkeypatch.setattr(run, "stream_completion_agentic", stream)
+
+    result = await run.run_case(
+        _case(documents=("lease.md",)), USER, MODEL, FakeJudge()
+    )
+
+    assert result["outcome"] == "pass"
+    assert result["error"] is None

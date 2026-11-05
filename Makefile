@@ -307,8 +307,8 @@ e2e:
 # evals/cases.jsonl, graded by code checks and a judge model. Spends API
 # credits, so never in CI. Needs `make infra-up` and ANTHROPIC_API_KEY and
 # VOYAGE_API_KEY in the environment. Its stack is literal, never the shell's:
-# database hax_eval, Redis db 13, bucket hax-eval (prepare.py --target eval
-# empties the first two each run). MODEL, JUDGE_MODEL, EVAL_CASES, EVAL_CORPUS and
+# database hax_eval, Redis db 13, bucket hax-eval on the local S3 stand-in
+# (prepare.py --target eval empties the first two each run). MODEL, JUDGE_MODEL, EVAL_CASES, EVAL_CORPUS and
 # RAG_MAX_DISTANCE apply only when given on this command line, and the
 # retrieval, chunking and model settings the dev shell may export are unset,
 # so every run uses the code's defaults unless its command line says otherwise.
@@ -316,7 +316,8 @@ EVAL_ENV := env -u RAG_TOP_K -u RAG_CHUNK_SIZE -u RAG_CHUNK_OVERLAP \
 	-u LLM_MAX_TOKENS -u LLM_MODEL -u VOYAGE_BASE_URL \
 	DATABASE_URL=postgresql://hax_app:hax_app@localhost:5432/hax_eval \
 	MIGRATIONS_DATABASE_URL=postgresql://hax:hax@localhost:5432/hax_eval \
-	S3_BUCKET=hax-eval REDIS_URL=redis://localhost:6379/13 \
+	S3_ENDPOINT_URL=http://localhost:9000 S3_BUCKET=hax-eval S3_REGION=us-east-1 \
+	S3_ACCESS_KEY_ID=hax S3_SECRET_ACCESS_KEY=haxhaxhax REDIS_URL=redis://localhost:6379/13 \
 	$(foreach v,MODEL JUDGE_MODEL EVAL_CASES EVAL_CORPUS RAG_MAX_DISTANCE,$(v)="$(if $(filter command line,$(origin $(v))),$($(v)))")
 
 .PHONY: eval eval-baseline eval-compare

@@ -34,3 +34,20 @@ def test_every_retrieval_case_checks_that_it_searched():
             assert case.expect.tools and "search_documents" in case.expect.tools, (
                 case.id
             )
+
+
+def test_every_committed_case_checks_something():
+    # A case with nothing to check is an error at run time; the shipped file
+    # never carries one.
+    for case in load_cases(CASES):
+        e = case.expect
+        gradable = (
+            e.tools is not None
+            or e.exact_reply is not None
+            or e.contains_any
+            or e.contains_none
+            or e.table
+            or e.key_points
+            or e.grounded
+        )
+        assert gradable, case.id

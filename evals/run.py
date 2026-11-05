@@ -23,6 +23,7 @@ import time
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import urlparse
 
 from alembic.config import Config
 from alembic.script import ScriptDirectory
@@ -164,6 +165,27 @@ def _score_retrieval(case: Case, chunks: list) -> dict:
     return scored
 
 
+# What search_documents tells the model when retrieval returned nothing
+# (packages/core/agent/tools.py). retrieve() turns every fault into that, so
+# for the corpus owner with no cutoff it means the stack failed, not the model.
+NO_PASSAGES = "No relevant passages were found"
+
+
+def _stack_fault(
+    case: Case, results: list[ToolResult], chunks: list | None
+) -> str | None:
+    if not case.documents or retrieval.MAX_DISTANCE is not None:
+        return None
+    for r in results:
+        # Not is_error: a rejected search is the model's malformed call, which
+        # retrieval faults never produce (retrieve() returns [] instead).
+        if r["name"] == "search_documents" and r["output"].startswith(NO_PASSAGES):
+            return "retrieval returned nothing for the corpus owner: a stack fault"
+    if chunks is not None and not chunks:
+        return "the retrieval score found nothing for the corpus owner: a stack fault"
+    return None
+
+
 def _total(usages: list[Usage], key: str) -> int:
     return sum(u[key] for u in usages)
 
@@ -230,12 +252,16 @@ async def run_case(case: Case, user_id: uuid.UUID, model: str, judge: Judge) -> 
                 }
                 for c in verdict.checks
             ]
-            if case.documents:
-                retrieval_score = _score_retrieval(
-                    case, await retrieve(case.question, user_id)
-                )
+            chunks = await retrieve(case.question, user_id) if case.documents else None
+            if chunks is not None:
+                retrieval_score = _score_retrieval(case, chunks)
+            # A fault is an error, never a failure: it says nothing about the answer.
+            error = error or _stack_fault(case, results, chunks)
         except Exception as exc:  # one broken case must not end the run
             error = f"{type(exc).__name__}: {exc}"
+    if error is None and not checks:
+        # all([]) would pass any answer: a case that grades nothing is broken.
+        error = "the case names nothing to check"
     if error is not None:
         outcome = "error"
     else:
@@ -339,14 +365,21 @@ class StartError(Exception):
     """The run could not start: nothing was graded (exit 2)."""
 
 
-def stack_problem(database: str | None, bucket: str) -> str | None:
+def stack_problem(
+    database: str | None, bucket: str, endpoint: str | None
+) -> str | None:
     # The Makefile points the runner at the eval stack; a bare
     # `python -m evals.run` from the dev shell would otherwise write the corpus
-    # into dev's database and bucket.
-    if database != EVAL_DATABASE or bucket != EVAL_BUCKET:
+    # into dev's database and bucket, and an unset endpoint is real AWS S3.
+    host = urlparse(endpoint or "").hostname
+    if (
+        database != EVAL_DATABASE
+        or bucket != EVAL_BUCKET
+        or host not in ("localhost", "127.0.0.1")
+    ):
         return (
-            f"not the eval stack (database {database}, bucket {bucket}): "
-            "run it with make eval"
+            f"not the eval stack (database {database}, bucket {bucket}, "
+            f"storage {endpoint or 'AWS'}): run it with make eval"
         )
     return None
 
@@ -408,7 +441,9 @@ async def _run_and_close(
 
 def _evaluate() -> int:
     try:
-        problem = stack_problem(engine.url.database, storage.S3_BUCKET)
+        problem = stack_problem(
+            engine.url.database, storage.S3_BUCKET, storage._ENDPOINT_URL
+        )
         if problem:
             raise StartError(problem)
         cases = load_cases(Path(os.getenv("EVAL_CASES") or CASES))
