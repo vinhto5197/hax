@@ -7,7 +7,8 @@
 # "PR", is no hand-off); the same message with the section, a message asking
 # for nothing, and a second stop in a row all pass. The final message is read
 # from the transcript (the text after the last user or tool-result entry), or
-# from last_assistant_message when given.
+# from last_assistant_message when given. Every case runs twice: in the
+# caller's locale, then under LC_ALL=C (the hook must set its own UTF-8 locale).
 # Run by hand:
 #   bash tests/scripts/test_review_gate.sh
 set -euo pipefail
@@ -179,5 +180,12 @@ expect_pass "an earlier word recounted with 'said' is not an ask" \
 
 out=$(msg 'PR #12: reply "merge".'; echo "exit=$?")
 case "$out" in *"exit=0") report PASS "a block still exits 0" ;; *) report FAIL "block exit: '$out'" ;; esac
+
+# The same cases again under LC_ALL=C; the child's lines carry a [LC_ALL=C] prefix.
+if [ -z "${REVIEW_GATE_TEST_C:-}" ]; then
+  c_status=0
+  LC_ALL=C REVIEW_GATE_TEST_C=1 bash "$0" 2>&1 | sed 's/^/[LC_ALL=C] /' || c_status=$?
+  [ "$c_status" -eq 0 ] && report PASS "every case passes under LC_ALL=C" || report FAIL "a case failed under LC_ALL=C (exit $c_status)"
+fi
 
 [ "$fails" -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }
