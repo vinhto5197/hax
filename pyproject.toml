@@ -87,7 +87,7 @@ known-first-party = ["apps", "packages"]
 [tool.pyright]
 typeCheckingMode = "standard"
 pythonVersion = "3.14"
-include = ["apps", "packages"]
+include = ["apps", "packages", "evals"]
 exclude = ["apps/web", "**/node_modules", "**/__pycache__"]
 
 [tool.pytest.ini_options]
