@@ -11,10 +11,10 @@ The unattended lane's weekly look at the product from outside: an agent uses mai
 
 `scripts/explorer.sh` is the whole run. The due hook (`.claude/hooks/due.sh`) starts it in the background on the first prompt from Friday on, once per ISO week, so it explores while the morning's reviews happen; the hook prints `[due] EXPLORER LAUNCHED`, or `EXPLORER WAITING` with the reason when a run cannot start (Docker down, a port taken) and tries again on the next prompt.
 
-- **The stack:** a worktree of `origin/main`; web :3002, API :8002, database `hax_explorer` and Redis db 14 (emptied each run by `apps/web/e2e/prepare.py --target explorer`), one worker for both queues, the dev S3 stand-in and dev Mailpit. The real model, because the scripted e2e model cannot produce a confusing answer. Nothing the dev stack (:3000/:8000) or the journeys (:3001/:8001) use is shared, and the runner stops only what it started.
+- **The stack and knobs:** `scripts/explorer.sh`'s header; its web and API ports (3002/8002) and its database are its own, apart from the journeys' (3001/8001). The real model, because the scripted e2e model cannot produce a confusing answer.
 - **The agent:** a headless `claude -p` in `dontAsk` mode: the browser (Playwright MCP, allowed origins :3002, :8002 and Mailpit's inbox :8025 only), and Write and Edit inside `local/explorer/` only. It signs up with a fresh address and verifies through the inbox, as a person would, with a seeded login as the fallback. It never sees the model keys.
 - **The persona:** the `persona-*.md` files here, rotated by ISO week (`scripts/explorer.sh --persona` names this week's). A new persona is one new file. Each one says what to do in order and how to report.
-- **Bounds:** 40 messages to hax's chat, $15 of agent spend on Sonnet (a two-message smoke run cost $0.33 in 45 agent turns), one hour of wall clock, and three failed actions in a row. Knobs for a run by hand are in the script's header.
+- **Bounds:** messages to hax's chat, agent spend and wall clock (values in `scripts/explorer.sh`), and three failed actions in a row.
 - **Output:** `local/explorer/<date>-<persona>.md`, ending with `## Findings`, `## Did not get to`, the agent's footer, and the runner's footer with the model, minutes, agent turns, cost and tokens. Screenshots and the stack's logs are in `local/explorer/<date>-<persona>/`.
 
 When the run ends, the hook prints `[due] EXPLORER DONE` (or `FAILED` with the reason and the logs) on every prompt until `.claude/hooks/due.sh mark explorer`.

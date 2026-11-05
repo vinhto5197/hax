@@ -46,7 +46,7 @@ The fourth case is the cautionary tale: `setting_sources=[]` alone is not enough
 - `setting_sources` default, `cwd=<repo root>` → confident, action-oriented voice
 - `setting_sources` default, `cwd=tempfile.gettempdir()` → hedged, defensive baseline voice
 
-The variable that flipped was `cwd`, not `setting_sources`. Causal chain: `setting_sources` includes `"project"` by default, which makes the CLI walk *upward from cwd* looking for `CLAUDE.md`. When cwd is the hax repo, the walk finds `hax/CLAUDE.md` and concatenates it into the system prompt. When cwd is `/tmp`, the walk finds nothing. The hax `CLAUDE.md` is written in confident product-doc voice (milestones, "ships the complete vertical slice," "lean toward interview-ready narratives"), and the model adopts that register — even when answering a generic question about the word "hax" rather than the project. The CLAUDE.md influences the model's *voice*, not just its *topic knowledge*.
+The variable that flipped was `cwd`, not `setting_sources`. Causal chain: `setting_sources` includes `"project"` by default, which makes the CLI walk *upward from cwd* looking for `CLAUDE.md`. When cwd is the hax repo, the walk finds `hax/CLAUDE.md` and concatenates it into the system prompt. When cwd is `/tmp`, the walk finds nothing. The hax `CLAUDE.md` is written in confident product-doc voice (milestones, "ships the complete vertical slice"), and the model adopts that register — even when answering a generic question about the word "hax" rather than the project. The CLAUDE.md influences the model's *voice*, not just its *topic knowledge*.
 
 The user-level plugin stack (`~/.claude/settings.json` → `superpowers`, `frontend-design`, etc.) likely amplifies the effect, but is not the load-bearing piece: cwd alone moves the dial.
 
@@ -90,7 +90,7 @@ Two implications worth knowing:
 
 **Negative / accepted:**
 
-- Uses API credits instead of pre-paid Max subscription budget. Cost: ~0.25¢/turn (Haiku) or ~1.3¢/turn (Opus). Trivial for dev; bounded for portfolio demo traffic.
+- Uses API credits instead of pre-paid Max subscription budget. Cost: ~0.25¢/turn (Haiku) or ~1.3¢/turn (Opus). Trivial for dev; bounded for demo traffic.
 - Adaptive thinking unavailable on Haiku (model limitation), and we dropped it for v0 cost. Re-enable on Opus/Sonnet if quality demands it.
 - The Max subscription's $100–$200 monthly programmatic budget goes unused. Acceptable: we'd be using a tiny fraction of it anyway.
 

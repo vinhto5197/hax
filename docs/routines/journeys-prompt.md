@@ -41,16 +41,19 @@ retries); `e2e/chat.ts` (the shared helpers); every existing `*.spec.ts`
 area); `e2e/fake-model/server.mjs` (the model's scripted replies; its header
 lists every prefix it understands — use only those). Facts that bound a
 journey:
-- No Celery worker runs: a conversation stays "Untitled", a document never
-  leaves `pending`, no email is ever sent (SMTP points at port 1).
-- Storage points at an unreachable address: an accepted upload fails fast.
+- The stack stages the scripted model's prefixes, the two workers (documents
+  are ingested, email is sent, and a conversation gets a title only when its
+  first message starts with `title:`), the S3 stand-in and the journeys' own
+  Mailpit. The source to read is the testing map's "What the e2e stack can
+  stage" list (`docs/testing-map.md`).
 - The guest demo allows 3 turns (`DEMO_TURN_LIMIT`), 1000 visitors per IP a
   day. Every other limiter is live and shared by every journey in the run:
   never exhaust one (no rate-limit tests), never log the seeded member out
   of its storage state in a `member` journey (sign-out tests end the file),
   and use a fresh email per signup test.
-- Email verification is ON: a signed-up account can log in only far enough
-  to see the unverified message. Tokens never reach a journey.
+- Email verification is ON: a signed-up account can log in only after
+  following the link from its email, which a journey reads from Mailpit
+  (`e2e/mail.ts`, by recipient).
 - Selectors come from the component source under `apps/web/app` and
   `apps/web/components` (read only): roles, labels, placeholders and exact
   text, as the existing journeys do. Never a CSS class.
@@ -97,8 +100,8 @@ If it is empty, skip to Step 4 with no new journeys.
    independent of other tests' state, asserting on text, attributes, URL,
    geometry or the network; no sleeps.
 4. A gap the stack cannot stage (see the facts above) gets its row with the
-   lane marked (`J*` needs a fake-model prefix, `J†` needs a worker or
-   storage) and no test; list it under "Gaps left".
+   lane marked (`J*` needs a fake-model prefix) and no test; list it under
+   "Gaps left".
 
 ## Step 4 — the PR, always one
 `git switch -c journey/sweep-<today> origin/main`. Move the cursor line to

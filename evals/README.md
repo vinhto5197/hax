@@ -66,8 +66,7 @@ so a change of model, or a model added to `ModelId`, runs
 A `broke` flip on a must case is rerun once, the whole eval, because the same
 model fails a case on one run and passes it on the next. Broken on both runs,
 the change stops there and the cases are named; `fixed` flips, probes and
-errors go into the hand-off. A run costs about $0.43 on Haiku with the 35
-cases.
+errors go into the hand-off.
 
 Two things that shape the prompt are not measured here: the guest prompt
 (`packages/core/demo/prompt.md`, no cases) and history replay
@@ -116,10 +115,6 @@ make eval-compare A=<file>.json B=<file>.json
 
 `eval-compare` matches cases by id; a case whose line was edited between the
 two runs is reported as `changed`, never as a flip.
-
-Model answers vary between runs. On 2026-11-05 four Haiku runs failed between
-none and two cases each, with one case (radio-channel) failing in two of them,
-so a single flip is a lead to read, not a verdict.
 
 ## Add a case
 

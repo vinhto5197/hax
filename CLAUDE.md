@@ -17,13 +17,11 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
 2. **Milestone 2 — Data + RAG** *(shipped 2026-07-29)*
    - Conversation memory: replay persisted turns into the LLM prompt (de-amnesia)
    - User data upload (files at minimum)
-   - Ingestion pipeline: chunking, embedding (Voyage AI), store in pgvector — sync first, Celery from slice 2
+   - Ingestion pipeline: chunking, embedding (Voyage AI), store in pgvector
    - RAG retrieval wired into chat flow
    - Slice 3: retrieval became a model-invoked tool — `/api/chat` is now the
      **single, agentic** chat route (hand-rolled tool-use harness; ADR 0002
-     addendum). Spot-check eval ran 2026-07-29 (local, not a deliverable;
-     REGRESSION 7/8 — the one fail is a known Haiku-tier limit, not pipeline).
-     The **eval harness** itself is an M5 deliverable.
+     addendum).
 
 2.5. **Milestone 2.5 — Auth + background titles** *(shipped 2026-09-22; deferred from M1)*
    - Auth via **NextAuth/Auth.js** (self-hosted, no per-user cost) — email/password
@@ -50,7 +48,7 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
    - Observability, tier one: container logs with size caps, an external
      uptime check on `/api/health` every five minutes with an email alert
      (a free third-party monitor — an alert that lives on the box dies with
-     it), and RDS automated backups. CloudWatch alarms wait for M3.5.
+     it), and RDS automated backups.
    - Why deploy here, not last: surfaces infra issues (SSE, secrets,
      networking) early and keeps a live URL from M3 on. M4 + M5 ride the
      pipeline. The deploy ADR records every thin choice and its upgrade.
@@ -63,51 +61,19 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
      limiter redesign, per-service env files, network split + Redis auth).
 
 4. **Milestone 4 — Structured outputs + polish** *(shipped 2026-10-13; built against live infra, auto-deployed)*
-   - Slice 0 *(2026-10-06)*: the work-queue split (ingestion on its own queue
-     and worker; email, titles and the sweep on the fast one) and the
-     per-user upload cap — closes the M3 review's one open medium. ADR 0010
-     addendum.
-   - Slice 2a *(2026-10-06)*: sources — retrieval provenance observed by the
-     harness, streamed and persisted beside the answer. ADR 0002 addendum.
-   - Slice 2b *(2026-10-07)*: the sources footer — chips per document,
-     expandable to the verbatim passages; committed replies only.
-   - Slice 3 *(2026-10-07)*: tabular answers as Markdown tables rendered as
-     sortable data tables with copy (tab-separated) and CSV download; the
-     code-block light-mode
-     fix.
-   - Slice 4a *(2026-10-08)*: the polish pass — the name in the shell, a
-     new-chat screen (time-of-day greeting, composer, example chips for
-     visitors), branded Google sign-in, source chips that reach the panel,
-     highlighted code (bundled), hover-only times with a copy button,
-     in-place sign-out on public pages.
-   - Slice 4b *(2026-10-11)*: the design pass — a design system (tokens for
-     both themes, three self-hosted typefaces, text and radius scales) in
-     the Tailwind theme, a drawn wordmark and favicon, every screen on the
-     tokens: open chat thread with prose replies, a growing composer, a
-     collapsible documents panel, the sidebar as a drawer on a phone, focus
-     ring and reduced motion. ADR 0014.
-   - Close-out *(2026-10-13)*: the milestone review's fix round — document
-     status writes are conditional (`failed` and `ready` are terminal for the
-     worker) with a second, long deadline for queued rows; the request's
-     model is an allowlist. ADR 0010 and 0011 addenda.
+   - Decisions: ADR 0002 (sources), 0010 (queue split, upload cap, conditional
+     status writes) and 0011 (model allowlist) addenda; ADR 0014 (design system).
    - Table / structured view for results (not only free-form text) *(shipped)*
    - Citation/source display (what data the answer used) *(shipped)*
    - Cohesive UI — feels like a product, not a demo collection *(shipped)*
 
 5. **Milestone 5 — Cleanup + hardening + eval** *(final pass before v0 is "done")*
-   - Test infrastructure: extend the pytest suite (async DB/API fixtures and a
-     real-Postgres authz suite exist since M2.5) to cover the chat + RAG paths
-     that were verified by hand during M1/M2.
-     The web has its own unit suite since M5: Vitest + React Testing Library,
-     tests beside the source, `make test-web`, gated in CI and pre-commit.
-     Browser journeys since M5: Playwright against an isolated stack with a
-     scripted model, `make e2e`, gated in CI (a failure uploads the traces).
-     Line coverage on demand: `make coverage` (pytest, then Vitest; no CI
-     floor — the testing map measures behaviour covered).
+   - Test infrastructure: pytest (async fixtures, real-Postgres authz suite),
+     Vitest, Playwright journeys, `make coverage`; see README Tests and
+     Verifying web changes below. *(shipped)*
    - **Eval infrastructure**: a measurable harness for RAG/agent quality
      (Q/A dataset → run → score via exact-match or LLM-as-judge) so retrieval
      and agent changes are tuned and regression-checked by **number, not vibes**.
-     A minimal eval rides along with M2 slice 3; M5 makes it systematic.
      (Rigorous eval-driven tuning is beyond v0 scope.) *(shipped 2026-11-05:
      `make eval` runs `evals/cases.jsonl` through the real agent loop on its
      own stack, graded by code checks and a judge model; flips against a
@@ -226,7 +192,7 @@ this repo. Write prod-level comments only:
 │
 ├─ scripts/         Ad-hoc dev utilities (read-mostly; e.g. corpus inspection)
 │
-└─ docs/            Project docs (onboarding, runbooks, architecture notes)
+└─ docs/            ADRs, the behaviour-to-test map, routine prompt templates
 ```
 
 ## Intent notes
@@ -235,7 +201,7 @@ this repo. Write prod-level comments only:
 - `scripts/*` are standalone, read-mostly dev utilities (e.g. `corpus.py`); not imported by the app.
 - Redis is the Celery broker AND the auth cache — rate-limit buckets and revocation cutoffs (one service, two roles). Sessions themselves are stateless JWTs, not Redis rows.
 - Chat responses are streamed (SSE) directly from FastAPI — never queued through Celery.
-- Celery handles background work — five tasks today: `generate_title`, `ingest_document` (chunk → embed → store; every status write is conditional, so `failed` and `ready` are terminal — the listing fails rows stuck `processing` past 10 minutes or `pending` past 6 hours), `send_email`, and `sweep_anonymous_users` (daily, from the fast worker's embedded beat; deletes demo visitors older than `ANON_RETENTION_DAYS` (default 3) with everything they own), and `sweep_email_tokens` (daily at 04:30 UTC, from the same beat; deletes email-link rows that are spent, voided or expired, by the database clock). Two queues, routed by task name in `apps/worker/celery_app.py` and consumed by two worker processes that never share a queue: `ingest` (the `worker` service: one slot, 1 GiB fence) and the default `celery` for email/titles/sweeps (`worker-fast`: carries beat). A new task must be given a route — a test fails otherwise. ADR 0010 addendum.
+- Celery handles background work — five tasks today: `generate_title`, `ingest_document` (chunk → embed → store; every status write is conditional, so `failed` and `ready` are terminal — the listing fails rows stuck `processing` past 10 minutes or `pending` past 6 hours), `send_email`, `sweep_anonymous_users` (daily, from the fast worker's embedded beat; deletes demo visitors older than `ANON_RETENTION_DAYS` (default 3) with everything they own), and `sweep_email_tokens` (daily at 04:30 UTC, from the same beat; deletes email-link rows that are spent, voided or expired, by the database clock). Two queues, routed by task name in `apps/worker/celery_app.py` and consumed by two worker processes that never share a queue: `ingest` (the `worker` service: one slot, 1 GiB fence) and the default `celery` for email/titles/sweeps (`worker-fast`: carries beat). A new task must be given a route — a test fails otherwise. ADR 0010 addendum.
 - Uploads are capped per user through the Redis limiter (`packages/core/auth/rate_limit.py`): 5 accepted files an hour, 15 a day, keyed on the user id, checked after validation and before the row exists; 429 with a string detail. Fail-open like every limiter.
 - Conversation titles: `generate_title` (worker) titles a conversation from its first user message only, with a conditional `UPDATE … WHERE title IS NULL` (first writer wins; nothing else is ever stored in `title`). The API enqueues at conversation creation and re-enqueues on each persisted assistant turn while untitled — that re-enqueue is the retry. The sidebar shows "Untitled" until then. See ADR 0010 addendum.
 - Every Celery publish from the API goes through `apps/api/enqueue.py` (off the event loop, after the DB commit, `retry=False`; `fire_and_forget` for work with its own recovery path — titles, email — and awaited `publish` where the caller must know, e.g. uploads marking a document failed). Tasks published from there declare `ignore_result=True`.
@@ -245,8 +211,8 @@ this repo. Write prod-level comments only:
 - TypeScript types are generated from the FastAPI OpenAPI spec to prevent drift.
 - LangChain is used inside `packages/core` for **text splitting only** (`langchain-text-splitters`). Embeddings call the **Voyage SDK directly**; retrieval SQL, prompt assembly, and generation stay hand-rolled (ADR 0008 → superseded by 0009).
 - Chat is **agentic**: `/api/chat` (the only chat route) runs a hand-rolled tool-use loop on the anthropic SDK — `packages/core/agent/harness.py` (loop, MAX_ITERS + no-tools fallback, moving prompt-cache breakpoint) over a registry of four tools in `tools.py` (`search_documents`, `calculator`, `get_current_datetime`, mocked `send_email`). Retrieval is model-invoked, never injected. The harness yields three event kinds — content, status, and sources (the passages a search found, persisted on the assistant message for the client and never replayed to the model). One reply at a time per conversation: the user turn claims `conversations.streaming_since` (409 while a live claim exists; stale after 2 minutes), the reply's save releases it, before `[DONE]`. See ADR 0002 addenda.
-- Auth is **NextAuth/Auth.js v5** (web front door, `/auth/*`) + FastAPI identity endpoints (`/api/auth/*` public; `/internal/auth/*` secret-gated: verify-credentials, oauth-upsert, anonymous — Google identities resolve to a hax user there, so JWT `sub` is always a hax id) bridged by a standard HS256 JWT (`packages/core/auth/`); `packages/db/repos/` is the start of the repo layer (M2.5); email verification + password reset ride single-use tokens (`packages/db/repos/email_tokens.py`, one live link per purpose) and the gate is ON by default. An anonymous demo visitor is a `users` row with no email and a token with no email — the only marker; `apps/api/demo.py` holds the caps (`DEMO_TURN_LIMIT` as a counter that only goes up, no uploads), and the chat route gives a visitor the guest prompt (`packages/core/demo/prompt.md`) with no tools and the default model; a member's model choice comes from `ChatRequest`'s allowlist. ADR 0011 addendum.
-- Isolation is structural (M2.5 slice 2): repo layer + Postgres RLS (`FORCE`, GUC `app.current_user_id` announced per-transaction from a ContextVar). The app connects as least-privilege `hax_app`; Alembic uses the owner role via `MIGRATIONS_DATABASE_URL`. Agent tools get identity via `ToolContext`, never model input. See ADR 0012.
+- Auth is **NextAuth/Auth.js v5** (web front door, `/auth/*`) + FastAPI identity endpoints (`/api/auth/*` public; `/internal/auth/*` secret-gated: verify-credentials, oauth-upsert, anonymous — Google identities resolve to a hax user there, so JWT `sub` is always a hax id) bridged by a standard HS256 JWT (`packages/core/auth/`); email verification + password reset ride single-use tokens (`packages/db/repos/email_tokens.py`, one live link per purpose) and the gate is ON by default. An anonymous demo visitor is a `users` row with no email and a token with no email — the only marker; `apps/api/demo.py` holds the caps (`DEMO_TURN_LIMIT` as a counter that only goes up, no uploads), and the chat route gives a visitor the guest prompt (`packages/core/demo/prompt.md`) with no tools and the default model; a member's model choice comes from `ChatRequest`'s allowlist. ADR 0011 addendum.
+- Isolation is structural: repo layer + Postgres RLS (`FORCE`, GUC `app.current_user_id` announced per-transaction from a ContextVar). The app connects as least-privilege `hax_app`; Alembic uses the owner role via `MIGRATIONS_DATABASE_URL`. Agent tools get identity via `ToolContext`, never model input. See ADR 0012.
 - A member's note about themselves (`user_profiles`, one row, ≤ 1000 characters, `GET`/`PUT /api/me/profile`, edited from the account menu's About you dialog) is read before the turn's claim and appended to the agentic system prompt on every turn, behind a fixed preface that frames it as information, never instructions; members only (a visitor gets 403 and never carries a note), never logged.
 - Production is `compose.prod.yml` on one EC2 box (Caddy is the only published port; TLS + single origin), RDS Postgres and S3 (instance role, no static keys), Redis on the box — all provisioned by `infra/terraform`. A deploy is `infra/deploy/deploy.sh` at a pushed commit: images tagged by sha on GHCR, compose files fetched at that sha, `/opt/hax/.env` written by hand once and never in the repo or CI. ADR 0013.
 - The directory structure is a target layout — start flat, extract as complexity demands. Not every directory needs to exist from day one.

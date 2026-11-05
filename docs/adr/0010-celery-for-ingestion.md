@@ -72,7 +72,7 @@ without re-upload.
 |---|---|
 | **Inline ingestion** (slice 1) | Client waits the full pipeline; LB-timeout + lost-on-disconnect risk. The thing 2a fixes. |
 | **FastAPI BackgroundTasks** | Returns fast but stays in the web process: no durability (lost on restart), no separate scaling. `async` softens isolation; hand-rolled retries lack durability without a broker. |
-| **A different task queue** (RQ / Dramatiq / arq) | Same architecture; Celery is the most mature/standard, already in the stack (`celery[redis]` in `pyproject`), reused for title-gen, and portfolio-recognizable. arq is async-native (a fair v1 reconsideration) but Celery's prefork + ecosystem win for v0. |
+| **A different task queue** (RQ / Dramatiq / arq) | Same architecture; Celery is the most mature/standard, already in the stack (`celery[redis]` in `pyproject`), and reused for title-gen. arq is async-native (a fair v1 reconsideration) but Celery's prefork + ecosystem win for v0. |
 
 ## Consequences
 

@@ -4,7 +4,7 @@ Every user-visible behaviour of the web app, and the test that would go red if i
 
 Swept through: 1b4245f — the weekly journeys sweep (`docs/routines/journeys-prompt.md`) checks only the changes after this commit and moves the line in its PR.
 
-Lanes: **J** a Playwright journey in `apps/web/e2e/` can observe it; **U** only a unit test can stage it (a race, an ordering, a mocked boundary); **L** a person has to look. Journey short names: demo = `demo.guest`, newchat = `new-chat.member`, hist = `history.member`, switch = `switch-mid-stream.member`, guard = `turn-guard.member`, setup = `auth.setup`; the newer journeys go by file stem: `auth-login.guest`, `auth-signup.guest`, `demo-landing.guest`, `demo-start.guest`, `routing.guest` and `routing.member`, `chat-basics.member`, `chat-thread.member`, `drawer.member`, `documents-panel.member`, `failed-reply.member`, `still-answering.member`, `about-you.member`, `sources.member`, `rich-replies.member`, `documents-lifecycle.member`, `model-hint.member`, `shell-short.member`, `google-button.guest`, `auth-email.guest`, `stop.member`, `stop.guest`, `try-again.member`, `jump-to-latest.member`. `py:` is a pytest module under `tests/`. A gap is a behaviour no test in its lane pins; a row whose gap is `–` is covered. **Gap** holds only the lane(s) of the gap, or `–`; a note on partial coverage goes in **Pinned by**, in parentheses.
+Lanes: **J** a Playwright journey in `apps/web/e2e/` can observe it; **U** only a unit test can stage it (a race, an ordering, a mocked boundary); **L** a person has to look. Journey short names: demo = `demo.guest`, newchat = `new-chat.member`, hist = `history.member`, switch = `switch-mid-stream.member`, guard = `turn-guard.member`, setup = `auth.setup`; every other journey goes by its file stem (`<area>.<guest|member>`). `py:` is a pytest module under `tests/`. A gap is a behaviour no test in its lane pins; a row whose gap is `–` is covered. **Gap** holds only the lane(s) of the gap, or `–`; a note on partial coverage goes in **Pinned by**, in parentheses.
 
 What the e2e stack can stage today, and what it cannot:
 
@@ -136,4 +136,4 @@ What the e2e stack can stage today, and what it cannot:
 
 Produced by `python scripts/testing_map_counts.py` from the tables above; rerun it after editing a row and paste its output here.
 
-91 behaviours; 89 covered; 2 gaps: J 0 (J\* 0, J† 0), U 0, L 2.
+91 behaviours; 89 covered; 2 gaps: J 0 (J\* 0), U 0, L 2.

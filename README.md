@@ -69,8 +69,8 @@ Start everything (Postgres, Redis, RustFS, Mailpit, FastAPI, Next.js):
 make dev
 ```
 
-Ingestion, transactional email, conversation titles and the daily sweep of
-demo visitors run in **two Celery workers** on two queues — ingestion on its
+Ingestion, transactional email, conversation titles and the daily sweeps run
+in **two Celery workers** on two queues — ingestion on its
 own, everything fast on the default one with the scheduler embedded — so a
 batch of uploads never delays an email. `make worker` starts both. Run it in
 a second terminal — otherwise an upload just sits at `pending`, no email
@@ -127,7 +127,7 @@ Postgres, RustFS and Mailpit for RDS, S3 and the SMTP relay.
    demo: send a message without an account to try it (a few turns, no
    uploads); log in for the full product.
 
-It publishes only 80/443 and 8026, so it runs alongside `make dev`.
+It publishes only 80/443 and 8026. Port 8026 is also the e2e inbox's (`hax-mailpit-e2e`, started by `make dev`): stop that container first to run both.
 The ingest worker runs inside a 1 GiB memory fence (`mem_limit` in
 `compose.prod.yml`); on Docker Desktop, raise its memory allowance if the
 whole stack does not fit: the Docker VM can run out of memory before the
@@ -150,7 +150,7 @@ script by hand is the fallback and the rollback. Secrets live only in
 
 After a fresh clone, a Docker version bump, or anything else that touches the data services, run this end-to-end pass to confirm Postgres + Redis are wired up correctly. Stop and diagnose if any step fails.
 
-**Shortcut:** `make infra-verify` runs the equivalent checks non-interactively via [infra/compose/verify.sh](infra/compose/verify.sh). The script uses `docker exec` directly instead of `make infra-psql` / `make infra-redis-cli`, because those open interactive shells (`-it`) which don't work from a script. Same coverage; the breakdown below is the human-friendly form for debugging a specific failure.
+**Shortcut:** `make infra-verify` runs the same checks non-interactively via [infra/compose/verify.sh](infra/compose/verify.sh); the steps below are the form for debugging one failure.
 
 1. `make infra-clean` — start from a known-empty state (deletes named volumes).
 2. `make infra-up` — bring the compose services up in the background (postgres, redis, s3, mailpit, and mailpit-e2e for the browser journeys). The storage console is at http://localhost:9001/rustfs/console/index.html (sign in with `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` from `.env`).
@@ -188,7 +188,7 @@ make migrate-down              # roll back the most recent migration
 
 ```bash
 make test         # Python: pytest (needs the dev Postgres from `make infra-up`)
-make types-check  # Python types: Pyright (standard) over apps/ and packages/, as CI and pre-commit run it
+make types-check  # Python types: Pyright (standard) over apps/, packages/, evals/ and tests/, as CI and pre-commit run it
 make test-web     # Web: Vitest + React Testing Library, no services needed
 make coverage     # Line coverage: pytest over apps/ and packages/, then Vitest over the web
 make e2e          # Browser journeys: Playwright (Chromium) against an isolated stack
@@ -214,7 +214,7 @@ The landing page's demo works without an account; saved conversations, uploads a
 
    `AUTH_SECRET` is the JWT secret shared between Auth.js (web) and FastAPI; `INTERNAL_API_SECRET` gates the server-to-server `/internal/auth/*` routes. They must be **different values**.
 
-2. **Two-URL env contract** (M2.5 slice 2, row-level security): `DATABASE_URL` is what the API/worker connect with at runtime, and it must point at the least-privilege **`hax_app`** role — a superuser role bypasses Postgres RLS entirely, which would make the per-user isolation silently decorative. `MIGRATIONS_DATABASE_URL` is separate and points at the **`hax`** owner role — Alembic needs ownership to run DDL. `.env.example` has both pre-filled for the compose Postgres; don't point `DATABASE_URL` at `hax`.
+2. **Two-URL env contract** (row-level security): `DATABASE_URL` is what the API/worker connect with at runtime, and it must point at the least-privilege **`hax_app`** role — a superuser role bypasses Postgres RLS entirely, which would make the per-user isolation silently decorative. `MIGRATIONS_DATABASE_URL` is separate and points at the **`hax`** owner role — Alembic needs ownership to run DDL. `.env.example` has both pre-filled for the compose Postgres; don't point `DATABASE_URL` at `hax`.
 
 3. **Set `BOOTSTRAP_USER_EMAIL` before your first `make migrate`** — only relevant if your database predates auth (has unowned conversations/documents). The auth migration assigns those legacy rows to a user created with this email; on a fresh empty database it's unused and can stay blank.
 
@@ -231,9 +231,9 @@ The landing page's demo works without an account; saved conversations, uploads a
    2. **Credentials → Create credentials → OAuth client ID → Web application.** Authorized JavaScript origin: `http://localhost:3000`. Authorized redirect URI: `http://localhost:3000/auth/callback/google` (note `/auth`, not `/api/auth` — Auth.js runs under `basePath: "/auth"` here).
    3. Copy the client ID and secret into `.env` as `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET`, then restart `make dev` (Next reads env at start).
 
-   Linking rules (ADR 0011): only if Google reports the email verified, a Google sign-in whose email matches an existing account **links to it** and marks the email verified; if that account was never verified, its password is cleared and its sessions signed out (the reset flow re-adds a password). A Google-born account has no password until the reset flow (slice 4) adds one. For the deployed origin (M3) add its origin + `/auth/callback/google` to the same client.
+   Linking rules (ADR 0011): only if Google reports the email verified, a Google sign-in whose email matches an existing account **links to it** and marks the email verified; if that account was never verified, its password is cleared and its sessions signed out (the reset flow re-adds a password). A Google-born account has no password until the reset flow adds one. For the deployed origin (production) add its origin + `/auth/callback/google` to the same client.
 
-6. **Email verification + password reset (M2.5 slice 4).** The login gate is **on** by default (`AUTH_REQUIRE_EMAIL_VERIFICATION=true`): signup emails a verify link, and an unverified password account can't log in until it's clicked. In dev, every email — verify, reset, "you already have an account" — lands in **Mailpit** at `http://localhost:8025` (nothing leaves the machine); nothing sends unless the worker is running (`make worker`), so an email that never arrives usually means the worker isn't up. Lifecycle in one paragraph: sign up → check Mailpit → click Confirm → log in. Forgot your password (or want to add one to a Google-born account)? Use **Forgot password** → check Mailpit → set a new password — this signs you out of every other session. After pulling code that adds a new worker task, restart `make worker`: Celery discards messages for tasks it doesn't recognize rather than queuing them.
+6. **Email verification + password reset.** The login gate is **on** by default (`AUTH_REQUIRE_EMAIL_VERIFICATION=true`): signup emails a verify link, and an unverified password account can't log in until it's clicked. In dev, every email — verify, reset, "you already have an account" — lands in **Mailpit** at `http://localhost:8025` (nothing leaves the machine); nothing sends unless the worker is running (`make worker`), so an email that never arrives usually means the worker isn't up. Lifecycle in one paragraph: sign up → check Mailpit → click Confirm → log in. Forgot your password (or want to add one to a Google-born account)? Use **Forgot password** → check Mailpit → set a new password — this signs you out of every other session. After pulling code that adds a new worker task, restart `make worker`: Celery discards messages for tasks it doesn't recognize rather than queuing them.
 
 ### Debugging (VS Code)
 
@@ -256,7 +256,7 @@ Then in VS Code: **Run & Debug** → **"Full stack (API + Web)"** → **F5**. Th
 
 **The assistant's browser.** [.mcp.json](.mcp.json) registers Playwright MCP for Claude Code (approve it when Claude Code asks): a headless Chrome with an in-memory profile, aimed at the local dev and e2e stacks only (`localhost:3000/8000/3001/8001`; production is blocked). The allowlist is a guard rail, not a security boundary, so the browser is never given production credentials. Screenshots land in `.playwright-mcp/` (gitignored).
 
-Check what's running at any time with `make status` (a TCP probe of each service's port, plus a process check that a Celery worker is running; it does not tell the two apart).
+Check what's running at any time with `make status` (a TCP probe of each service's port, and a process check per Celery worker, by its queue).
 
 ## Stack
 
@@ -271,18 +271,15 @@ Check what's running at any time with `make status` (a TCP probe of each service
 | Data       | Postgres + pgvector (embeddings)                                   |
 | Storage    | Object storage for uploads — S3 in prod, RustFS in dev (boto3)     |
 | Email      | Transactional email — Mailpit (dev), real SMTP relay in prod       |
-| Types      | OpenAPI spec → generated TypeScript (e.g. openapi-typescript)      |
+| Types      | OpenAPI spec → generated TypeScript (openapi-typescript)           |
 | Infra      | Docker, Docker Compose                                             |
 | Deploy     | AWS (EC2 + RDS + S3) via Terraform; GHCR images; SSM roll (ADR 0013) |
 
-## Build milestones (v0)
+## Status
 
-1. **Streaming chat** *(shipped)* — Next.js + FastAPI + SSE, conversation history in Postgres, Docker Compose (Postgres, Redis, all services). Auth + background titles deferred to M2.5.
-2. **Data + RAG** *(shipped)* — User data upload (files), Celery ingestion (chunk → embed → pgvector), conversation memory, and chat as a single **agentic** route: retrieval is a model-invoked tool (`search_documents`, alongside a calculator, datetime, and a mocked email send) behind a hand-rolled tool-use harness with prompt caching and a model selector.
-2.5. **Auth + background titles** *(shipped)* — email/password + Google via NextAuth/Auth.js, `users` table, Postgres row-level security, email verification + password reset, conversations + documents scoped to a user; background chat title generation (Celery + Redis, `TITLE_MODEL`), with every API-side publish off the event loop (`apps/api/enqueue.py`).
-3. **Live on AWS** *(shipped; live since 2026-09-27)* — the smallest live stack first: one EC2 box running the compose topology (api, worker, web, Redis, Caddy) against managed RDS Postgres + pgvector and S3, all in Terraform; CI/CD that rolls the box on every merge; an anonymous demo on the landing page (a few turns about hax, no account). **3.5** grows it when each piece earns its cost: ALB, ElastiCache, SES, alarms, Fargate.
-4. **Structured outputs + polish** *(shipped 2026-10-13)* — table/structured view for results, citation/source display, cohesive UI.
-5. **Cleanup + hardening + eval** — test + eval infrastructure, drain backlogs, tighten deferred foot-guns.
+Milestones 1–4 (streaming chat, data + RAG, auth, live on AWS, structured
+outputs + polish) have shipped; milestone 5 (cleanup, hardening, eval) is in
+progress. Decisions are recorded in the [ADR index](docs/adr/README.md).
 
 ## Architecture (v0)
 
@@ -310,7 +307,7 @@ graph TB
 
 - `/api/chat` is the single, **agentic** chat route: the model invokes tools in a loop (document search over pgvector, calculator, datetime, mocked email) — retrieval is never injected, always model-invoked. Each answer that searched carries the passages it found, shown as sources under the reply; tabular answers render as sortable tables with copy and CSV download.
 - Chat responses stream (SSE) directly from FastAPI to the browser; they are not queued through Celery.
-- Celery + Redis handle background work — four tasks today: conversation titles, document ingestion (chunk → embed → store), transactional email, and the daily sweep of aged demo visitors. Two queues, two workers: ingestion has its own, so a slow parse never delays an email or a title.
+- Celery + Redis handle background work — five tasks today: conversation titles, document ingestion (chunk → embed → store), transactional email, and two daily sweeps (aged demo visitors, dead email links). Two queues, two workers: ingestion has its own, so a slow parse never delays an email or a title.
 - pgvector lives in Postgres; no separate vector DB.
 
 ## Built with Claude Code + community skills

@@ -1,10 +1,6 @@
 # Architecture Decision Records
 
-This directory holds Architecture Decision Records (ADRs) — short, dated, immutable documents capturing one architectural decision and the reasoning behind it.
-
-## Why ADRs
-
-Codebases drift. Six months from now, you'll look at a piece of architecture and ask "why on earth did we do it this way?" ADRs let past-you tell future-you. They also signal — to teammates, reviewers, hiring managers — that the project is the product of deliberate thinking, not accident.
+This directory holds Architecture Decision Records (ADRs) — short, dated documents, stable once accepted, capturing one architectural decision and the reasoning behind it.
 
 ## Format
 
