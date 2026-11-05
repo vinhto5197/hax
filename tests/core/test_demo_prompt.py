@@ -104,3 +104,14 @@ def test_an_answer_that_opened_with_sign_up_does_not_also_end_with_the_invitatio
         and "sign" in w
         for w in windows
     ), sentences
+
+
+def test_member_prompt_forbids_claiming_no_documents_before_a_search():
+    # The model told members "I don't have any documents uploaded yet"
+    # without searching; the ex110-* and radio-channel cases in
+    # evals/cases.jsonl measure it, this pins the instruction that answers it.
+    from apps.api.routers.chat import AGENTIC_SYSTEM
+
+    text = " ".join(AGENTIC_SYSTEM.split())
+    assert "cannot see which documents the user has until you search" in text
+    assert "or that the user has none, without having searched" in text

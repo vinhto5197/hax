@@ -56,6 +56,10 @@ EVAL_DIR = ROOT / "local" / "eval"
 OWNER_EMAIL = "eval@example.com"
 EMPTY_EMAIL = "eval-empty@example.com"
 DEFAULT_MODEL = "claude-haiku-4-5"
+# Cases in flight at once: each holds a DB session only briefly and makes a
+# few model calls, so four keep well inside the pool and the rate limits
+# while cutting a run's wall time about fourfold.
+CONCURRENCY = 4
 EVAL_DATABASE = "hax_eval"
 EVAL_BUCKET = "hax-eval"
 MIME = {".md": "text/markdown", ".txt": "text/plain"}
@@ -277,6 +281,38 @@ async def run_case(case: Case, user_id: uuid.UUID, model: str, judge: Judge) -> 
     }
 
 
+async def run_cases(
+    cases: list[Case],
+    owner: uuid.UUID,
+    empty: uuid.UUID,
+    model: str,
+    judge: Judge,
+    concurrency: int,
+) -> list[dict]:
+    gate = asyncio.Semaphore(concurrency)
+
+    async def one(case: Case) -> dict:
+        async with gate:
+            result = await run_case(
+                case, owner if case.documents else empty, model, judge
+            )
+        print(f"  {result['outcome']:5} {case.id}", flush=True)
+        return result
+
+    # gather keeps the cases' order whatever order they finish in.
+    return list(await asyncio.gather(*(one(c) for c in cases)))
+
+
+def concurrency() -> int:
+    raw = os.getenv("EVAL_CONCURRENCY")
+    if not raw:
+        return CONCURRENCY
+    # 0 would admit no case and hang the run with the lock held.
+    if not raw.isdigit() or int(raw) < 1:
+        raise StartError(f"EVAL_CONCURRENCY must be a whole number from 1, not {raw!r}")
+    return int(raw)
+
+
 def exit_code(cases: list[dict]) -> int:
     if any(c["outcome"] == "error" for c in cases):
         return 1
@@ -322,7 +358,9 @@ def _probe_query(cases: list[Case]) -> str:
     return cases[0].question
 
 
-async def _run(cases: list[Case], model: str, judge: AnthropicJudge) -> dict:
+async def _run(
+    cases: list[Case], model: str, judge: AnthropicJudge, in_flight: int
+) -> dict:
     started = datetime.now(UTC)
     clock = time.monotonic()
     try:
@@ -333,11 +371,7 @@ async def _run(cases: list[Case], model: str, judge: AnthropicJudge) -> dict:
         raise StartError(f"setup failed: {type(exc).__name__}: {exc}") from exc
     if reason:
         raise StartError(f"preflight: {reason}")
-    results = []
-    for case in cases:
-        result = await run_case(case, owner if case.documents else empty, model, judge)
-        print(f"  {result['outcome']:5} {case.id}", flush=True)
-        results.append(result)
+    results = await run_cases(cases, owner, empty, model, judge, in_flight)
     summary = report.summarize(results)
     summary["cost"] = {
         "model": _cost(results, "model", "tokens"),
@@ -362,9 +396,11 @@ async def _run(cases: list[Case], model: str, judge: AnthropicJudge) -> dict:
     }
 
 
-async def _run_and_close(cases: list[Case], model: str, judge: AnthropicJudge) -> dict:
+async def _run_and_close(
+    cases: list[Case], model: str, judge: AnthropicJudge, in_flight: int
+) -> dict:
     try:
-        return await _run(cases, model, judge)
+        return await _run(cases, model, judge, in_flight)
     finally:
         # Pooled connections closed inside the loop, not by the collector after.
         await engine.dispose()
@@ -378,10 +414,11 @@ def _evaluate() -> int:
         cases = load_cases(Path(os.getenv("EVAL_CASES") or CASES))
         if not cases:
             raise StartError("the case file has no cases")
+        in_flight = concurrency()
         judge = AnthropicJudge()
         model = os.getenv("MODEL") or DEFAULT_MODEL
         print(f"eval: {len(cases)} cases, model {model}, judge {judge.model}")
-        run = asyncio.run(_run_and_close(cases, model, judge))
+        run = asyncio.run(_run_and_close(cases, model, judge, in_flight))
     except (StartError, CaseFileError, OSError, RuntimeError) as exc:
         print(f"eval: {exc}", file=sys.stderr)
         return 2

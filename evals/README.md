@@ -34,13 +34,14 @@ nobody references), so two runs at once would undo each other. It refuses to sta
 anywhere else. The retrieval, chunking and model settings your shell may
 export are unset; a variant goes on the `make` command line, never in `.env`.
 
-A run takes two to four minutes. Measured on 2026-11-05 with 23 cases (an
-estimate from list prices, `evals/prices.py`):
+A run takes about a minute: four cases run at a time (`EVAL_CONCURRENCY` in
+the environment changes it). Measured on 2026-11-05 (an estimate from list
+prices, `evals/prices.py`):
 
-| Model under test | Model | Judge | Total |
-|---|---|---|---|
-| claude-haiku-4-5 | ~$0.13 | ~$0.17 | ~$0.30 |
-| claude-sonnet-4-6 | ~$0.36 | ~$0.18 | ~$0.54 |
+| Model under test | Cases | Model | Judge | Total |
+|---|---|---|---|---|
+| claude-haiku-4-5 | 35 | ~$0.21 | ~$0.22 | ~$0.43 |
+| claude-sonnet-4-6 | 23 | ~$0.36 | ~$0.18 | ~$0.54 |
 
 CI never runs it: it spends credits. CI runs its unit tests (`tests/evals/`).
 
@@ -65,7 +66,7 @@ so a change of model, or a model added to `ModelId`, runs
 A `broke` flip on a must case is rerun once, the whole eval, because the same
 model fails a case on one run and passes it on the next. Broken on both runs,
 the change stops there and the cases are named; `fixed` flips, probes and
-errors go into the hand-off. A run costs about $0.35 on Haiku with the 27
+errors go into the hand-off. A run costs about $0.43 on Haiku with the 35
 cases.
 
 Two things that shape the prompt are not measured here: the guest prompt

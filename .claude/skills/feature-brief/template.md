@@ -32,7 +32,7 @@ Decisions only the maintainer can make, each with its options and a recommendati
 Journeys by name for every behaviour a browser can observe; unit tests by name for what only a test can stage (a race, an ordering, a mocked boundary); screenshots to capture (which screens, desktop and phone); the CI checks; what counts as evidence of done. A behaviour with neither is named here with the reason.
 
 ## Size and cost
-Estimated changed lines, per file, split into reviewed lines (the slice limit counts these) and test lines; tokens by phase (build, tests, reviews, fixes); wall time; the adversarial-review ceiling that approval pre-authorizes; and, when the brief changes what the model sees or does (`evals/README.md`, "When a change must run it"), the eval runs it pre-authorizes (about $0.35 each, two at most: the run and its one rerun).
+Estimated changed lines, per file, split into reviewed lines (the slice limit counts these) and test lines; tokens by phase (build, tests, reviews, fixes); wall time; the adversarial-review ceiling that approval pre-authorizes; and, when the brief changes what the model sees or does (`evals/README.md`, "When a change must run it"), the eval runs it pre-authorizes (about $0.43 each, two at most: the run and its one rerun).
 
 ## New to you
 Concepts in this brief not yet on the front-loading ledger, two lines each, with an offer to go deeper. "Nothing new" when none.

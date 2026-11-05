@@ -3,6 +3,7 @@ grades it into a result dict; preflight refuses a run against an unmigrated or
 unready eval corpus; exit_code turns a run into CI's verdict. The harness,
 retrieval and database probes are monkeypatched: no real API or database."""
 
+import asyncio
 import uuid
 from typing import Any
 
@@ -560,3 +561,125 @@ def test_setup_failure_exits_2(monkeypatch, tmp_path, capsys):
 
     assert run._evaluate() == 2
     assert "voyage unreachable" in capsys.readouterr().err
+
+
+OWNER = uuid.UUID("22222222-2222-2222-2222-222222222222")
+EMPTY = uuid.UUID("33333333-3333-3333-3333-333333333333")
+
+
+def _cases(n: int, documents: tuple[str, ...] = ("lease.md",)) -> list[Case]:
+    return [_case(id=f"case-{i}", documents=documents) for i in range(n)]
+
+
+def _fake_run_case(monkeypatch, delay=lambda case: 0.01):
+    """Patches run.run_case with a fake that records its calls and tracks how
+    many are in flight at once."""
+    state: dict[str, Any] = {"in_flight": 0, "max": 0, "calls": [], "log": []}
+
+    async def fake(case, user_id, model, judge):
+        state["calls"].append((case.id, user_id, model, judge))
+        state["in_flight"] += 1
+        state["max"] = max(state["max"], state["in_flight"])
+        state["log"].append(("start", case.id))
+        try:
+            await asyncio.sleep(delay(case))
+        finally:
+            state["in_flight"] -= 1
+            state["log"].append(("end", case.id))
+        return {"id": case.id, "outcome": "pass", "tier": case.tier}
+
+    monkeypatch.setattr(run, "run_case", fake)
+    return state
+
+
+def test_concurrency_default_is_a_positive_int():
+    assert isinstance(run.CONCURRENCY, int)
+    assert run.CONCURRENCY >= 1
+
+
+async def test_run_cases_keeps_case_order_when_calls_finish_out_of_order(
+    monkeypatch,
+):
+    cases = _cases(5)
+    index = {case.id: i for i, case in enumerate(cases)}
+    state = _fake_run_case(
+        monkeypatch, delay=lambda case: 0.01 * (len(cases) - index[case.id])
+    )
+
+    results = await run.run_cases(cases, OWNER, EMPTY, MODEL, FakeJudge(), 5)
+
+    assert [result["id"] for result in results] == [case.id for case in cases]
+    finished = [case_id for kind, case_id in state["log"] if kind == "end"]
+    assert finished != [case.id for case in cases]
+    assert len(state["calls"]) == len(cases)
+
+
+async def test_run_cases_never_exceeds_the_concurrency(monkeypatch):
+    cases = _cases(7)
+    state = _fake_run_case(monkeypatch, delay=lambda case: 0.02)
+
+    results = await run.run_cases(cases, OWNER, EMPTY, MODEL, FakeJudge(), 3)
+
+    assert state["max"] == 3
+    assert state["in_flight"] == 0
+    assert sorted(call[0] for call in state["calls"]) == sorted(c.id for c in cases)
+    assert len(state["calls"]) == 7
+    assert [result["id"] for result in results] == [case.id for case in cases]
+
+
+async def test_run_cases_with_concurrency_one_runs_one_at_a_time(monkeypatch):
+    cases = _cases(4)
+    state = _fake_run_case(monkeypatch, delay=lambda case: 0.005)
+
+    results = await run.run_cases(cases, OWNER, EMPTY, MODEL, FakeJudge(), 1)
+
+    assert state["max"] == 1
+    kinds = [kind for kind, _ in state["log"]]
+    assert kinds == ["start", "end"] * len(cases)
+    for start, end in zip(state["log"][::2], state["log"][1::2], strict=True):
+        assert start[1] == end[1]
+    assert [result["id"] for result in results] == [case.id for case in cases]
+
+
+async def test_run_cases_routes_cases_without_documents_to_the_empty_member(
+    monkeypatch,
+):
+    cases = [
+        _case(id="with-docs", documents=("lease.md",)),
+        _case(id="no-docs", documents=()),
+        _case(id="more-docs", documents=("lease.md", "notes.md")),
+        _case(id="also-none", documents=()),
+    ]
+    state = _fake_run_case(monkeypatch, delay=lambda case: 0)
+    judge = FakeJudge()
+
+    results = await run.run_cases(cases, OWNER, EMPTY, MODEL, judge, 2)
+
+    users = {case_id: user_id for case_id, user_id, _, _ in state["calls"]}
+    assert users == {
+        "with-docs": OWNER,
+        "no-docs": EMPTY,
+        "more-docs": OWNER,
+        "also-none": EMPTY,
+    }
+    assert all(model == MODEL for _, _, model, _ in state["calls"])
+    assert all(passed is judge for _, _, _, passed in state["calls"])
+    assert [result["id"] for result in results] == [case.id for case in cases]
+
+
+@pytest.mark.parametrize("value", ["0", "-2", "abc", "1.5"])
+def test_bad_concurrency_exits_2_before_any_case(monkeypatch, tmp_path, capsys, value):
+    # 0 would admit no case: the run would hang with the eval lock held.
+    _start_from(monkeypatch, tmp_path, ['{"id": "a", "question": "q"}'])
+    monkeypatch.setenv("EVAL_CONCURRENCY", value)
+    monkeypatch.setattr(run, "_run_and_close", lambda *a: pytest.fail("started"))
+
+    assert run._evaluate() == 2
+    assert "EVAL_CONCURRENCY" in capsys.readouterr().err
+
+
+def test_concurrency_reads_the_environment(monkeypatch):
+    monkeypatch.delenv("EVAL_CONCURRENCY", raising=False)
+    assert run.concurrency() == run.CONCURRENCY
+    monkeypatch.setenv("EVAL_CONCURRENCY", "2")
+    assert run.concurrency() == 2
