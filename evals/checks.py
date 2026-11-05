@@ -26,8 +26,26 @@ class Check:
     reason: str | None = None
 
 
+# Typographic forms a model writes for the same text: curly quotes and
+# apostrophes, and every dash, so "Don’t" and "–en" match "Don't" and "-en".
+_FOLD = str.maketrans(
+    {
+        "\u2018": "'",
+        "\u2019": "'",
+        "\u201c": '"',
+        "\u201d": '"',
+        "\u2010": "-",
+        "\u2011": "-",
+        "\u2012": "-",
+        "\u2013": "-",
+        "\u2014": "-",
+        "\u2212": "-",
+    }
+)
+
+
 def normalize(text: str) -> str:
-    return " ".join(text.lower().replace(",", "").split())
+    return " ".join(text.lower().translate(_FOLD).replace(",", "").split())
 
 
 def code_checks(expect: Expect, answer: str, tools_fired: list[str]) -> list[Check]:

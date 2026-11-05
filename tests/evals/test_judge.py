@@ -290,7 +290,9 @@ async def test_grade_retries_once_then_errors():
 
     assert len(client.calls) == 2
     assert result.checks == []
-    assert result.error == "judge reply unparseable"
+    assert result.error is not None
+    assert result.error.startswith("judge reply unparseable")
+    assert "reply began" in result.error  # the cause travels with the error
     assert result.usage == {
         "model": "m",
         "input": 150,
@@ -341,9 +343,11 @@ async def test_grade_api_error_is_error_not_raised(fail_on: int):
 
 
 async def test_prompt_carries_seen():
+    # A search's passages reach the model inside its tool output, so the
+    # judge reads them there; seen.passages is not sent a second time.
     seen = _seen(
-        passages=("PASSAGE-ALPHA text", "PASSAGE-BETA text"),
-        tool_outputs=("TOOL-OUT-ONE", "TOOL-OUT-TWO"),
+        passages=("PASSAGE-ALPHA text",),
+        tool_outputs=("TOOL-OUT-ONE [1] PASSAGE-ALPHA text", "TOOL-OUT-TWO"),
         note="NOTE-I-am-a-baker",
         history=(("user", "HIST-USER-turn"), ("assistant", "HIST-ASSISTANT-turn")),
     )
@@ -358,8 +362,6 @@ async def test_prompt_carries_seen():
         "QUESTION-what-city",
         "ANSWER-paris",
         *POINTS,
-        "PASSAGE-ALPHA text",
-        "PASSAGE-BETA text",
         "TOOL-OUT-ONE",
         "TOOL-OUT-TWO",
         "NOTE-I-am-a-baker",
@@ -367,6 +369,7 @@ async def test_prompt_carries_seen():
         "HIST-ASSISTANT-turn",
     ):
         assert needle in text, needle
+    assert text.count("PASSAGE-ALPHA text") == 1  # once, inside the tool output
 
 
 async def test_grade_reports_usage():
@@ -425,3 +428,59 @@ async def test_empty_judge_model_env_falls_back_to_the_default(monkeypatch):
     await AnthropicJudge(client=client).grade("q", "a", POINTS, False, _seen())
 
     assert client.calls[0]["model"] == DEFAULT_JUDGE_MODEL
+
+
+async def test_verdict_comes_back_as_a_forced_tool_call():
+    verdict = json.loads(_good_reply())
+    resp = SimpleNamespace(
+        content=[
+            SimpleNamespace(type="tool_use", name="record_verdict", input=verdict)
+        ],
+        usage=_usage(),
+    )
+    client = FakeClient(resp)
+
+    result = await AnthropicJudge(model="m", client=client).grade(
+        "q", "a", POINTS, True, _seen()
+    )
+
+    assert result.error is None
+    assert [c.passed for c in result.checks] == [True, False, True]
+    call = client.calls[0]
+    assert call["tool_choice"] == {
+        "type": "tool",
+        "name": "record_verdict",
+        "disable_parallel_tool_use": True,
+    }
+    assert [t["name"] for t in call["tools"]] == ["record_verdict"]
+
+
+async def test_tool_verdict_with_backticks_in_a_reason_still_parses():
+    verdict = json.loads(_good_reply())
+    verdict["points"][0]["reason"] = "It quotes ```json {} ``` and still states it."
+    resp = SimpleNamespace(
+        content=[
+            SimpleNamespace(type="tool_use", name="record_verdict", input=verdict)
+        ],
+        usage=_usage(),
+    )
+
+    result = await AnthropicJudge(model="m", client=FakeClient(resp)).grade(
+        "q", "a", POINTS, True, _seen()
+    )
+
+    assert result.error is None
+    assert [c.passed for c in result.checks] == [True, False, True]
+
+
+async def test_refusal_is_an_error_without_retry():
+    resp = _resp("")
+    resp.stop_reason = "refusal"
+    client = FakeClient(resp, _resp(_good_reply()))
+
+    result = await AnthropicJudge(model="m", client=client).grade(
+        "q", "a", POINTS, False, _seen()
+    )
+
+    assert result.error == "judge refused to grade"
+    assert len(client.calls) == 1

@@ -153,3 +153,9 @@ def test_table_forms_models_produce():
     assert _passes(expect, "| a | b |\r\n|---|---|\r\n| 1 | 2 |")  # CRLF
     assert _passes(expect, "Here:\n\n| a |\n|---|")  # one column, at the end
     assert not _passes(expect, "a | b\n---")  # a rule under prose
+
+
+def test_curly_quotes_and_dashes_match_their_plain_forms():
+    assert _passes(_expect(exact_reply="Don't bro."), "Don\u2019t bro.")
+    assert _passes(_expect(contains_any=("-en",)), "the suffix is \u2013en")
+    assert _passes(_expect(contains_any=("-en",)), "the suffix is \u2011en")

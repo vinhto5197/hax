@@ -369,3 +369,19 @@ later platform can import it.
 Rejected: a `{"usage": …}` event in the stream (every consumer of the
 protocol would have to drop it); reading the counts from the logs (fragile,
 and the logs never carry tool output, by design).
+
+## Addendum (2026-11-05) — the judge returns its verdict as a tool call
+
+The eval's judge (`evals/judge.py`) records its verdict by calling one tool,
+`record_verdict`, which the request forces (`tool_choice`), and reads the
+call's input, which the API returns already parsed. The first design asked for
+JSON in the reply text: on `claude-sonnet-4-6` that text dropped or doubled
+its closing brace in about one case in twenty, and each such case became an
+`error`, so a whole run read as untrustworthy for a reason that had nothing
+to do with the answer graded. A forced tool call is plain tool use, which
+every provider the harness might move to offers; the same validation runs on
+its input, and a text reply is still read the old way.
+
+Rejected: repairing the text (guessing which brace is missing grades on a
+guess); provider-side structured-output parameters (a provider-specific
+request surface, which these addenda keep out).

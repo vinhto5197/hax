@@ -108,7 +108,11 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
      (Q/A dataset → run → score via exact-match or LLM-as-judge) so retrieval
      and agent changes are tuned and regression-checked by **number, not vibes**.
      A minimal eval rides along with M2 slice 3; M5 makes it systematic.
-     (Rigorous eval-driven tuning is beyond v0 scope.)
+     (Rigorous eval-driven tuning is beyond v0 scope.) *(shipped 2026-11-05:
+     `make eval` runs `evals/cases.jsonl` through the real agent loop on its
+     own stack, graded by code checks and a judge model; flips against a
+     baseline, `make eval-compare` between any two runs; never in CI.
+     `evals/README.md`, ADR 0002 addenda.)*
    - Drain the remaining dev + QOL backlogs (kept locally, not committed)
    - Tighten foot-guns deferred during feature work (input validation, error
      surfaces, anything flagged "fix in cleanup")
@@ -217,6 +221,8 @@ this repo. Write prod-level comments only:
 │  ├─ docker/       python.Dockerfile (api, worker, migrate) and web.Dockerfile
 │  ├─ terraform/    EC2 box, RDS, S3, IAM, remote state (bootstrap/); rds-bootstrap.sql; runbook
 │  └─ deploy/       deploy.sh: build → push to GHCR by sha → roll the box over SSM; runbook
+│
+├─ evals/           The eval: cases.jsonl, corpus/, runner, checks, judge, report (make eval)
 │
 ├─ scripts/         Ad-hoc dev utilities (read-mostly; e.g. corpus inspection)
 │
