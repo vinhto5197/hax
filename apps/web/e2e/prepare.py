@@ -1,14 +1,16 @@
 """Prepare an isolated local stack's database and Redis db.
 
-Two targets, each a throwaway of its own: `e2e` (the default; database
-hax_e2e, Redis db 15) for the browser journeys (`make e2e`), and `explorer`
+Three targets, each a throwaway of its own: `e2e` (the default; database
+hax_e2e, Redis db 15) for the browser journeys (`make e2e`), `explorer`
 (hax_explorer, Redis db 14) for the weekly product explorer
-(`scripts/explorer.sh`). Run from the repo root before the stack starts.
+(`scripts/explorer.sh`), and `eval` (hax_eval, Redis db 13) for the eval
+(`make eval`, whose uploads land in the stand-in's hax-eval bucket). Run
+from the repo root before the stack starts.
 Idempotent: creates the database if missing, migrates it as the owner role,
 grants the app role, empties every table but the migration ledger, seeds one
-verified member, flushes the Redis db. The `e2e` target also requires the
-dev S3 stand-in (its uploads land in the stand-in's hax-e2e bucket) and never
-empties it: object keys are unique per document and the database is
+verified member, flushes the Redis db. The `e2e` and `eval` targets also
+require the dev S3 stand-in (their own buckets, hax-e2e and hax-eval) and
+never empty it: object keys are unique per document and the database is
 truncated, so a leftover object is never referenced. It also requires the
 journeys' own Mailpit (mailpit-e2e, :8026) and empties it; dev's inbox is a
 separate container.
@@ -23,6 +25,7 @@ import sys
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import NoReturn
 
 ADMIN_URL = "postgresql://hax:hax@localhost:5432/postgres"
 S3_HEALTH_URL = "http://localhost:9000/health"
@@ -34,11 +37,13 @@ class Target:
     database: str
     redis_db: int
     # The member each stack logs in as; e2e's is a contract with
-    # e2e/auth.setup.ts, the explorer's with scripts/explorer.sh.
+    # e2e/auth.setup.ts, the explorer's with scripts/explorer.sh, the eval's
+    # with evals/run.py.
     member_email: str
     member_name: str
     member_password: str
-    # Only the journeys' stack uploads (playwright.config.ts points it here).
+    # The stacks that upload: the journeys' (playwright.config.ts) and the
+    # eval's corpus (evals/run.py).
     needs_storage: bool = False
     # Only the journeys' stack sends to Mailpit (playwright.config.ts).
     needs_mail: bool = False
@@ -71,13 +76,21 @@ TARGETS = {
     "explorer": Target(
         "hax_explorer", 14, "explorer@example.com", "Explorer", "explorer-password-123"
     ),
+    "eval": Target(
+        "hax_eval",
+        13,
+        "eval@example.com",
+        "Eval",
+        "eval-password-123",
+        needs_storage=True,
+    ),
 }
 
 ROOT = Path(__file__).resolve().parents[3]
 
 
 def parse_target(argv: list[str]) -> Target:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     parser.add_argument("--target", choices=sorted(TARGETS), default="e2e")
     return TARGETS[parser.parse_args(argv).target]
 
@@ -99,7 +112,7 @@ _GRANTS_SQL = (
 )
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> NoReturn:
     print(f"e2e prepare: {message}", file=sys.stderr)
     sys.exit(1)
 
@@ -174,6 +187,7 @@ async def grant_reset_seed(target: Target) -> None:
 
 def flush_redis(target: Target) -> None:
     import redis
+    import redis.exceptions
 
     try:
         redis.Redis.from_url(target.redis_url, socket_connect_timeout=5).flushdb()

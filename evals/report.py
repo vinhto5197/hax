@@ -152,6 +152,7 @@ h1 { font-size: 20px; } h2 { font-size: 16px; margin: 0 0 8px; }
 pre { white-space: pre-wrap; margin: 4px 0; font: 13px/1.45 ui-monospace,
   monospace; }
 ul { margin: 4px 0; padding-left: 20px; }
+summary { cursor: pointer; }
 """
 
 
@@ -200,12 +201,15 @@ def _case_html(case: dict) -> str:
             bits.append(f"expected passage rank {rank if rank else 'not found'}")
         for key in ("distance", "nearest_distance"):
             if retrieval.get(key) is not None:
-                bits.append(f"{key.replace('_', ' ')} {retrieval[key]}")
+                bits.append(f"{key.replace('_', ' ')} {retrieval[key]:.3f}")
         parts.append(_block("retrieval", f"<pre>{_e('; '.join(bits))}</pre>"))
     seen = case.get("seen") or {}
     if seen.get("passages"):
         passages = "".join(f"<li><pre>{_e(p)}</pre></li>" for p in seen["passages"])
-        parts.append(_block("passages the model saw", f"<ul>{passages}</ul>"))
+        parts.append(
+            f'<details><summary class="label">passages the model saw '
+            f"({len(seen['passages'])})</summary><ul>{passages}</ul></details>"
+        )
     tools = ", ".join(case.get("tools_fired") or []) or "none"
     parts.append(_block("tools fired", f"<pre>{_e(tools)}</pre>"))
     return (

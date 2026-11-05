@@ -11,7 +11,13 @@ import anthropic
 import httpx2
 import pytest
 from evals.checks import Check
-from evals.judge import AnthropicJudge, JudgeResult, Seen, parse_verdict
+from evals.judge import (
+    DEFAULT_JUDGE_MODEL,
+    AnthropicJudge,
+    JudgeResult,
+    Seen,
+    parse_verdict,
+)
 
 POINTS = ("Paris is the capital", "Population is about 2 million")
 
@@ -409,3 +415,13 @@ async def test_judge_model_read_from_env_at_construction(monkeypatch):
     await AnthropicJudge(client=client).grade("q", "a", POINTS, False, _seen())
 
     assert client.calls[0]["model"] == "env-model"
+
+
+async def test_empty_judge_model_env_falls_back_to_the_default(monkeypatch):
+    # make eval passes JUDGE_MODEL= when it is not on its command line.
+    monkeypatch.setenv("JUDGE_MODEL", "")
+    client = FakeClient(_resp(_good_reply()))
+
+    await AnthropicJudge(client=client).grade("q", "a", POINTS, False, _seen())
+
+    assert client.calls[0]["model"] == DEFAULT_JUDGE_MODEL

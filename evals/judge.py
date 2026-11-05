@@ -173,7 +173,7 @@ def _add(total: Usage | None, model: str, usage: Any) -> Usage:
 
 class AnthropicJudge:
     def __init__(self, model: str | None = None, client: Any = None):
-        self.model = model or os.getenv("JUDGE_MODEL", DEFAULT_JUDGE_MODEL)
+        self.model = model or os.getenv("JUDGE_MODEL") or DEFAULT_JUDGE_MODEL
         self._client = client or anthropic.AsyncAnthropic()
         # The SDK raises a TypeError, not an APIError, on the first call when
         # no key is set: refuse here, before a run starts, instead.

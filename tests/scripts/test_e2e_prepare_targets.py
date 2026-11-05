@@ -53,3 +53,15 @@ def test_the_journey_stack_needs_mail_and_the_explorer_does_not():
     assert prepare.TARGETS["e2e"].needs_mail is True
     assert prepare.TARGETS["explorer"].needs_mail is False
     assert prepare.Target.__dataclass_fields__["needs_mail"].default is False
+
+
+def test_the_eval_target_is_its_own_database_redis_db_and_bucket():
+    prepare = _load()
+    target = prepare.parse_target(["--target", "eval"])
+    assert (target.database, target.redis_db) == ("hax_eval", 13)
+    assert target.owner_url.endswith("/hax_eval")
+    assert target.app_url.endswith("/hax_eval")
+    assert target.redis_url.endswith("/13")
+    assert target.needs_storage is True
+    assert target.needs_mail is False
+    assert target.member_email == "eval@example.com"

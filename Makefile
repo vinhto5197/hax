@@ -302,3 +302,34 @@ coverage:
 e2e:
 	@nc -z localhost 5432 >/dev/null 2>&1 && nc -z localhost 6379 >/dev/null 2>&1 || { echo "Postgres/Redis down: run make infra-up"; exit 1; }
 	$(GATE_LOCK) sh -c '.venv/bin/python apps/web/e2e/prepare.py && cd apps/web && npx playwright test $(ARGS)'
+
+# The eval (evals/README.md): the real agent loop and model over
+# evals/cases.jsonl, graded by code checks and a judge model. Spends API
+# credits, so never in CI. Needs `make infra-up` and ANTHROPIC_API_KEY and
+# VOYAGE_API_KEY in the environment. Its stack is literal, never the shell's:
+# database hax_eval, Redis db 13, bucket hax-eval (prepare.py --target eval
+# empties the first two each run). MODEL, JUDGE_MODEL, EVAL_CASES, EVAL_CORPUS and
+# RAG_MAX_DISTANCE apply only when given on this command line, and the
+# retrieval, chunking and model settings the dev shell may export are unset,
+# so every run uses the code's defaults unless its command line says otherwise.
+EVAL_ENV := env -u RAG_TOP_K -u RAG_CHUNK_SIZE -u RAG_CHUNK_OVERLAP \
+	-u LLM_MAX_TOKENS -u LLM_MODEL -u VOYAGE_BASE_URL \
+	DATABASE_URL=postgresql://hax_app:hax_app@localhost:5432/hax_eval \
+	MIGRATIONS_DATABASE_URL=postgresql://hax:hax@localhost:5432/hax_eval \
+	S3_BUCKET=hax-eval REDIS_URL=redis://localhost:6379/13 \
+	$(foreach v,MODEL JUDGE_MODEL EVAL_CASES EVAL_CORPUS RAG_MAX_DISTANCE,$(v)='$(if $(filter command line,$(origin $(v))),$($(v)))')
+
+.PHONY: eval eval-baseline eval-compare
+
+eval:
+	@nc -z localhost 5432 >/dev/null 2>&1 && nc -z localhost 6379 >/dev/null 2>&1 || { echo "Postgres/Redis down: run make infra-up"; exit 1; }
+	.venv/bin/python apps/web/e2e/prepare.py --target eval
+	$(EVAL_ENV) .venv/bin/python -m evals.run
+
+# Marks a run in local/eval/runs/ as the one every later run reports flips against.
+eval-baseline:
+	$(EVAL_ENV) .venv/bin/python -m evals.run --baseline $(RUN)
+
+# Flips and per-check deltas between any two runs (two models, two settings).
+eval-compare:
+	$(EVAL_ENV) .venv/bin/python -m evals.run --compare $(A) $(B)
