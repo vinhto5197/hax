@@ -115,3 +115,15 @@ def test_member_prompt_forbids_claiming_no_documents_before_a_search():
     text = " ".join(AGENTIC_SYSTEM.split())
     assert "cannot see which documents the user has until you search" in text
     assert "or that the user has none, without having searched" in text
+
+
+def test_member_prompt_forbids_adding_unsupported_facts():
+    # The eval's grounding checks (chamber-table, off-corpus-dual) measure
+    # invention in document answers; this pins the instruction against it,
+    # including the allowance for what follows directly from the documents.
+    from apps.api.routers.chat import AGENTIC_SYSTEM
+
+    text = " ".join(AGENTIC_SYSTEM.split())
+    assert "every fact, number and reason must come from them" in text
+    assert "follow directly from them" in text
+    assert "never add one as a guess" in text

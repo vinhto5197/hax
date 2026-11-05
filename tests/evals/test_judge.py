@@ -484,3 +484,21 @@ async def test_refusal_is_an_error_without_retry():
 
     assert result.error == "judge refused to grade"
     assert len(client.calls) == 1
+
+
+async def test_a_verdict_sent_as_a_json_string_is_read():
+    verdict = json.loads(_good_reply())
+    verdict["grounded"] = json.dumps(verdict["grounded"])
+    resp = SimpleNamespace(
+        content=[
+            SimpleNamespace(type="tool_use", name="record_verdict", input=verdict)
+        ],
+        usage=_usage(),
+    )
+
+    result = await AnthropicJudge(model="m", client=FakeClient(resp)).grade(
+        "q", "a", POINTS, True, _seen()
+    )
+
+    assert result.error is None
+    assert result.checks[-1].check == "grounded" and result.checks[-1].passed is True

@@ -124,6 +124,13 @@ def _first_object(text: str) -> Any:
 
 
 def _verdict(entry: Any, where: str) -> tuple[bool, str]:
+    # The model sometimes sends a nested object as a JSON string inside the
+    # tool call's input; it is the same verdict, so it is read as one.
+    if isinstance(entry, str):
+        try:
+            entry = json.loads(entry)
+        except ValueError:
+            raise ValueError(f"{where} is not an object") from None
     if not isinstance(entry, dict):
         raise ValueError(f"{where} is not an object")
     passed, reason = entry.get("pass"), entry.get("reason")
