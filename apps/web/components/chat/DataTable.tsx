@@ -3,6 +3,9 @@
 import { useState } from "react";
 import type { ExtraProps } from "react-markdown";
 
+import { useCopy } from "@/hooks/useCopy";
+import { saveBlob } from "@/lib/download";
+
 type Cell = string;
 type Row = Cell[];
 
@@ -118,7 +121,7 @@ export function DataTable({ node }: ExtraProps) {
   // node is never the same object twice and the parse is cheap beside it.
   const { header, rows } = parseTable(node);
   const [sort, setSort] = useState<Sort>(null);
-  const [copied, setCopied] = useState(false);
+  const [copied, copy] = useCopy();
 
   // Computed per render, like the parse above (a memo on a per-render input
   // would never hit).
@@ -146,31 +149,15 @@ export function DataTable({ node }: ExtraProps) {
     );
   }
 
-  async function copyTable() {
-    // The clipboard can refuse (permission, insecure context); a click handler
-    // must not leave an unhandled rejection — the download button remains.
-    try {
-      await navigator.clipboard.writeText(toTsv(header, sorted));
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      setCopied(false);
-    }
-  }
-
   function downloadCsv() {
     // The byte-order mark is what makes Excel read the file as UTF-8 rather
     // than ANSI (download only; the clipboard needs none).
-    const blob = new Blob(["\ufeff", toCsv(header, sorted)], {
-      type: "text/csv;charset=utf-8",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "table.csv";
-    a.click();
-    // Revoking synchronously can cancel the download in WebKit; defer it.
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    saveBlob(
+      new Blob(["\ufeff", toCsv(header, sorted)], {
+        type: "text/csv;charset=utf-8",
+      }),
+      "table.csv",
+    );
   }
 
   if (header.length === 0 && rows.length === 0) return null;
@@ -227,7 +214,11 @@ export function DataTable({ node }: ExtraProps) {
         </table>
       </div>
       <div className="mt-1 flex gap-3 text-caption text-ink-3">
-        <button type="button" onClick={copyTable} className="hover:underline">
+        <button
+          type="button"
+          onClick={() => copy(toTsv(header, sorted))}
+          className="hover:underline"
+        >
           {copied ? "Copied" : "Copy table"}
         </button>
         <button type="button" onClick={downloadCsv} className="hover:underline">

@@ -1,9 +1,13 @@
 "use client";
 
-import Link from "next/link";
 import { useState, type SubmitEvent } from "react";
 
-import { AuthCard, buttonClass, fieldClass } from "@/components/auth/AuthCard";
+import {
+  AuthCard,
+  BackToLogin,
+  buttonClass,
+  fieldClass,
+} from "@/components/auth/AuthCard";
 import { requestPasswordReset } from "@/lib/authApi";
 
 export default function ForgotPasswordPage() {
@@ -40,14 +44,7 @@ export default function ForgotPasswordPage() {
           If an account exists for {sentTo}, we&apos;ve sent a reset link (valid
           for 1 hour).
         </p>
-        <p className="text-small text-ink-2">
-          <Link
-            href="/login"
-            className="text-accent underline underline-offset-2"
-          >
-            Back to log in
-          </Link>
-        </p>
+        <BackToLogin />
       </AuthCard>
     );
   }
@@ -68,14 +65,7 @@ export default function ForgotPasswordPage() {
           {submitting ? "Sending…" : "Send reset link"}
         </button>
       </form>
-      <p className="text-small text-ink-2">
-        <Link
-          href="/login"
-          className="text-accent underline underline-offset-2"
-        >
-          Back to log in
-        </Link>
-      </p>
+      <BackToLogin />
     </AuthCard>
   );
 }

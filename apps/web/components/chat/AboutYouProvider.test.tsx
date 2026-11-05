@@ -89,9 +89,10 @@ async function openDialog() {
 }
 
 describe("useAboutYou", () => {
-  it("is null without a provider", () => {
-    const { result } = renderHook(() => useAboutYou());
-    expect(result.current).toBeNull();
+  it("throws without a provider", () => {
+    expect(() => renderHook(() => useAboutYou())).toThrow(
+      "useAboutYou must be used within an AboutYouProvider",
+    );
   });
 
   it("offers open() inside the provider", () => {

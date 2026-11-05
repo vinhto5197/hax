@@ -1,5 +1,7 @@
 import { signOut } from "next-auth/react";
 
+import { API_BASE } from "@/lib/apiBase";
+import { saveBlob } from "@/lib/download";
 import type { components } from "@/lib/openapi";
 
 type ChatRole = components["schemas"]["MessageOut"]["role"];
@@ -25,9 +27,7 @@ export type DocumentSummary = components["schemas"]["DocumentOut"];
 // provenance, not a citation): the server snapshots it on the message.
 export type Source = components["schemas"]["SourceOut"];
 
-// Dev: NEXT_PUBLIC_API_URL hits FastAPI directly (Next's dev rewrite buffers
-// SSE). Prod: unset — same-origin via the reverse proxy. See ADR 0005.
-export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
+export { API_BASE };
 
 // Collapses the parallel 401s of one eviction into a single signOut. Never
 // reset on success (the navigation discards module state); the .catch re-arms
@@ -73,7 +73,7 @@ const TURN_IN_PROGRESS = "A reply is already in progress in this conversation.";
 // persisted, so the caller drops its optimistic turn. `message` is the
 // server's detail.
 export class TurnInProgressError extends Error {
-  constructor(message: string = TURN_IN_PROGRESS) {
+  constructor(message: string) {
     super(message);
     this.name = "TurnInProgressError";
   }
@@ -154,32 +154,31 @@ async function isDemoLimit(response: Response): Promise<boolean> {
   }
 }
 
-// Response bodies are typed from the generated OpenAPI contract but not
-// validated at runtime — we trust the first-party API.
-export async function listConversations(): Promise<ConversationSummary[]> {
-  const response = await apiFetch(`${API_BASE}/api/conversations`);
+function requireOk(response: Response): void {
   if (!response.ok) {
     throw new Error(`API ${response.status}: ${response.statusText}`);
   }
+}
+
+// Response bodies are typed from the generated OpenAPI contract but not
+// validated at runtime — we trust the first-party API.
+export async function okJson<T>(response: Response): Promise<T> {
+  requireOk(response);
   return response.json();
 }
 
+export async function listConversations(): Promise<ConversationSummary[]> {
+  return okJson(await apiFetch(`${API_BASE}/api/conversations`));
+}
+
 export async function getConversation(id: string): Promise<ConversationDetail> {
-  const response = await apiFetch(`${API_BASE}/api/conversations/${id}`);
-  if (!response.ok) {
-    throw new Error(`API ${response.status}: ${response.statusText}`);
-  }
-  return response.json();
+  return okJson(await apiFetch(`${API_BASE}/api/conversations/${id}`));
 }
 
 // Ingestion is async (Celery): an upload returns 'pending' and the panel polls
 // until it settles to ready|failed.
 export async function listDocuments(): Promise<DocumentSummary[]> {
-  const response = await apiFetch(`${API_BASE}/api/documents`);
-  if (!response.ok) {
-    throw new Error(`API ${response.status}: ${response.statusText}`);
-  }
-  return response.json();
+  return okJson(await apiFetch(`${API_BASE}/api/documents`));
 }
 
 export async function uploadDocument(file: File): Promise<DocumentSummary> {
@@ -218,17 +217,8 @@ export async function downloadDocument(
   filename: string,
 ): Promise<void> {
   const response = await apiFetch(`${API_BASE}/api/documents/${id}/download`);
-  if (!response.ok) {
-    throw new Error(`API ${response.status}: ${response.statusText}`);
-  }
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  // Revoking synchronously can cancel the download in WebKit; defer it.
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  requireOk(response);
+  saveBlob(await response.blob(), filename);
 }
 
 // 204 on success. A 404 means the conversation was already gone (stale

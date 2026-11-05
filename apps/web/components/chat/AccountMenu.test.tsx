@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AccountMenu } from "@/components/chat/AccountMenu";
 
 const { aboutYou, signOut } = vi.hoisted(() => ({
-  aboutYou: { current: null as null | { open: () => void } },
+  aboutYou: { current: { open: () => {} } },
   signOut: vi.fn(),
 }));
 vi.mock("next-auth/react", () => ({ signOut }));
@@ -103,16 +103,7 @@ describe("AccountMenu", () => {
     renderMenu();
     open();
     fireEvent.click(item("About you")!);
-    expect(aboutYou.current!.open).toHaveBeenCalledTimes(1);
-  });
-
-  it("leaves out About you when there is no provider", () => {
-    aboutYou.current = null;
-    renderMenu();
-    open();
-    expect(item("About you")).toBeNull();
-    expect(item("Privacy")).toBeInTheDocument();
-    expect(item("Sign out")).toBeInTheDocument();
+    expect(aboutYou.current.open).toHaveBeenCalledTimes(1);
   });
 
   it("Privacy links to /privacy", () => {
@@ -141,15 +132,6 @@ describe("AccountMenu keyboard", () => {
     open();
     const items = menuItems();
     expect(items[0]).toHaveTextContent("About you");
-    await vi.waitFor(() => expect(items[0]).toHaveFocus());
-  });
-
-  it("opening by click focuses Privacy first when there is no About you", async () => {
-    aboutYou.current = null;
-    renderMenu();
-    open();
-    const items = menuItems();
-    expect(items[0]).toHaveTextContent("Privacy");
     await vi.waitFor(() => expect(items[0]).toHaveFocus());
   });
 

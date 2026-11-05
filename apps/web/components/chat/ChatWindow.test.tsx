@@ -43,9 +43,6 @@ beforeEach(() => {
   restoreDraft = null;
   stoppedNotice = false;
   canRetry = false;
-  // jsdom has no layout; auto-scroll calls must not throw.
-  Element.prototype.scrollIntoView = () => {};
-  Element.prototype.scrollTo = () => {};
 });
 
 describe("ChatWindow error", () => {

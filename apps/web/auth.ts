@@ -26,9 +26,18 @@ class SignInTimeout extends CredentialsSignin {
   code = "timeout";
 }
 
-async function callApi(path: string, init: RequestInit): Promise<Response> {
+async function callApi(
+  path: string,
+  init: RequestInit & { headers?: Record<string, string> },
+): Promise<Response> {
   try {
-    return await internalFetch(`${process.env.API_INTERNAL_URL}${path}`, init);
+    return await internalFetch(`${process.env.API_INTERNAL_URL}${path}`, {
+      ...init,
+      headers: {
+        "X-Internal-Secret": process.env.INTERNAL_API_SECRET ?? "",
+        ...init.headers,
+      },
+    });
   } catch (error) {
     if (error instanceof InternalApiTimeout) throw new SignInTimeout();
     throw error;
@@ -65,10 +74,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       async authorize(credentials) {
         const res = await callApi("/internal/auth/verify-credentials", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Internal-Secret": process.env.INTERNAL_API_SECRET ?? "",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             email: credentials.email,
             password: credentials.password,
@@ -99,10 +105,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const forwarded = request.headers.get("x-forwarded-for") ?? "";
         const res = await callApi("/internal/auth/anonymous", {
           method: "POST",
-          headers: {
-            "X-Internal-Secret": process.env.INTERNAL_API_SECRET ?? "",
-            "X-Visitor-IP": forwarded.split(",")[0].trim(),
-          },
+          headers: { "X-Visitor-IP": forwarded.split(",")[0].trim() },
         });
         if (res.status === 429) throw new RateLimit();
         if (!res.ok) return null;
@@ -129,10 +132,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       try {
         const res = await callApi("/internal/auth/oauth-upsert", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Internal-Secret": process.env.INTERNAL_API_SECRET ?? "",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             provider: "google",
             provider_account_id: account.providerAccountId,

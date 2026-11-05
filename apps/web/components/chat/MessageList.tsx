@@ -10,6 +10,7 @@ import {
 
 import { Markdown } from "@/components/chat/Markdown";
 import { SourcesFooter } from "@/components/chat/SourcesFooter";
+import { useCopy } from "@/hooks/useCopy";
 import { type ChatMessage } from "@/lib/chatApi";
 import { REDUCED_MOTION } from "@/lib/media";
 import { formatMessageTime } from "@/lib/time";
@@ -40,24 +41,12 @@ function isNewUserTurn(prevLength: number, messages: ChatMessage[]): boolean {
 // Copies the raw Markdown of a message (its stored `content`), not the
 // rendered text.
 function CopyButton({ content }: { content: string }) {
-  const [copied, setCopied] = useState(false);
-
-  async function copy() {
-    // The clipboard can refuse (permission, insecure context); a click handler
-    // must not leave an unhandled rejection (same contract as DataTable's copy).
-    try {
-      await navigator.clipboard.writeText(content);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      setCopied(false);
-    }
-  }
+  const [copied, copy] = useCopy();
 
   return (
     <button
       type="button"
-      onClick={copy}
+      onClick={() => copy(content)}
       aria-label="Copy message"
       className="rounded p-0.5 text-ink-3 hover:bg-surface-2 hover:text-ink"
     >

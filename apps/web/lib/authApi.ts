@@ -1,10 +1,10 @@
+import { API_BASE } from "@/lib/apiBase";
 import type { components } from "@/lib/openapi";
 
 // Thin typed fetch wrappers for the public auth routes (signup, resend,
 // verify-email, request/reset password + the reset precheck) — all called
 // before a session cookie exists, so unlike chatApi.ts these carry no
 // credentials.
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 type AcceptedOut = components["schemas"]["AcceptedOut"];
 type EmailOut = components["schemas"]["EmailOut"];

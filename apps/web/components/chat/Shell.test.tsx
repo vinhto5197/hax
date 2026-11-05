@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Shell } from "@/components/chat/Shell";
+import { stubMatchMedia } from "@/test-utils/matchMedia";
 
 // Plain functions, not vi.fn: the config's mockReset would clear a queued
 // return value before each test.
@@ -15,16 +16,7 @@ vi.mock("@/components/chat/Sidebar", () => ({ Sidebar: () => null }));
 
 beforeEach(() => {
   // Every query false: the phone shell, where the drawer exists.
-  vi.stubGlobal("matchMedia", (query: string) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addEventListener: () => {},
-    removeEventListener: () => {},
-    addListener: () => {},
-    removeListener: () => {},
-    dispatchEvent: () => false,
-  }));
+  stubMatchMedia();
 });
 
 function openDrawer() {

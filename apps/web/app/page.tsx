@@ -18,8 +18,6 @@ const DEMO_CHIPS = [
   "How are my documents searched?",
 ];
 
-const FOOTER_LINKS = [{ href: "/privacy", label: "Privacy" }] as const;
-
 // Public landing (proxy.ts: exact-match "/"; members are sent to /chat). The
 // first send starts a demo — a new anonymous session — and the chat renders
 // here, in place, with no URL: reload or leave and it is gone. The provider
@@ -39,7 +37,7 @@ export default function Home() {
     try {
       result = await signIn("anonymous", { redirect: false });
     } catch {
-      result = undefined;
+      // result stays undefined: the generic failure below.
     }
     if (!result || result.error) {
       setError(
@@ -94,14 +92,11 @@ export default function Home() {
         />
       </div>
       <nav className="flex justify-center gap-2 px-4 pb-4 text-small text-ink-2">
-        {FOOTER_LINKS.map((link, i) => (
-          <span key={link.href} className="flex gap-2">
-            {i > 0 ? <span aria-hidden="true">·</span> : null}
-            <Link href={link.href} className="hover:underline">
-              {link.label}
-            </Link>
-          </span>
-        ))}
+        <span className="flex gap-2">
+          <Link href="/privacy" className="hover:underline">
+            Privacy
+          </Link>
+        </span>
       </nav>
     </main>
   );

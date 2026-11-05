@@ -28,6 +28,19 @@ function respondWith(make: () => Response): void {
   fetchMock.mockImplementation(async () => make());
 }
 
+function stream(reads: Array<string | Uint8Array>): void {
+  respondWith(() => sseResponse(reads));
+}
+
+async function rejection(promise: Promise<unknown>): Promise<unknown> {
+  return promise.then(
+    () => {
+      throw new Error("expected a rejection");
+    },
+    (err: unknown) => err,
+  );
+}
+
 function call(index = 0): { url: string; init: RequestInit } {
   const [input, init] = fetchMock.mock.calls[index];
   return { url: String(input), init: init ?? {} };
@@ -365,10 +378,6 @@ describe("downloadDocument", () => {
 });
 
 describe("streamChat", () => {
-  function stream(reads: Array<string | Uint8Array>): void {
-    respondWith(() => sseResponse(reads));
-  }
-
   it("posts the prompt as JSON with a null model and conversation for a new chat", async () => {
     const api = await load();
     stream([sseEvent("[DONE]")]);
@@ -646,19 +655,6 @@ describe("streamChat", () => {
 });
 
 describe("streamChat reply failure", () => {
-  function stream(reads: Array<string | Uint8Array>): void {
-    respondWith(() => sseResponse(reads));
-  }
-
-  async function rejection(promise: Promise<unknown>): Promise<unknown> {
-    return promise.then(
-      () => {
-        throw new Error("expected streamChat to reject");
-      },
-      (err: unknown) => err,
-    );
-  }
-
   it("delivers every event before an error frame, then rejects with ReplyFailedError", async () => {
     const api = await load();
     const h = handlers();
@@ -775,19 +771,6 @@ describe("streamChat reply failure", () => {
 
 describe("streamChat lost connection", () => {
   const SILENCE_MS = 45_000;
-
-  function stream(reads: Array<string | Uint8Array>): void {
-    respondWith(() => sseResponse(reads));
-  }
-
-  async function rejection(promise: Promise<unknown>): Promise<unknown> {
-    return promise.then(
-      () => {
-        throw new Error("expected streamChat to reject");
-      },
-      (err: unknown) => err,
-    );
-  }
 
   // A response body the test feeds by hand and can break or leave silent.
   function openStream() {
@@ -1118,19 +1101,6 @@ describe("stopReply", () => {
 });
 
 describe("streamRetry", () => {
-  function stream(reads: Array<string | Uint8Array>): void {
-    respondWith(() => sseResponse(reads));
-  }
-
-  async function rejection(promise: Promise<unknown>): Promise<unknown> {
-    return promise.then(
-      () => {
-        throw new Error("expected streamRetry to reject");
-      },
-      (err: unknown) => err,
-    );
-  }
-
   it("posts after, replace and the chosen model as JSON to the conversation's retry route with credentials included", async () => {
     const api = await load();
     stream([sseEvent("[DONE]")]);

@@ -16,10 +16,12 @@ type AboutYou = { open: () => void };
 
 const AboutYouContext = createContext<AboutYou | null>(null);
 
-// Null outside the provider: the account menu leaves out its About you item
-// there.
-export function useAboutYou(): AboutYou | null {
-  return useContext(AboutYouContext);
+export function useAboutYou(): AboutYou {
+  const context = useContext(AboutYouContext);
+  if (!context) {
+    throw new Error("useAboutYou must be used within an AboutYouProvider");
+  }
+  return context;
 }
 
 function memberOf(session: Session | null): string | null {

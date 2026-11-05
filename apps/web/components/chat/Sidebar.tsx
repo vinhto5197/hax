@@ -61,15 +61,17 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     }
   }
 
+  function newChat() {
+    startNewChat();
+    onNavigate?.();
+  }
+
   return (
     <aside className="flex h-full w-full flex-col gap-3 border-r border-border p-3">
       <div className="flex items-center justify-between">
         <Link
           href="/chat"
-          onClick={() => {
-            startNewChat();
-            onNavigate?.();
-          }}
+          onClick={newChat}
           aria-label="Hax home"
           className="text-ink"
         >
@@ -77,10 +79,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         </Link>
         <Link
           href="/chat"
-          onClick={() => {
-            startNewChat();
-            onNavigate?.();
-          }}
+          onClick={newChat}
           className="rounded-control border border-border-control px-3 py-1.5 text-body text-ink hover:bg-surface-2"
         >
           + New chat

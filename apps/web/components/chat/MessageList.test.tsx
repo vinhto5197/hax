@@ -5,10 +5,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MessageList } from "@/components/chat/MessageList";
 import type { ChatMessage } from "@/lib/chatApi";
 import { REDUCED_MOTION } from "@/lib/media";
+import { stubMatchMedia } from "@/test-utils/matchMedia";
 
 beforeEach(() => {
-  // jsdom has no layout; auto-scroll calls must not throw.
-  Element.prototype.scrollIntoView = () => {};
+  // jsdom has no Element.scrollTo; the jump button calls it.
   Element.prototype.scrollTo = () => {};
 });
 
@@ -155,18 +155,9 @@ describe("MessageList stick-to-bottom on scroller resize", () => {
 
 const JUMP = { name: "Jump to latest" };
 
-// jsdom has no matchMedia; only the reduced-motion query is ever asked here.
+// Only the reduced-motion query is ever asked here.
 function stubReducedMotion(reduce: boolean) {
-  vi.stubGlobal("matchMedia", (query: string) => ({
-    matches: reduce && query === REDUCED_MOTION,
-    media: query,
-    onchange: null,
-    addListener: () => {},
-    removeListener: () => {},
-    addEventListener: () => {},
-    removeEventListener: () => {},
-    dispatchEvent: () => false,
-  }));
+  stubMatchMedia((query) => reduce && query === REDUCED_MOTION);
 }
 
 const BASE_MESSAGES: ChatMessage[] = [

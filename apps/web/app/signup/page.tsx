@@ -3,7 +3,12 @@
 import Link from "next/link";
 import { useState, type SubmitEvent } from "react";
 
-import { AuthCard, buttonClass, fieldClass } from "@/components/auth/AuthCard";
+import {
+  AuthCard,
+  BackToLogin,
+  buttonClass,
+  fieldClass,
+} from "@/components/auth/AuthCard";
 import { PasswordField } from "@/components/auth/PasswordField";
 import { GoogleButton, OrDivider } from "@/components/auth/GoogleButton";
 import { ResendStatus, useResend } from "@/components/auth/useResend";
@@ -85,14 +90,7 @@ export default function SignupPage() {
           Didn&apos;t get it? Resend
         </button>
         <ResendStatus state={resendState} />
-        <p className="text-small text-ink-2">
-          <Link
-            href="/login"
-            className="text-accent underline underline-offset-2"
-          >
-            Back to log in
-          </Link>
-        </p>
+        <BackToLogin />
       </AuthCard>
     );
   }

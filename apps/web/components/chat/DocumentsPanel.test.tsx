@@ -7,6 +7,7 @@ import {
   uploadDocument,
   type DocumentSummary,
 } from "@/lib/chatApi";
+import { stubMatchMedia } from "@/test-utils/matchMedia";
 
 vi.mock("@/lib/chatApi", () => ({
   listDocuments: vi.fn(),
@@ -37,16 +38,7 @@ function serve(docs: DocumentSummary[]) {
 
 beforeEach(() => {
   // matches: false keeps the panel's <details> open by default.
-  vi.stubGlobal("matchMedia", (query: string) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addEventListener: () => {},
-    removeEventListener: () => {},
-    addListener: () => {},
-    removeListener: () => {},
-    dispatchEvent: () => false,
-  }));
+  stubMatchMedia();
 });
 
 describe("DocumentsPanel status labels", () => {

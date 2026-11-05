@@ -8,10 +8,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest",
     "e2e": "playwright test",
     "generate:types": "openapi-typescript openapi.json -o lib/openapi.ts"
   },

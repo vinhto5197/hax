@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Sidebar } from "@/components/chat/Sidebar";
 import type { ConversationSummary } from "@/lib/chatApi";
+import { stubMatchMedia } from "@/test-utils/matchMedia";
 
 const conversation: ConversationSummary = {
   id: "11111111-1111-1111-1111-111111111111",
@@ -48,21 +49,15 @@ vi.mock("@/lib/chatApi", () => ({
   deleteDocument: () => Promise.resolve(),
   downloadDocument: () => Promise.resolve(),
 }));
+vi.mock("@/components/chat/AboutYouProvider", () => ({
+  useAboutYou: () => ({ open: () => {} }),
+}));
 vi.mock("@/components/chat/DocumentsPanel", () => ({
   DocumentsPanel: () => null,
 }));
 
 beforeEach(() => {
-  vi.stubGlobal("matchMedia", (query: string) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addEventListener: () => {},
-    removeEventListener: () => {},
-    addListener: () => {},
-    removeListener: () => {},
-    dispatchEvent: () => false,
-  }));
+  stubMatchMedia();
 });
 
 describe("Sidebar loading", () => {

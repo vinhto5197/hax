@@ -15,7 +15,6 @@ interface SourcesFooterProps {
 // claims which sentence rests on which passage.
 export function SourcesFooter({ sources }: SourcesFooterProps) {
   const [open, setOpen] = useState<string | null>(null);
-  if (sources.length === 0) return null;
 
   // Group by document, preserving first-seen order; passages in document order.
   const byDocument = new Map<

@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { PublicHeader } from "@/components/PublicHeader";
 
 export function AuthCard({
@@ -24,3 +26,13 @@ export const fieldClass =
   "w-full rounded-control border border-border-control bg-surface-1 px-3 py-2 text-body text-ink";
 export const buttonClass =
   "w-full rounded-control bg-accent px-3 py-2 text-body font-medium text-accent-ink disabled:opacity-50";
+
+export function BackToLogin() {
+  return (
+    <p className="text-small text-ink-2">
+      <Link href="/login" className="text-accent underline underline-offset-2">
+        Back to log in
+      </Link>
+    </p>
+  );
+}

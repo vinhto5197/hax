@@ -1,10 +1,14 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState, type SubmitEvent } from "react";
 
-import { AuthCard, buttonClass, fieldClass } from "@/components/auth/AuthCard";
+import {
+  AuthCard,
+  BackToLogin,
+  buttonClass,
+  fieldClass,
+} from "@/components/auth/AuthCard";
 import { ResendStatus, useResend } from "@/components/auth/useResend";
 import { verifyEmail } from "@/lib/authApi";
 
@@ -84,14 +88,7 @@ function VerifyEmailForm() {
           state={resendState}
           sentCopy="Sent — if an account exists, a new link is on its way."
         />
-        <p className="text-small text-ink-2">
-          <Link
-            href="/login"
-            className="text-accent underline underline-offset-2"
-          >
-            Back to log in
-          </Link>
-        </p>
+        <BackToLogin />
       </AuthCard>
     );
   }

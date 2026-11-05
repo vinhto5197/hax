@@ -131,6 +131,23 @@ async function newChatTurn(
   return hook.result;
 }
 
+function transcript(result: { current: ReturnType<typeof useChat> }) {
+  return result.current.messages.map((m) => [m.role, m.content]);
+}
+
+async function tick(ms: number) {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(ms);
+  });
+}
+
+// The id the hook chose for its latest send, as streamChat received it.
+function sentId(): string {
+  const id = streamChat.mock.calls.at(-1)?.[4];
+  if (!id) throw new Error("no message id was sent");
+  return id;
+}
+
 describe("useChat loading", () => {
   it("a new chat starts empty without loading anything", () => {
     const { result } = renderHook(() => useChat(null, null));
@@ -572,10 +589,6 @@ describe("useChat sending", () => {
 describe("useChat reply failure", () => {
   const INTERRUPTED = "The reply was interrupted.";
 
-  function transcript(result: { current: ReturnType<typeof useChat> }) {
-    return result.current.messages.map((m) => [m.role, m.content]);
-  }
-
   it("a reply failure before any text shows 'The reply was interrupted.' and keeps the user message", async () => {
     const turn = holdTurn();
     const result = await newChatTurn(
@@ -715,26 +728,9 @@ describe("useChat still answering", () => {
     return { promise, resolve };
   }
 
-  async function tick(ms: number) {
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(ms);
-    });
-  }
-
-  function transcript(result: { current: ReturnType<typeof useChat> }) {
-    return result.current.messages.map((m) => [m.role, m.content]);
-  }
-
   function polls(id: string): number {
     return getConversation.mock.calls.filter(([polled]) => polled === id)
       .length;
-  }
-
-  // The id the hook chose for its latest send, as streamChat received it.
-  function sentId(): string {
-    const id = streamChat.mock.calls.at(-1)?.[4];
-    if (!id) throw new Error("no message id was sent");
-    return id;
   }
 
   // The latest send's user message as the server stores it.
@@ -1455,10 +1451,6 @@ describe("useChat stop", () => {
     vi.useRealTimers();
   });
 
-  function transcript(result: { current: ReturnType<typeof useChat> }) {
-    return result.current.messages.map((m) => [m.role, m.content]);
-  }
-
   function stopAnswers(status: number) {
     fetchMock.mockResolvedValue(new Response(null, { status }));
   }
@@ -1835,32 +1827,9 @@ describe("useChat try again", () => {
     });
   }
 
-  async function tick(ms: number) {
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(ms);
-    });
-  }
-
-  function transcript(result: { current: ReturnType<typeof useChat> }) {
-    return result.current.messages.map((m) => [m.role, m.content]);
-  }
-
-  // The id the hook chose for its latest send, as streamChat received it.
-  function sentId(): string {
-    const id = streamChat.mock.calls.at(-1)?.[4];
-    if (!id) throw new Error("no message id was sent");
-    return id;
-  }
-
-  type Retry = {
-    handlers: StreamHandlers;
-    end: () => void;
-    fail: (reason: unknown) => void;
-  };
-
   // The next streamRetry call stays in flight until the test ends or fails it.
-  function holdRetry(): Retry {
-    const retry = {} as Retry;
+  function holdRetry(): Turn {
+    const retry = {} as Turn;
     streamRetry.mockImplementationOnce(
       (_conversationId, _after, _replace, handlers) =>
         new Promise<void>((resolve, reject) => {

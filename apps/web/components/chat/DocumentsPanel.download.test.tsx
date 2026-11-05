@@ -7,6 +7,7 @@ import {
   listDocuments,
   type DocumentSummary,
 } from "@/lib/chatApi";
+import { stubMatchMedia } from "@/test-utils/matchMedia";
 
 vi.mock("@/lib/chatApi", () => ({
   listDocuments: vi.fn(),
@@ -31,16 +32,7 @@ beforeEach(() => {
   // The config's mockReset clears return values, so they are set per test.
   vi.mocked(listDocuments).mockResolvedValue([REPORT]);
   vi.mocked(downloadDocument).mockResolvedValue(undefined);
-  vi.stubGlobal("matchMedia", (query: string) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addEventListener: () => {},
-    removeEventListener: () => {},
-    addListener: () => {},
-    removeListener: () => {},
-    dispatchEvent: () => false,
-  }));
+  stubMatchMedia();
 });
 
 describe("DocumentsPanel filename download", () => {

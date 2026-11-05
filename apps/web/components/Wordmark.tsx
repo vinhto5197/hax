@@ -1,13 +1,7 @@
 // The product's mark: drawn geometry, not type. This is the only place the
 // name is a graphic; it takes its colour from `currentColor`. The favicon in
 // `app/icon.svg` is the x of this mark on the accent tile.
-export function Wordmark({
-  height = 22,
-  className,
-}: {
-  height?: number;
-  className?: string;
-}) {
+export function Wordmark({ height = 22 }: { height?: number }) {
   return (
     <svg
       role="img"
@@ -15,7 +9,6 @@ export function Wordmark({
       viewBox="-6 -6 256 112"
       width={(height * 256) / 112}
       height={height}
-      className={className}
     >
       <g
         fill="none"

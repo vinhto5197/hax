@@ -7,9 +7,7 @@ import { signIn } from "next-auth/react";
 
 import { AuthCard, buttonClass } from "@/components/auth/AuthCard";
 import { PasswordField } from "@/components/auth/PasswordField";
-import { checkResetToken, resetPassword } from "@/lib/authApi";
-
-type ErrorCode = "invalid_token" | "rate_limited" | "validation" | "unknown";
+import { checkResetToken, resetPassword, type Code } from "@/lib/authApi";
 
 function ResetPasswordForm() {
   const router = useRouter();
@@ -19,7 +17,7 @@ function ResetPasswordForm() {
   const [submitting, setSubmitting] = useState(false);
   // No token behaves exactly like an invalid/expired one — set once, up
   // front, with nothing to retry.
-  const [errorCode, setErrorCode] = useState<ErrorCode | null>(
+  const [errorCode, setErrorCode] = useState<Code | null>(
     token ? null : "invalid_token",
   );
   // A present, non-empty token starts "checking" until the precheck below
@@ -49,10 +47,7 @@ function ResetPasswordForm() {
 
   async function handleSubmit(event: SubmitEvent) {
     event.preventDefault();
-    if (!token) {
-      setErrorCode("invalid_token");
-      return;
-    }
+    if (!token) return;
     setSubmitting(true);
     setErrorCode(null);
     try {

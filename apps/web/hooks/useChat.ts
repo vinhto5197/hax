@@ -67,25 +67,16 @@ function endsWithUser(conv: ConversationDetail): boolean {
   return conv.messages.at(-1)?.role === "user";
 }
 
-// fetch's own rejection (offline, DNS, or the silence limit's abort): the
-// request may or may not have reached the server.
+// fetch's own rejection (offline, DNS, the silence limit's abort, or
+// stopReply's bound): the request may or may not have reached the server.
 function isNetworkFailure(err: unknown): boolean {
   if (err instanceof TypeError) return true;
   return (
     typeof err === "object" &&
     err !== null &&
-    (err as { name?: unknown }).name === "AbortError"
-  );
-}
-
-// stopReply's bound fires as a TimeoutError: like a network failure, the stop
-// may have reached the server.
-function isStopNetworkFailure(err: unknown): boolean {
-  return (
-    isNetworkFailure(err) ||
-    (typeof err === "object" &&
-      err !== null &&
-      (err as { name?: unknown }).name === "TimeoutError")
+    ["AbortError", "TimeoutError"].includes(
+      (err as { name?: unknown }).name as string,
+    )
   );
 }
 
@@ -623,7 +614,7 @@ export function useChat(
     } catch (err) {
       // An error status: the server did not stop it, so a later failure must
       // show. A network failure keeps it set: that stop may have landed.
-      if (!isStopNetworkFailure(err)) {
+      if (!isNetworkFailure(err)) {
         stoppedRef.current = false;
         // The turn settled first, as a stopped one: undo that.
         if (!sendingRef.current) {

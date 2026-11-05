@@ -42,7 +42,6 @@ export function AccountMenu({
     menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
   }, [open]);
 
-  // Queried at key time: "About you" is present only for members.
   function menuItems(): HTMLElement[] {
     return Array.from(
       menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [],
@@ -90,19 +89,17 @@ export function AccountMenu({
           aria-label="Account"
           className="absolute inset-x-0 bottom-full mb-1 overflow-hidden rounded-card border border-border bg-surface-1 py-1 shadow-lg"
         >
-          {aboutYou ? (
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                setOpen(false);
-                aboutYou.open();
-              }}
-              className={ITEM}
-            >
-              About you
-            </button>
-          ) : null}
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              aboutYou.open();
+            }}
+            className={ITEM}
+          >
+            About you
+          </button>
           <Link
             href="/privacy"
             role="menuitem"
