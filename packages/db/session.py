@@ -1,8 +1,11 @@
 import os
 import re
 
+from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
+
+from packages.db.user_context import current_user_id
 
 
 def to_async_url(url: str) -> str:
@@ -59,11 +62,6 @@ AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 class Base(DeclarativeBase):
     pass
-
-
-from sqlalchemy import event, text  # noqa: E402 — grouped with the listener it serves
-
-from packages.db.user_context import current_user_id  # noqa: E402
 
 
 @event.listens_for(engine.sync_engine, "begin")

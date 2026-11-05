@@ -2,7 +2,7 @@ from packages.db.models.account import Account
 from packages.db.models.chunk import Chunk
 from packages.db.models.conversation import Conversation
 from packages.db.models.document import Document
-from packages.db.models.email_token import EMAIL_TOKEN_PURPOSES, EmailToken
+from packages.db.models.email_token import EmailToken
 from packages.db.models.message import Message
 from packages.db.models.user import User
 from packages.db.models.user_profile import UserProfile
@@ -16,5 +16,4 @@ __all__ = [
     "UserProfile",
     "Account",
     "EmailToken",
-    "EMAIL_TOKEN_PURPOSES",
 ]

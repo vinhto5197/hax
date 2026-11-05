@@ -97,7 +97,7 @@ async def _resolve_oauth_user(
     if user is None:
         user = await users_repo.create_oauth_user(session, email, body.name)
     else:
-        cutoff = await users_repo.claim_by_verified_email(session, user, body.name)
+        cutoff = await users_repo.claim_by_verified_email(user, body.name)
     await accounts_repo.link(session, user.id, body.provider, body.provider_account_id)
     return user, cutoff
 

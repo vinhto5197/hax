@@ -225,7 +225,7 @@ async def verify_email(
     # bucket on before the token is looked up).
     await _limit(request, "verify", per_ip=10, window_s=900)
     user = await _spend_token(session, body.token, "verify_email")
-    await users_repo.mark_email_verified(session, user)
+    await users_repo.mark_email_verified(user)
     await session.commit()
     return EmailOut(email=users_repo.member_email(user))
 
@@ -284,7 +284,7 @@ async def reset_password(
     # connection for the hash, which on a route this rare is the cheaper cost.
     user = await _spend_token(session, body.token, "reset_password")
     cutoff = await users_repo.reset_password(
-        session, user, await hash_password_async(body.password)
+        user, await hash_password_async(body.password)
     )
     await session.commit()
     await publish_sva(get_redis(), user.id, cutoff)

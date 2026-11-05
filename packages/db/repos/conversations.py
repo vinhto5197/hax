@@ -40,15 +40,10 @@ async def get_owned(
     session: AsyncSession,
     user_id: uuid.UUID,
     conversation_id: uuid.UUID,
-    *,
-    with_messages: bool = False,
 ) -> Conversation | None:
     stmt = select(Conversation).where(
         Conversation.id == conversation_id, Conversation.user_id == user_id
     )
-    if with_messages:
-        # selectinload: second query, avoids a lazy load in async context.
-        stmt = stmt.options(selectinload(Conversation.messages))
     result = await session.scalars(stmt)
     return result.first()
 

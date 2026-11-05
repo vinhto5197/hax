@@ -31,9 +31,7 @@ class RetrievedChunk:
     chunk_idx: int
 
 
-async def retrieve(
-    query: str, user_id: uuid.UUID, k: int = TOP_K
-) -> list[RetrievedChunk]:
+async def retrieve(query: str, user_id: uuid.UUID) -> list[RetrievedChunk]:
     """Embed the query and return its k nearest chunks by cosine distance.
 
     Degrades to [] on ANY fault (no corpus, Voyage down, DB error) so chat never
@@ -78,7 +76,7 @@ async def retrieve(
             )
             if MAX_DISTANCE is not None:
                 stmt = stmt.where(distance <= MAX_DISTANCE)
-            rows = await session.execute(stmt.order_by(distance).limit(k))
+            rows = await session.execute(stmt.order_by(distance).limit(TOP_K))
             results = [
                 RetrievedChunk(
                     content=content,
@@ -92,7 +90,7 @@ async def retrieve(
             logger.info(
                 "retrieval: query_len=%d k=%d cutoff=%s hits=%d distances=%s",
                 len(query),
-                k,
+                TOP_K,
                 MAX_DISTANCE,
                 len(results),
                 [round(r.distance, 3) for r in results],

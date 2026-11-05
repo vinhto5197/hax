@@ -10,7 +10,6 @@ CHUNK_OVERLAP = int(os.getenv("RAG_CHUNK_OVERLAP", "200"))
 _splitter = RecursiveCharacterTextSplitter(
     chunk_size=CHUNK_SIZE,
     chunk_overlap=CHUNK_OVERLAP,
-    length_function=len,
 )
 
 

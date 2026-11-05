@@ -57,11 +57,9 @@ async def create_anonymous(session: AsyncSession) -> User:
 async def get_sessions_valid_after(
     session: AsyncSession, user_id: uuid.UUID
 ) -> datetime | None:
-    result = await session.execute(
+    return await session.scalar(
         select(User.sessions_valid_after).where(User.id == user_id)
     )
-    row = result.first()
-    return row[0] if row else None
 
 
 async def create_oauth_user(
@@ -80,9 +78,7 @@ async def create_oauth_user(
     return user
 
 
-async def claim_by_verified_email(
-    session: AsyncSession, user: User, name: str | None
-) -> datetime | None:
+async def claim_by_verified_email(user: User, name: str | None) -> datetime | None:
     """A provider-verified sign-in claims an existing row for `user.email`.
 
     Returns the new sessions cutoff when the claim revoked sessions, else None.
@@ -104,7 +100,7 @@ async def claim_by_verified_email(
     return cutoff
 
 
-async def mark_email_verified(session: AsyncSession, user: User) -> None:
+async def mark_email_verified(user: User) -> None:
     if user.email_verified_at is None:
         user.email_verified_at = datetime.now(UTC)
 
@@ -138,9 +134,7 @@ async def replace_pending_password(
     return cutoff
 
 
-async def reset_password(
-    session: AsyncSession, user: User, password_hash: str
-) -> datetime:
+async def reset_password(user: User, password_hash: str) -> datetime:
     """Inbox-proven password set. Stamps verified if NULL (the link proved
     the inbox) and revokes every prior session — a stolen token must not
     outlive a reset. Returns the cutoff; caller publishes it after commit."""

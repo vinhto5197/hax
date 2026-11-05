@@ -10,11 +10,12 @@ are user-facing only: the model receives ToolOutput.text and nothing else.
 
 import logging
 import os
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncGenerator, AsyncIterator, Callable
+from contextlib import aclosing
 from typing import Any, TypedDict, cast
 
 from anthropic import AsyncAnthropic
-from anthropic.types import MessageParam, ToolResultBlockParam
+from anthropic.types import Message, MessageParam, ToolResultBlockParam
 
 from packages.core.agent.tools import TOOLS, Source, ToolContext, ToolOutput
 
@@ -149,15 +150,20 @@ async def stream_completion_agentic(
     # Tracks whether any iteration streamed text, so a new iteration's text gets
     # a separator instead of concatenating into run-ons.
     emitted_text = False
+    final: Message | None = None
 
-    for iteration in range(MAX_ITERS):
+    async def _call(label: str, schemas: list) -> AsyncGenerator[dict, None]:
+        # Streams one model call over the current `messages`, leaving its
+        # response in `final`. Callers wrap it in aclosing so a closed turn
+        # exits the SDK stream at once, as an inline `async with` would.
+        nonlocal emitted_text, final
         kwargs: dict = {
             "model": model,
             "max_tokens": MAX_TOKENS,
             "messages": _cache_last(messages),
         }
-        if tool_schemas:
-            kwargs["tools"] = tool_schemas
+        if schemas:
+            kwargs["tools"] = schemas
         if system is not None:
             kwargs["system"] = system
 
@@ -172,7 +178,13 @@ async def stream_completion_agentic(
                 yield {"content": text}
             final = await stream.get_final_message()
 
-        _report_usage(str(iteration), model, final.usage, on_usage)
+        _report_usage(label, model, final.usage, on_usage)
+
+    for iteration in range(MAX_ITERS):
+        async with aclosing(_call(str(iteration), tool_schemas)) as events:
+            async for event in events:
+                yield event
+        assert final is not None
 
         if final.stop_reason != "tool_use":
             return  # end_turn — the answer already streamed
@@ -233,20 +245,6 @@ async def stream_completion_agentic(
     logger.warning("agentic loop hit MAX_ITERS=%d without finishing", MAX_ITERS)
     yield {"status": "Reached the tool-use limit."}
     messages.append({"role": "user", "content": FINAL_ANSWER_PROMPT})
-    kwargs = {
-        "model": model,
-        "max_tokens": MAX_TOKENS,
-        "messages": _cache_last(messages),
-    }
-    if system is not None:
-        kwargs["system"] = system
-    async with _client.messages.stream(**kwargs) as stream:
-        first_delta = True
-        async for text in stream.text_stream:
-            if first_delta and emitted_text:
-                yield {"content": "\n\n"}
-            first_delta = False
-            emitted_text = True
-            yield {"content": text}
-        final = await stream.get_final_message()
-    _report_usage("fallback", model, final.usage, on_usage)
+    async with aclosing(_call("fallback", [])) as events:
+        async for event in events:
+            yield event
