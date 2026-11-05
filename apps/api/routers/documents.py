@@ -160,8 +160,7 @@ async def upload_document(
     await session.commit()
     await session.refresh(doc)
 
-    # Enqueue ingestion (Celery) and return at 'pending'; the UI polls for the
-    # status flip. The id goes as a str — the JSON broker can't carry a UUID.
+    # Return at 'pending'; the UI polls for the status flip.
     # Shielded: a client disconnect during a slow publish must not cancel the
     # handler between the commit and the mark-failed below.
     with anyio.CancelScope(shield=True):
@@ -191,7 +190,7 @@ async def delete_document(
 
     # DB row first (source of truth), storage second and best-effort: a storage
     # failure after commit only leaks an orphaned object — log, don't 500.
-    # storage_key is None when the put never succeeded (the row is flushed first).
+    # storage_key is nullable; a row without one has no object to remove.
     storage_key = doc.storage_key
     await session.commit()
 
@@ -238,7 +237,7 @@ async def download_document(
 ) -> Response:
     refuse_visitor(user)
     doc = await documents_repo.get_owned(session, user.id, document_id)
-    # A row whose put never succeeded has no bytes; it answers like a miss so
+    # A row without a storage_key has no bytes and answers like a miss, so
     # the two are indistinguishable. Any status is downloadable otherwise: the
     # bytes exist from the moment the put succeeded, pending or failed alike.
     if doc is None or doc.storage_key is None:

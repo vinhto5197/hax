@@ -1,14 +1,10 @@
 """The API's one way to put a Celery task on the broker.
 
-Publishing is a BLOCKING network call: about a millisecond against a healthy
-broker, about 6 s against a sick one whether the port refuses or the host is
-unroutable (bounded by the broker's `socket_connect_timeout`, set in
-`apps/worker/celery_app.py`; without `ignore_result` on the task, the
-result-backend subscription pushes a refusing broker past 15 s). Every producer
-in this app sits on a request path — chat turns, the public auth routes,
-uploads — so a publish made inline on the event loop freezes the whole
-process for every user for that long. Nothing here runs a task; it only hands
-the message off:
+Publishing is a BLOCKING network call that can take seconds against a sick
+broker (bounded by `socket_connect_timeout`, apps/worker/celery_app.py). Every
+producer here sits on a request path, so an inline publish would freeze the
+event loop for every user. Nothing here runs a task; it only hands the message
+off:
 
   1. to a `_publisher` thread, so the event loop never blocks on the network;
   2. for `fire_and_forget`, to an asyncio task first, so the request does not

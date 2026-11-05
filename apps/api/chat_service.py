@@ -203,20 +203,15 @@ async def persist_assistant_turn(
     sources), bumping updated_at, in one transaction — "reply saved" and
     "conversation free" cannot disagree.
 
-    Called only by the turn's task (apps/api/turns.py), on a clean finish
-    or a Stop with text: a stored reply is complete, or cut short by its user's
-    Stop. The message is written only if this call released the turn's own
-    claim (a lapsed turn whose claim another turn or a retry took stores
-    nothing: that turn read the conversation's end under its claim) and only
-    if something streamed — sources alone are not a turn. `claimed_at` is the
-    claim's latest value, after any refresh.
-    `sources` is the deduplicated provenance from the turn's searches; it is
-    stored for the client and never replayed to the model.
+    The message is written only if this call released the turn's own claim (a
+    lapsed turn whose claim another turn or a retry took stores nothing: that
+    turn read the conversation's end under its claim) and only if something
+    streamed — sources alone are not a turn. `claimed_at` is the claim's latest
+    value, after any refresh. `sources` is the deduplicated provenance from the
+    turn's searches; it is stored for the client and never replayed to the
+    model.
 
-    user_id is needed for the title task: the worker has no request to take an
-    identity from, so the owner rides the Celery payload and the task announces
-    it for RLS. A title that is still NULL here means the creation-time enqueue
-    never produced one, so this turn queues it again.
+    user_id scopes the title check; a still-NULL title is queued again.
     """
     untitled = False
     async with AsyncSessionLocal() as session:

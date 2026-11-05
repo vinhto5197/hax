@@ -126,11 +126,9 @@ async def current_user(request: Request) -> CurrentUser:
 
 
 async def internal_only(x_internal_secret: str = Header(default="")) -> None:
-    # Server-to-server auth for endpoints only our Next server may call (e.g.
-    # verify-credentials, a password oracle that current_user cannot protect:
-    # its callers aren't logged in yet). Identity = possession of
-    # INTERNAL_API_SECRET, shared by the two services' environments; rejection
-    # is a 404 indistinguishable from a nonexistent route.
+    # Possession of INTERNAL_API_SECRET; verify-credentials is a password
+    # oracle current_user can't guard (its callers aren't signed in). A miss is
+    # a 404 indistinguishable from a nonexistent route.
     expected = os.getenv("INTERNAL_API_SECRET", "")
     if not expected or not hmac.compare_digest(
         x_internal_secret.encode("latin-1"), expected.encode()

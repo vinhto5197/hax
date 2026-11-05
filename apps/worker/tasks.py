@@ -81,15 +81,9 @@ def _public_error(exc: BaseException) -> str:
 
 
 def _run_async(coro):
-    """Drive a coroutine in a fresh event loop, return its result, then dispose
-    the async engine's pool.
-
-    ``asyncio.run`` creates a NEW loop per call, but the shared async engine caches
-    asyncpg connections bound to whichever loop first used them. Disposing after
-    each call means the next one — a retry, or the failure-recording call below —
-    starts with a clean pool instead of connections bound to a closed loop
-    ("attached to a different loop"). A cheap reconnect, negligible for infrequent
-    ingestion.
+    """Run `coro` on a fresh loop, then dispose the engine's pool: its asyncpg
+    connections are bound to the loop that opened them, so the next call (a
+    retry, the failure write) would otherwise get connections from a closed loop.
     """
 
     async def _runner():
@@ -102,12 +96,9 @@ def _run_async(coro):
 
 
 def _record_failed(doc_id: UUID, error: str) -> None:
-    """Best-effort record of terminal 'failed', which NEVER raises.
-
-    The task calls this right before re-raising the original ingest error, so if
-    the DB write here failed and propagated, it would mask that original error (and
-    Celery would log the wrong cause). Swallowing + logging keeps the original
-    failure intact; the doc just stays at 'processing' in the rare double-failure.
+    """Best-effort terminal 'failed'; never raises, so a failed write can't mask
+    the ingest error being re-raised. On a double failure the API's deadline
+    fails the row.
     """
     try:
         _run_async(mark_document_failed(doc_id, error))
@@ -135,9 +126,8 @@ def ingest_document(self, document_id: str, user_id: str) -> None:
       message is not requeued (celery_app), and the document stays
       'processing' until the API's deadline fails it.
 
-    The id arrives as a str (the JSON broker can't carry a UUID) and is parsed back
-    here. user_id rides the payload — the enqueuing request knows the owner; the
-    worker announces it for RLS.
+    user_id rides the payload: the enqueuing request knows the owner; the worker
+    announces it for RLS.
     """
     doc_id = UUID(document_id)
     logger.info("ingesting document %s (attempt %d)", doc_id, self.request.retries + 1)
@@ -176,11 +166,10 @@ def ingest_document(self, document_id: str, user_id: str) -> None:
             # type name only. The task is still marked failed.
             raise RuntimeError(type(exc).__name__) from None
         countdown = RETRY_BACKOFF_BASE * (2**self.request.retries)
-        # Exception TYPE only, never str(exc): a DBAPI error's text can carry
-        # bound parameters (chunk content) even with hide_parameters=True if
-        # the exception was constructed outside the engine's own wrapping —
-        # exc_info is also deliberately omitted here for the same reason, and
-        # the Retry handed to Celery (which logs it) wraps the type name only.
+        # Type only, never str(exc) or exc_info: a DBAPI error raised outside the
+        # engine's wrapping carries bound parameters (chunk content) despite
+        # hide_parameters. The Retry handed to Celery wraps the type name for the
+        # same reason.
         logger.warning(
             "transient ingest failure for %s; retry %d/%d in %ds: %s",
             doc_id,
@@ -255,9 +244,9 @@ async def generate_title_async(conversation_id: UUID, user_id: UUID) -> None:
 def generate_title(self, conversation_id: str, user_id: str) -> None:
     """Write a conversation's title from its first user message, once.
 
-    Payload is two strings (the JSON broker can't carry UUIDs). user_id rides
-    the payload — the enqueuing request knows the owner; the worker announces
-    it for RLS and resets it in `finally` (prefork children are long-lived).
+    user_id rides the payload: the enqueuing request knows the owner; the
+    worker announces it for RLS and resets it in `finally` (prefork children
+    are long-lived).
 
     Idempotent by construction (the write is conditional on title IS NULL), so
     at-least-once delivery and racing enqueues are harmless. No title from the

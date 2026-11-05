@@ -36,8 +36,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 def client_ip(request: Request) -> str:
-    # Direct-connect dev value. Behind a reverse proxy this must instead come
-    # from X-Forwarded-For, or every visitor shares one rate-limit bucket.
+    # Behind Caddy, uvicorn's --proxy-headers (compose.prod.yml) makes this the
+    # browser's address.
     return request.client.host if request.client else "unknown"
 
 

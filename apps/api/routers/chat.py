@@ -147,8 +147,6 @@ async def chat(
     # Before anything is persisted: a refused turn leaves no trace.
     await enforce_turn_cap(user)
     about = await read_about(user)
-    # Persist the user turn before streaming, so it survives an LLM error and we
-    # have a conversation id for the SSE prelude.
     conversation_id, claimed_at = await persist_user_turn(
         payload.prompt, payload.conversation_id, user.id, payload.message_id
     )

@@ -1,8 +1,5 @@
-"""Celery application for hax background jobs.
-
-Broker + result backend are both Redis (``REDIS_URL``). The worker runs as a
-**separate process** from the FastAPI app (see ADR 0010) — start it with
-``make worker``. Tasks live in ``apps.worker.tasks`` (registered via ``include``).
+"""Celery application: Redis (``REDIS_URL``) as broker and result backend; the
+routing, schedule and delivery settings below.
 """
 
 import asyncio
@@ -30,8 +27,7 @@ celery_app = Celery(
 )
 
 celery_app.conf.update(
-    # JSON (not pickle) on the wire — safe, language-agnostic. Task args must be
-    # JSON-serializable, so ids travel as str, never as UUID.
+    # Task args must be JSON-serializable, so ids travel as str, never as UUID.
     task_serializer="json",
     result_serializer="json",
     accept_content=["json"],
