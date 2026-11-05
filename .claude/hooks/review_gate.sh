@@ -15,8 +15,12 @@
 set -u
 # The greps match curly quotes as characters, which needs a UTF-8 locale; under
 # C or POSIX they are separate bytes and a curly-quoted ask is missed. Claude
-# Code may start the hook in any locale. glibc lists C.UTF-8 as C.utf8.
-if locale -a 2>/dev/null | grep -Eqix 'C\.utf-?8'; then export LC_ALL=C.UTF-8; else export LC_ALL=en_US.UTF-8; fi
+# Code may start the hook in any locale. glibc lists C.UTF-8 as C.utf8. With
+# neither locale installed LC_ALL is left alone: exporting a missing one makes
+# bash warn on stderr every stop and still leaves the greps on bytes.
+locales=$(locale -a 2>/dev/null)
+if echo "$locales" | grep -Eqix 'C\.utf-?8'; then export LC_ALL=C.UTF-8
+elif echo "$locales" | grep -Eqix 'en_US\.utf-?8'; then export LC_ALL=en_US.UTF-8; fi
 input=$(cat)
 [ "$(echo "$input" | jq -r '.stop_hook_active // false' 2>/dev/null)" = true ] && exit 0
 
