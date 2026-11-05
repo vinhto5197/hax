@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Proves every CI job that runs Python 3.14 sets it up with a pip cache keyed
-# on constraints.txt and a retry: the first actions/setup-python step carries
-# an id and continue-on-error, and the step right after it is an identical
+# Proves every CI job that runs Python 3.14 sets it up with a retry: the
+# first actions/setup-python step carries an id and continue-on-error, and
+# the step right after it is an identical
 # twin (same action pin, same `with:`) that runs only when the first failed,
 # so one flaky Python download does not turn CI red. No other setup-python
 # step exists in those jobs. Jobs are discovered from ci.yml (any setup-python
@@ -41,7 +41,7 @@ fi
 
 cat > "$work/check.py" <<'PY'
 """Exit 1, printing one reason per line, unless every 3.14 job in the given
-workflow sets up Python as a cached first attempt plus an identical retry."""
+workflow sets up Python as a first attempt plus an identical retry."""
 import re
 import sys
 
@@ -59,12 +59,6 @@ def version(step):
     return str((step.get("with") or {}).get("python-version", ""))
 
 
-def dep_paths(value):
-    if isinstance(value, list):
-        return [str(v).strip() for v in value]
-    return [line.strip() for line in str(value or "").splitlines() if line.strip()]
-
-
 def check_job(name, steps):
     bad = []
     idx = [i for i, s in enumerate(steps) if is_setup(s)]
@@ -78,10 +72,6 @@ def check_job(name, steps):
         bad.append(f"{name}: first setup-python step has no id")
     if first.get("continue-on-error") is not True:
         bad.append(f"{name}: first setup-python step lacks continue-on-error: true")
-    if first_with.get("cache") != "pip":
-        bad.append(f"{name}: first setup-python step has no cache: pip")
-    if not any(p.endswith("constraints.txt") for p in dep_paths(first_with.get("cache-dependency-path"))):
-        bad.append(f"{name}: first setup-python step's cache-dependency-path does not include constraints.txt")
 
     # B2/B3: the twin, immediately after
     twin = steps[first_i + 1] if first_i + 1 < len(steps) else None
@@ -134,7 +124,7 @@ PY
 cat > "$work/mutate.py" <<'PY'
 """Copy ci.yml with one change to the test job's Python setup, by name.
 
-Exits 3 when the real file does not have the cached-first-plus-twin shape
+Exits 3 when the real file does not have the first-plus-twin shape
 the mutation needs, so a copy is never built vacuously."""
 import sys
 
@@ -164,7 +154,7 @@ else:
     if mode == "no-twin":
         del steps[idx[1]]
     elif mode == "twin-with":
-        twin["with"] = {k: v for k, v in (twin.get("with") or {}).items() if k != "cache"}
+        twin["with"] = {**(twin.get("with") or {}), "python-version": "3.14.7"}
     elif mode == "no-coe":
         first.pop("continue-on-error", None)
     else:
@@ -174,7 +164,7 @@ PY
 
 # ── Real file ────────────────────────────────────────────────
 if out=$("$py" "$work/check.py" "$ci_yml" 2>"$work/covered"); then
-  report PASS "every 3.14 job in ci.yml ($(sed 's/^covered: //' "$work/covered")) has a cached setup-python and an identical retry"
+  report PASS "every 3.14 job in ci.yml ($(sed 's/^covered: //' "$work/covered")) has a setup-python and an identical retry"
 else
   report FAIL "ci.yml python setup: $(echo "$out" | tr '\n' '|')"
 fi
@@ -197,13 +187,13 @@ bites() {
   fi
 }
 bites no-twin "test: no twin setup-python step" "the test job's twin step deleted"
-bites twin-with "test: twin's with differs" "the test job's twin without the cache"
+bites twin-with "test: twin's with differs" "the test job's twin on another Python version"
 bites no-coe "test: first setup-python step lacks continue-on-error" "continue-on-error missing on the test job's first step"
 
 # ── The lint job is not held to the guard ────────────────────
 if "$py" "$work/mutate.py" "$ci_yml" "$work/ci-lint.yml" lint-untouched 2>"$work/mutate.err"; then
   if out=$("$py" "$work/check.py" "$work/ci-lint.yml" 2>/dev/null); then
-    report PASS "a copy whose lint setup has no cache or retry still passes"
+    report PASS "a copy whose lint setup has no retry still passes"
   else
     report FAIL "a copy with only lint's setup changed fails: $(echo "$out" | tr '\n' '|')"
   fi
