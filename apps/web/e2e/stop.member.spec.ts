@@ -1,35 +1,23 @@
 import { expect, test, type Page } from "@playwright/test";
-import { composer, REPLY, send } from "./chat";
+import {
+  composer,
+  errorLine,
+  INTERRUPTED,
+  LONG_REPLY,
+  REPLY,
+  send,
+  sendButton,
+  stopButton,
+} from "./chat";
 
 // The fake model streams twenty "Long reply, part N. " deltas 500 ms apart
 // for a "long:" prompt (fake-model/server.mjs), about ten seconds: Stop is
 // certainly pressed while the reply runs, and waiting the rest of those ten
 // seconds shows whether it kept growing.
 const STILL = "Still answering…";
-const INTERRUPTED = "The reply was interrupted.";
 const STOPPED = "You stopped this reply.";
-const LONG_REPLY = Array.from(
-  { length: 20 },
-  (_, i) => `Long reply, part ${i + 1}. `,
-)
-  .join("")
-  .trim();
 const REPLY_RUNS_MS = 11_000;
 const REPLY_LANDS_MS = 25_000;
-
-function stopButton(page: Page) {
-  return page.getByRole("button", { name: "Stop" });
-}
-
-function sendButton(page: Page) {
-  return page.getByRole("button", { name: "Send", exact: true });
-}
-
-// Scoped to the chat: Next.js renders an empty role="alert" route announcer
-// outside it on every page.
-function errorLine(page: Page) {
-  return page.getByRole("main").getByRole("alert");
-}
 
 // The thread's activity line; the stopped line is also a status, so it is
 // left out.

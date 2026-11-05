@@ -2,17 +2,8 @@
 and the uploading user's id: the worker announces that user for RLS, so a
 wrong or missing id would ingest under another identity or under none."""
 
-import pytest
-
 from apps.worker.tasks import ingest_document
 from tests.api.conftest import bearer
-
-
-@pytest.fixture
-def stub_storage(monkeypatch):
-    from packages.core import storage
-
-    monkeypatch.setattr(storage, "put", lambda key, content, mime: None)
 
 
 async def test_an_accepted_upload_publishes_ingest_with_the_uploaders_id(

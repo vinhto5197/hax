@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { fillSignup, uniqueEmail } from "./signup";
 
 // Every accepted signup and reset request spends a shared per-IP budget (10
 // an hour each in apps/api/routers/auth.py), shared with auth-login.guest and
@@ -10,18 +11,6 @@ const BAD_EMAIL = "a@b";
 // Seeded by e2e/prepare.py; only ever asked for a reset link here.
 const MEMBER_EMAIL = "e2e@example.com";
 
-function uniqueEmail(label: string) {
-  return `signup-${label}-${Date.now()}@example.com`;
-}
-
-async function fillSignup(page: Page, email: string, password: string) {
-  await page.goto("/signup");
-  await page.getByPlaceholder("Name").fill("Signup Journey");
-  await page.getByPlaceholder("Email").fill(email);
-  await page.getByPlaceholder("Password (8+ characters)").fill(password);
-  await page.getByRole("button", { name: "Sign up", exact: true }).click();
-}
-
 function inboxHeading(page: Page) {
   return page.getByRole("heading", { name: "Check your inbox" });
 }
@@ -29,7 +18,12 @@ function inboxHeading(page: Page) {
 test("signup with an address the API rejects shows the email message", async ({
   page,
 }) => {
-  await fillSignup(page, BAD_EMAIL, "signup-journey-password");
+  await fillSignup(
+    page,
+    BAD_EMAIL,
+    "signup-journey-password",
+    "Signup Journey",
+  );
 
   await expect(page.getByText(EMAIL_RULE)).toBeVisible();
   await expect(inboxHeading(page)).toHaveCount(0);
@@ -44,7 +38,12 @@ test("signup with a short password is stopped before any request", async ({
     if (url.includes("/api/auth/signup")) requests.push(url);
   });
 
-  await fillSignup(page, uniqueEmail("short"), "short");
+  await fillSignup(
+    page,
+    uniqueEmail("signup", "short"),
+    "short",
+    "Signup Journey",
+  );
 
   const password = page.getByPlaceholder("Password (8+ characters)");
   const tooShort = () =>
@@ -61,8 +60,8 @@ test("signup with a short password is stopped before any request", async ({
 test("a valid signup shows the check-your-inbox panel with the address", async ({
   page,
 }) => {
-  const email = uniqueEmail("valid");
-  await fillSignup(page, email, "signup-journey-password");
+  const email = uniqueEmail("signup", "valid");
+  await fillSignup(page, email, "signup-journey-password", "Signup Journey");
 
   await expect(inboxHeading(page)).toBeVisible();
   await expect(
@@ -75,7 +74,12 @@ test("a valid signup shows the check-your-inbox panel with the address", async (
 test("Resend on the check-your-inbox panel shows the sent status", async ({
   page,
 }) => {
-  await fillSignup(page, uniqueEmail("resend"), "signup-journey-password");
+  await fillSignup(
+    page,
+    uniqueEmail("signup", "resend"),
+    "signup-journey-password",
+    "Signup Journey",
+  );
   await expect(inboxHeading(page)).toBeVisible();
 
   await page.getByRole("button", { name: "Didn't get it? Resend" }).click();
@@ -91,7 +95,7 @@ async function requestReset(page: Page, email: string) {
 test("forgot password shows the same panel for a registered and an unknown email", async ({
   page,
 }) => {
-  for (const email of [MEMBER_EMAIL, uniqueEmail("unknown")]) {
+  for (const email of [MEMBER_EMAIL, uniqueEmail("signup", "unknown")]) {
     await requestReset(page, email);
     await expect(inboxHeading(page)).toBeVisible();
     await expect(

@@ -2,12 +2,10 @@
 session minted before a password reset dies even while the cache is
 unreachable, and a fresh session still works."""
 
-import os
 import time
 
 import fakeredis
 import fakeredis.aioredis
-import jwt
 import pytest
 from sqlalchemy import text
 
@@ -28,25 +26,6 @@ def redis_down(monkeypatch):
     return client
 
 
-def _bearer_minted_at(user, auth_time: int) -> dict[str, str]:
-    now = int(time.time())
-    token = jwt.encode(
-        {
-            "sub": str(user.id),
-            "email": user.email,
-            "iss": "hax",
-            "aud": "hax-api",
-            "iat": auth_time,
-            "exp": now + 600,
-            "jti": "old",
-            "auth_time": auth_time,
-        },
-        os.environ["AUTH_SECRET"],
-        algorithm="HS256",
-    )
-    return {"Authorization": f"Bearer {token}"}
-
-
 async def test_redis_down_a_session_minted_before_the_cutoff_is_401(
     client, admin_engine, redis_down
 ):
@@ -56,7 +35,7 @@ async def test_redis_down_a_session_minted_before_the_cutoff_is_401(
             text("UPDATE users SET sessions_valid_after = now() WHERE id = :id"),
             {"id": u.id},
         )
-    old = _bearer_minted_at(u, int(time.time()) - 3600)
+    old = bearer(u, auth_time=int(time.time()) - 3600)
 
     res = await client.get("/api/conversations", headers=old)
     assert res.status_code == 401
@@ -74,7 +53,7 @@ async def test_redis_down_a_password_reset_kills_the_sessions_minted_before_it(
             ),
             {"id": u.id},
         )
-    old = _bearer_minted_at(u, int(time.time()) - 120)
+    old = bearer(u, auth_time=int(time.time()) - 120)
     await make_email_token(admin_engine, u.id, "reset_password", hash_token("raw1"))
 
     reset = await client.post(

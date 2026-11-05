@@ -1,15 +1,10 @@
-import { expect, test, type Page } from "@playwright/test";
-import { composer, send } from "./chat";
+import { expect, test } from "@playwright/test";
+import { composer, INTERRUPTED, send, stopButton } from "./chat";
 
 // The guest prompt reaches the fake model like a member's: a "long:" message
 // streams twenty "Long reply, part N. " deltas 500 ms apart
 // (fake-model/server.mjs), about ten seconds.
-const INTERRUPTED = "The reply was interrupted.";
 const REPLY_RUNS_MS = 11_000;
-
-function stopButton(page: Page) {
-  return page.getByRole("button", { name: "Stop" });
-}
 
 test("A visitor can stop a demo reply: what was written stays and the composer is free", async ({
   page,

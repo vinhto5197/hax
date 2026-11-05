@@ -5,15 +5,7 @@ from sqlalchemy.pool import QueuePool
 
 from packages.core.rag import retrieval
 from packages.db.user_context import current_user_id
-from tests.api.factories import make_chunk, make_document
-
-DIM = 1024
-
-
-def unit_vec(hot: int) -> list[float]:
-    v = [0.0] * DIM
-    v[hot] = 1.0
-    return v
+from tests.api.factories import make_chunk, make_document, unit_vec
 
 
 async def test_retrieval_is_partitioned(user_a, user_b, admin_engine, monkeypatch):

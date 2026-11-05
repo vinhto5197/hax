@@ -12,13 +12,8 @@ set -uo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
 config=$root/.pre-commit-config.yaml
 work=$(mktemp -d "${TMPDIR:-/tmp}/no-artifacts-test.XXXXXX")
-fails=0
+. "$root/tests/scripts/lib.sh"
 trap 'rm -rf "$work"' EXIT
-
-report() {
-  echo "$1: $2"
-  [ "$1" = PASS ] || fails=$((fails + 1))
-}
 
 block=$(awk '/- id: no-test-artifacts$/ {on=1; print; next} on && /- id:/ {exit} on {print}' "$config")
 regex=$(printf '%s\n' "$block" | sed -n 's/^[[:space:]]*files:[[:space:]]*//p' | head -1)

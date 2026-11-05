@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { fillSignup, uniqueEmail } from "./signup";
 
 // Every signup here spends the shared per-IP signup budget (10 an hour in
 // apps/api/routers/auth.py): one per test that needs an unverified account.
@@ -8,16 +9,8 @@ const GOOGLE_HINT = /^Signed up with Google\?/;
 const VERIFIED_BANNER = "Email verified — log in to continue.";
 const RESET_BANNER = "Password updated — log in to continue.";
 
-function uniqueEmail(row: string) {
-  return `login-${row}-${Date.now()}@example.com`;
-}
-
 async function signUp(page: Page, email: string) {
-  await page.goto("/signup");
-  await page.getByPlaceholder("Name").fill("Login Journey");
-  await page.getByPlaceholder("Email").fill(email);
-  await page.getByPlaceholder("Password (8+ characters)").fill(PASSWORD);
-  await page.getByRole("button", { name: "Sign up", exact: true }).click();
+  await fillSignup(page, email, PASSWORD, "Login Journey");
   const inbox = page.getByRole("heading", { name: "Check your inbox" });
   await expect(inbox).toBeVisible();
 }
@@ -36,7 +29,7 @@ function resendButton(page: Page) {
 test("wrong credentials show the generic message and the Google hint", async ({
   page,
 }) => {
-  await logIn(page, uniqueEmail("51"), "not-the-password");
+  await logIn(page, uniqueEmail("login", "51"), "not-the-password");
 
   await expect(page.getByText("Invalid email or password.")).toBeVisible();
   await expect(page.getByText(GOOGLE_HINT)).toBeVisible();
@@ -59,7 +52,7 @@ test("a login the API never answers shows 'That took too long' and the button co
       },
     }),
   );
-  await logIn(page, uniqueEmail("timeout"), PASSWORD);
+  await logIn(page, uniqueEmail("login", "timeout"), PASSWORD);
 
   await expect(
     page.getByText("That took too long, please try again."),
@@ -75,7 +68,7 @@ test("a login the API never answers shows 'That took too long' and the button co
 test("an unverified account sees the verify message and Resend, not the Google hint", async ({
   page,
 }) => {
-  const email = uniqueEmail("52");
+  const email = uniqueEmail("login", "52");
   await signUp(page, email);
   await logIn(page, email, PASSWORD);
 
@@ -88,7 +81,7 @@ test("an unverified account sees the verify message and Resend, not the Google h
 test("Resend on the unverified message shows the sent status", async ({
   page,
 }) => {
-  const email = uniqueEmail("61");
+  const email = uniqueEmail("login", "61");
   await signUp(page, email);
   await logIn(page, email, PASSWORD);
   await expect(page.getByText(UNVERIFIED)).toBeVisible();

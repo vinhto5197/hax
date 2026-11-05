@@ -13,36 +13,9 @@ from pypdf import PdfReader, PdfWriter
 
 from packages.core.rag.errors import PermanentIngestError
 from packages.core.rag.extract import MAX_DOCX_PARAGRAPHS, MAX_PDF_PAGES, extract_text
+from tests.core.files import one_page_pdf
 
 MARKER = "zebraquartz"
-
-
-def _text_page_pdf(text: str) -> bytes:
-    """A one-page PDF whose page carries a Helvetica text layer."""
-    content = f"BT /F1 12 Tf 72 720 Td ({text}) Tj ET".encode()
-    objs = [
-        b"<< /Type /Catalog /Pages 2 0 R >>",
-        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792]"
-        b" /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
-        b"<< /Length %d >>\nstream\n" % len(content) + content + b"\nendstream",
-        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-    ]
-    out = io.BytesIO()
-    out.write(b"%PDF-1.4\n")
-    offsets = []
-    for i, body in enumerate(objs, start=1):
-        offsets.append(out.tell())
-        out.write(b"%d 0 obj\n" % i + body + b"\nendobj\n")
-    xref = out.tell()
-    out.write(b"xref\n0 %d\n0000000000 65535 f \n" % (len(objs) + 1))
-    for off in offsets:
-        out.write(b"%010d 00000 n \n" % off)
-    out.write(
-        b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n"
-        % (len(objs) + 1, xref)
-    )
-    return out.getvalue()
 
 
 def _pdf(pages: int, text: str | None = None) -> bytes:
@@ -50,7 +23,7 @@ def _pdf(pages: int, text: str | None = None) -> bytes:
     rest are blank."""
     writer = PdfWriter()
     if text is not None:
-        writer.append(PdfReader(io.BytesIO(_text_page_pdf(text))))
+        writer.append(PdfReader(io.BytesIO(one_page_pdf(text))))
     while len(writer.pages) < pages:
         writer.add_blank_page(width=612, height=792)
     out = io.BytesIO()

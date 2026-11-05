@@ -1,21 +1,16 @@
-import {
-  expect,
-  test,
-  type JSHandle,
-  type Page,
-  type TestInfo,
-} from "@playwright/test";
+import { expect, test, type JSHandle, type Page } from "@playwright/test";
 import {
   composer,
+  DESKTOP,
   distanceFromBottom,
+  PHONE,
   REPLY,
   send,
+  shot,
   startConversation,
   threadScroller,
 } from "./chat";
 
-const DESKTOP = { width: 1280, height: 800 };
-const PHONE = { width: 390, height: 844 };
 // Mirrors STICK_THRESHOLD_PX in components/chat/MessageList.tsx.
 const STICK_THRESHOLD_PX = 64;
 
@@ -80,12 +75,6 @@ function scrollerBox(scroller: JSHandle<HTMLDivElement>) {
     const r = el.getBoundingClientRect();
     return { x: r.x, y: r.y, width: r.width, height: r.height };
   });
-}
-
-async function shot(page: Page, testInfo: TestInfo, name: string) {
-  const path = testInfo.outputPath(`${name}.png`);
-  await page.screenshot({ path });
-  await testInfo.attach(name, { path, contentType: "image/png" });
 }
 
 test("Jump to latest is absent when the view is at the bottom: a short conversation, and a long one just opened", async ({

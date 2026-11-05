@@ -1,28 +1,11 @@
 """Verification is by link alone: the token proves the inbox. The pre-hijack
 defense lives in signup (re-signup replaces the pending password), not here."""
 
-import pytest
 from sqlalchemy import text
 
-import apps.api.routers.auth as auth_router
 from packages.core.auth.email_tokens import hash_token
+from tests.api.conftest import token_from
 from tests.api.factories import make_email_token, make_user
-
-
-@pytest.fixture
-def outbox(monkeypatch):
-    calls: list[tuple] = []
-
-    def record(task, *args, log_ref):
-        calls.append(args)
-
-    monkeypatch.setattr(auth_router, "fire_and_forget", record)
-    return calls
-
-
-def _token_from(call) -> str:
-    _to, _template, params = call
-    return params["link"].split("token=")[1]
 
 
 async def _seed(admin_engine, email="v@example.com"):
@@ -121,7 +104,7 @@ async def test_superseded_link_is_rejected_and_the_new_one_still_works(
         "/api/auth/signup", json={"email": "v@example.com", "password": "password1"}
     )
     await client.post("/api/auth/resend-verification", json={"email": "v@example.com"})
-    old_raw, new_raw = _token_from(outbox[0]), _token_from(outbox[1])
+    old_raw, new_raw = token_from(outbox[0]), token_from(outbox[1])
     assert old_raw != new_raw
     user_id = await _user_id(admin_engine, "v@example.com")
 

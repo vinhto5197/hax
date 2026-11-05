@@ -10,12 +10,7 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
 ci=$root/.github/workflows/ci.yml
 pins=$root/constraints.txt
-fails=0
-
-report() {
-  echo "$1: $2"
-  [ "$1" = PASS ] || fails=$((fails + 1))
-}
+. "$root/tests/scripts/lib.sh"
 
 [ -f "$pins" ] && report PASS "the constraints file exists" || report FAIL "no constraints.txt"
 
@@ -47,4 +42,4 @@ else
   report FAIL "CI does not run the pin check"
 fi
 
-[ "$fails" -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }
+finish

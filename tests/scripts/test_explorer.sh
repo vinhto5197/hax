@@ -17,15 +17,10 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
 script=$root/scripts/explorer.sh
 work=$(mktemp -d "${TMPDIR:-/tmp}/explorer-test.XXXXXX")
-fails=0
+. "$root/tests/scripts/lib.sh"
 live_pid=
 cleanup() { [ -n "$live_pid" ] && kill "$live_pid" 2>/dev/null; rm -rf "$work"; }
 trap cleanup EXIT
-
-report() {
-  echo "$1: $2"
-  [ "$1" = PASS ] || fails=$((fails + 1))
-}
 
 # Grep-level, never a run. The committed fixture is a non-empty text
 # file; the prompt's "The file to upload:" path sits under the run's own
@@ -212,4 +207,4 @@ else
   report FAIL "a full run whose check fails with no status file records this week as failed: week '$week', state '$state'"
 fi
 
-[ "$fails" -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }
+finish

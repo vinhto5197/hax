@@ -19,13 +19,9 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
 hook=$root/.claude/hooks/due.sh
 work=$(mktemp -d "${TMPDIR:-/tmp}/due-hook-test.XXXXXX")
-fails=0
+. "$root/tests/scripts/lib.sh"
 trap 'rm -rf "$work"' EXIT
 
-report() {
-  echo "$1: $2"
-  [ "$1" = PASS ] || fails=$((fails + 1))
-}
 # Every prompt on a configured machine carries the [state] pointer, so "nothing
 # due" means no [due] line, not empty output.
 no_due() { ! printf '%s' "$1" | grep -q '\[due\]'; }
@@ -321,4 +317,4 @@ retro_due "$out" && report FAIL "retro named after Friday's mark: '$out'" || rep
 
 mv "$work/marker.saved" "$marker"
 
-[ "$fails" -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }
+finish

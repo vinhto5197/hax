@@ -8,12 +8,7 @@ set -euo pipefail
 
 root=$(cd "$(dirname "$0")/../.." && pwd)
 hook=$root/.claude/hooks/background_waits.sh
-fails=0
-
-report() {
-  echo "$1: $2"
-  [ "$1" = PASS ] || fails=$((fails + 1))
-}
+. "$root/tests/scripts/lib.sh"
 run() { # $1 = command, $2 = run_in_background (true|false)
   jq -cn --arg c "$1" --argjson b "$2" \
     '{hook_event_name:"PreToolUse", tool_name:"Bash", tool_input:{command:$c, run_in_background:$b}}' | "$hook"
@@ -110,4 +105,4 @@ done
 out=$(run 'make test' false)
 [ -z "$out" ] && report PASS "make test passes" || report FAIL "make test refused: '$out'"
 
-[ "$fails" -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }
+finish

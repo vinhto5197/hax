@@ -1,5 +1,17 @@
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
-import { composer, REPLY, send, startConversation } from "./chat";
+import {
+  BUSY,
+  composer,
+  DESKTOP,
+  errorLine,
+  INTERRUPTED,
+  LONG_REPLY,
+  PHONE,
+  REPLY,
+  send,
+  startConversation,
+  stopButton,
+} from "./chat";
 import { cutStream, installStreamCut } from "./network";
 
 // Scripted replies (fake-model/server.mjs): a "flaky:" prompt fails mid-reply
@@ -8,33 +20,13 @@ import { cutStream, installStreamCut } from "./network";
 // "fail:" fails every time; "long:" streams twenty "Long reply, part N. "
 // deltas 500 ms apart; "search:" runs a tool call whose follow-up waits
 // 1.5 s before any text, the window a Stop lands in before the first word.
-const INTERRUPTED = "The reply was interrupted.";
 const STOPPED = "You stopped this reply.";
 const RECOVERED = "Recovered reply.";
 const SEARCH_ANSWER = "Here is what your documents say.";
-const BUSY = "A reply is already in progress in this conversation.";
-const LONG_REPLY = Array.from(
-  { length: 20 },
-  (_, i) => `Long reply, part ${i + 1}. `,
-)
-  .join("")
-  .trim();
 const REPLY_LANDS_MS = 25_000;
-const DESKTOP = { width: 1280, height: 800 };
-const PHONE = { width: 390, height: 844 };
-
-// Scoped to the chat: Next.js renders an empty role="alert" route announcer
-// outside it on every page.
-function errorLine(page: Page) {
-  return page.getByRole("main").getByRole("alert");
-}
 
 function tryAgain(page: Page) {
   return page.getByRole("main").getByRole("button", { name: "Try again" });
-}
-
-function stopButton(page: Page) {
-  return page.getByRole("button", { name: "Stop" });
 }
 
 function stoppedLine(page: Page) {

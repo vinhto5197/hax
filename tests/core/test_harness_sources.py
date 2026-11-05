@@ -3,65 +3,13 @@ ToolOutput, with only the text sent back to the model. Scripted fake client;
 no network."""
 
 import uuid
-from types import SimpleNamespace
-
-import pytest
 
 from packages.core.agent import harness, tools
-from packages.core.agent.tools import Source, ToolContext, ToolOutput
+from packages.core.agent.tools import Source, ToolOutput
+from tests.core.fake_anthropic import FakeClient, collect, text_block, tool_use
 
 DOC = uuid.UUID("00000000-0000-0000-0000-00000000d0c1")
 SRC = Source(DOC, "lease.pdf", 0, "one dog allowed", 0.1)
-
-
-class _Stream:
-    def __init__(self, turn):
-        self._turn = turn
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *exc):
-        return False
-
-    @property
-    async def text_stream(self):
-        for t in self._turn["text"]:
-            yield t
-
-    async def get_final_message(self):
-        return SimpleNamespace(
-            content=self._turn["content"],
-            stop_reason=self._turn["stop_reason"],
-            usage=SimpleNamespace(
-                input_tokens=1,
-                output_tokens=1,
-                cache_read_input_tokens=0,
-                cache_creation_input_tokens=0,
-            ),
-        )
-
-
-class FakeClient:
-    """Each call to messages.stream consumes the next scripted turn and
-    records the kwargs it was called with."""
-
-    def __init__(self, turns):
-        self.turns = list(turns)
-        self.calls: list[dict] = []
-        self.messages = SimpleNamespace(stream=self._stream)
-
-    def _stream(self, **kwargs):
-        self.calls.append(kwargs)
-        return _Stream(self.turns.pop(0))
-
-
-def tool_use(name, inp, id_="tu_1"):
-    return SimpleNamespace(type="tool_use", name=name, input=inp, id=id_)
-
-
-def text_block(text):
-    return SimpleNamespace(type="text", text=text)
 
 
 def search_turn():
@@ -91,15 +39,6 @@ def patch_search(monkeypatch, run):
     )
 
 
-@pytest.fixture
-def ctx():
-    return ToolContext(user_id=uuid.uuid4())
-
-
-async def _collect(gen):
-    return [e async for e in gen]
-
-
 async def test_tool_output_yields_sources_and_sends_only_text(monkeypatch, ctx):
     async def fake_search(inp, c):
         return ToolOutput(text="[1] from lease.pdf:\none dog allowed", sources=(SRC,))
@@ -108,7 +47,7 @@ async def test_tool_output_yields_sources_and_sends_only_text(monkeypatch, ctx):
     client = FakeClient([search_turn(), answer_turn()])
     monkeypatch.setattr(harness, "_client", client)
 
-    events = await _collect(
+    events = await collect(
         harness.stream_completion_agentic(
             [{"role": "user", "content": "dog?"}], ctx=ctx
         )
@@ -136,7 +75,7 @@ async def test_str_tool_yields_no_sources(monkeypatch, ctx):
     client = FakeClient([search_turn(), answer_turn("Nothing found.")])
     monkeypatch.setattr(harness, "_client", client)
 
-    events = await _collect(
+    events = await collect(
         harness.stream_completion_agentic(
             [{"role": "user", "content": "dog?"}], ctx=ctx
         )
@@ -155,7 +94,7 @@ async def test_tool_error_yields_no_sources(monkeypatch, ctx):
     client = FakeClient([search_turn(), answer_turn("Could not search.")])
     monkeypatch.setattr(harness, "_client", client)
 
-    events = await _collect(
+    events = await collect(
         harness.stream_completion_agentic(
             [{"role": "user", "content": "dog?"}], ctx=ctx
         )
@@ -170,7 +109,7 @@ async def test_tools_false_never_yields_sources(monkeypatch, ctx):
     client = FakeClient([answer_turn("Hello.")])
     monkeypatch.setattr(harness, "_client", client)
 
-    events = await _collect(
+    events = await collect(
         harness.stream_completion_agentic(
             [{"role": "user", "content": "hi"}], ctx=ctx, tools=False
         )
@@ -188,7 +127,7 @@ async def test_sources_survive_the_max_iters_fallback(monkeypatch, ctx):
     client = FakeClient(turns)
     monkeypatch.setattr(harness, "_client", client)
 
-    events = await _collect(
+    events = await collect(
         harness.stream_completion_agentic(
             [{"role": "user", "content": "dog?"}], ctx=ctx
         )

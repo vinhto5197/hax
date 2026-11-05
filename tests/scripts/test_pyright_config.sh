@@ -7,12 +7,7 @@
 set -euo pipefail
 
 root=$(cd "$(dirname "$0")/../.." && pwd)
-fails=0
-
-report() {
-  echo "$1: $2"
-  [ "$1" = PASS ] || fails=$((fails + 1))
-}
+. "$root/tests/scripts/lib.sh"
 
 # A python with tomllib (3.11+) and PyYAML: the venv on a laptop, the system
 # one elsewhere.
@@ -111,4 +106,4 @@ else
   report FAIL "constraints.txt pins: $(grep -Ei '^pyright' "$root/constraints.txt" || echo 'no pyright line')"
 fi
 
-[ "$fails" -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }
+finish

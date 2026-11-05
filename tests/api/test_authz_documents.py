@@ -1,7 +1,5 @@
 from types import SimpleNamespace
 
-import pytest
-
 from tests.api.conftest import bearer
 from tests.api.factories import make_document
 
@@ -59,9 +57,7 @@ async def test_upload_stamps_owner(client, user_a, admin_engine, monkeypatch):
     assert owner == user_a.id
 
 
-async def test_upload_marks_failed_when_the_broker_is_down(
-    client, user_a, admin_engine, monkeypatch
-):
+async def test_upload_marks_failed_when_the_broker_is_down(client, user_a, monkeypatch):
     # 'pending' must always mean a task is really queued, so the upload route
     # awaits its publish and records the outage on the row.
     import apps.api.routers.documents as documents_router
@@ -84,13 +80,6 @@ async def test_upload_marks_failed_when_the_broker_is_down(
     assert r.status_code == 200
     assert r.json()["status"] == "failed"
     assert r.json()["error"] == "could not start ingestion (task queue unavailable)"
-
-
-@pytest.fixture
-def stub_storage(monkeypatch):
-    from packages.core import storage
-
-    monkeypatch.setattr(storage, "put", lambda key, content, mime: None)
 
 
 async def test_upload_accepts_pdf_without_parsing_it(client, user_a, stub_storage):
@@ -282,7 +271,7 @@ async def test_download_filename_cannot_inject_a_header(
     assert cd.endswith("filename*=UTF-8''evil%22%0D%0AX-Injected%3A%201.txt")
 
 
-async def test_visitor_cannot_download(client, user_a, admin_engine, monkeypatch):
+async def test_visitor_cannot_download(client, admin_engine, monkeypatch):
     from packages.core import storage
     from tests.api.factories import make_visitor
 

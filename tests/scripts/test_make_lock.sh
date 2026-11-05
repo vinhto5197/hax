@@ -10,13 +10,8 @@ set -euo pipefail
 
 root=$(cd "$(dirname "$0")/../.." && pwd)
 work=$(mktemp -d "${TMPDIR:-/tmp}/make-lock-test.XXXXXX")
-fails=0
+. "$root/tests/scripts/lib.sh"
 trap 'rm -rf "$work"' EXIT
-
-report() {
-  echo "$1: $2"
-  [ "$1" = PASS ] || fails=$((fails + 1))
-}
 
 cp "$root/Makefile" "$work/Makefile"
 dry() { make -s -n -C "$work" "$@" 2>/dev/null; }
@@ -34,4 +29,4 @@ for target in test e2e; do
   esac
 done
 
-[ "$fails" -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }
+finish

@@ -9,13 +9,8 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
 check=$root/scripts/check_constraints.sh
 work=$(mktemp -d "${TMPDIR:-/tmp}/check-constraints-test.XXXXXX")
-fails=0
+. "$root/tests/scripts/lib.sh"
 trap 'rm -rf "$work"' EXIT
-
-report() {
-  echo "$1: $2"
-  [ "$1" = PASS ] || fails=$((fails + 1))
-}
 
 printf '# header\nfastapi==0.141.1\nlangsmith==0.14.14\nPyYAML==6.0.3\npydantic-core==2.23.4\nruamel.yaml==0.18.6\n' > "$work/constraints.txt"
 
@@ -98,4 +93,4 @@ rc=0; out=$(printf '\n# Editable install with no version control (hax==0.1.0)\nf
   && report PASS "blank lines and '#' comment lines in the freeze are ignored" \
   || report FAIL "comments/blank lines: exit $rc, output: $out"
 
-[ "$fails" -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }
+finish

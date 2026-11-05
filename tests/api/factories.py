@@ -13,6 +13,8 @@ from types import SimpleNamespace
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+EMBEDDING_DIM = 1024
+
 
 async def make_user(admin_engine: AsyncEngine, email: str) -> SimpleNamespace:
     # sessions_valid_after from the app clock, as the ORM stamps it in
@@ -89,6 +91,13 @@ async def make_document(
         return row.scalar_one()
 
 
+def unit_vec(hot: int) -> list[float]:
+    """An embedding with a single 1.0 at `hot`."""
+    v = [0.0] * EMBEDDING_DIM
+    v[hot] = 1.0
+    return v
+
+
 async def make_chunk(
     admin_engine: AsyncEngine,
     document_id: uuid.UUID,
@@ -111,6 +120,14 @@ async def make_chunk(
                 "content": content,
                 "vec": vec,
             },
+        )
+
+
+async def seed_note(admin_engine: AsyncEngine, user_id, about: str) -> None:
+    async with admin_engine.begin() as conn:
+        await conn.execute(
+            text("INSERT INTO user_profiles (user_id, about) VALUES (:u, :a)"),
+            {"u": user_id, "a": about},
         )
 
 

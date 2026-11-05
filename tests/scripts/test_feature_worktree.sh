@@ -6,8 +6,7 @@
 set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
 script=$root/scripts/feature-worktree.sh
-fails=0
-report() { echo "$1: $2"; [ "$1" = PASS ] || fails=$((fails + 1)); }
+. "$root/tests/scripts/lib.sh"
 # Everything runs in a temp clone of a temp bare origin, with the script
 # copied in and committed, so nothing touches this repo, and no other session's
 # writes under this repo's .claude/ can make a case fail.
@@ -222,5 +221,4 @@ else
   report FAIL "could not create worktrees 'other' and 'inner'"
 fi
 
-[ "$fails" -eq 0 ] && echo "all passed" || echo "$fails failed"
-[ "$fails" -eq 0 ]
+finish

@@ -10,13 +10,6 @@ from tests.api.conftest import bearer
 LIMIT_DETAIL = "upload limit reached; try again later"
 
 
-@pytest.fixture
-def stub_storage(monkeypatch):
-    from packages.core import storage
-
-    monkeypatch.setattr(storage, "put", lambda key, content, mime: None)
-
-
 def _upload(client, user, name="mine.txt", content=b"hello world"):
     return client.post(
         "/api/documents",

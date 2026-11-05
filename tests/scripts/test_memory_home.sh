@@ -10,13 +10,8 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
 hook=$root/.claude/hooks/memory_home.sh
 work=$(mktemp -d "${TMPDIR:-/tmp}/memory-home-test.XXXXXX")
-fails=0
+. "$root/tests/scripts/lib.sh"
 trap 'rm -rf "$work"' EXIT
-
-report() {
-  echo "$1: $2"
-  [ "$1" = PASS ] || fails=$((fails + 1))
-}
 
 mem=$work/.claude/projects/-x-proj/memory
 mkdir -p "$mem" "$work/repo"
@@ -43,4 +38,4 @@ out=$(run "$work/repo/notes.md")
 out=$(echo '{}' | "$hook"; echo "exit=$?")
 [ "$out" = "exit=0" ] && report PASS "no input: silent, exit 0" || report FAIL "no input: '$out'"
 
-[ "$fails" -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }
+finish

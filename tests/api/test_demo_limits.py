@@ -27,17 +27,9 @@ async def visitor(admin_engine):
 
 
 @pytest.fixture
-def harness(monkeypatch):
-    """Records each harness call's keyword arguments; streams nothing."""
-    calls: list[dict] = []
-
-    async def fake(messages, **kwargs):
-        calls.append(kwargs)
-        if False:
-            yield {}
-
-    monkeypatch.setattr(chat_router, "stream_completion_agentic", fake)
-    return calls
+def harness(model_stream):
+    """Each harness call's keyword arguments; the model streams nothing."""
+    return model_stream().kwargs
 
 
 async def _first_conversation_id(admin_engine, user_id):
@@ -175,7 +167,7 @@ async def test_concurrent_sends_cannot_exceed_the_cap(client, visitor, harness):
     assert len(harness) == 3
 
 
-async def test_member_has_no_turn_cap(client, admin_engine, user_a, harness):
+async def test_member_has_no_turn_cap(client, user_a, harness):
     for i in range(5):
         assert (
             await client.post(

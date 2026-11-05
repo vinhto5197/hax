@@ -241,7 +241,6 @@ def main(argv: list[str]) -> None:
         check_storage()
     if target.needs_mail:
         check_and_clear_mail()
-    assert target.owner_url.endswith(f"/{target.database}")
     # Alembic's env.py and packages.db read these at import; set before either
     # is imported so nothing from the shell can redirect the migration.
     os.environ["MIGRATIONS_DATABASE_URL"] = target.owner_url

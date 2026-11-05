@@ -122,7 +122,7 @@ async def test_wrong_password_verify_runs_with_no_open_transaction(
 
 
 async def test_unknown_email_dummy_verify_runs_with_no_open_transaction(
-    client, admin_engine, observed_verify
+    client, observed_verify
 ):
     res = await _login(client, "nobody@example.com", OLD_PW)
     assert res.status_code == 401

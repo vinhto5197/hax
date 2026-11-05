@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { mailLink } from "./mail";
+import { fillSignup, uniqueEmail } from "./signup";
 
 // Each test signs up its own address and reads the link the API mailed to it
 // from Mailpit; never the seeded member, whose reset would revoke the
@@ -9,16 +10,8 @@ const INVALID_LINK = "This link is invalid or has expired.";
 const VERIFIED_BANNER = "Email verified — log in to continue.";
 const RESET_BANNER = "Password updated — log in to continue.";
 
-function uniqueEmail(label: string) {
-  return `mail-${label}-${Date.now()}@example.com`;
-}
-
 async function signUp(page: Page, email: string, password: string) {
-  await page.goto("/signup");
-  await page.getByPlaceholder("Name").fill("Mail Journey");
-  await page.getByPlaceholder("Email").fill(email);
-  await page.getByPlaceholder("Password (8+ characters)").fill(password);
-  await page.getByRole("button", { name: "Sign up", exact: true }).click();
+  await fillSignup(page, email, password, "Mail Journey");
   const inbox = page.getByRole("heading", { name: "Check your inbox" });
   await expect(inbox).toBeVisible();
 }
@@ -28,7 +21,7 @@ test("row 55: signing up sends a verification link, and Confirm on it lands on /
   request,
 }) => {
   test.setTimeout(60_000);
-  const email = uniqueEmail("verify");
+  const email = uniqueEmail("mail", "verify");
   await signUp(page, email, "mail-verify-password");
 
   const link = await mailLink(request, email, "/verify-email");
@@ -55,7 +48,7 @@ test("row 57: a reset link from the email opens the new-password form; saving a 
   request,
 }) => {
   test.setTimeout(60_000);
-  const email = uniqueEmail("reset");
+  const email = uniqueEmail("mail", "reset");
   await signUp(page, email, "mail-reset-old-password");
 
   await page.goto("/forgot-password");
@@ -95,7 +88,7 @@ test("row 58: when the reset succeeds but the sign-in after it fails, the page l
   request,
 }) => {
   test.setTimeout(60_000);
-  const email = uniqueEmail("reset-signin-fails");
+  const email = uniqueEmail("mail", "reset-signin-fails");
   await signUp(page, email, "mail-reset-old-password");
 
   await page.goto("/forgot-password");

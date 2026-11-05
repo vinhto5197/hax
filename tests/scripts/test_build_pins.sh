@@ -11,12 +11,7 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
 docker=$root/infra/docker/python.Dockerfile
 pyproject=$root/pyproject.toml
-fails=0
-
-report() {
-  echo "$1: $2"
-  [ "$1" = PASS ] || fails=$((fails + 1))
-}
+. "$root/tests/scripts/lib.sh"
 
 [ -f "$docker" ] && report PASS "the Python Dockerfile exists" || report FAIL "no $docker"
 
@@ -37,4 +32,4 @@ printf '%s\n' "$requires" | grep -qE 'setuptools[[:space:]]*(>|<|~|!|,)' \
   && report FAIL "setuptools carries a range: $requires" \
   || report PASS "setuptools carries no range"
 
-[ "$fails" -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }
+finish

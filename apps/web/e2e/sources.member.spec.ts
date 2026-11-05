@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { send } from "./chat";
+import { DESKTOP, PHONE, send } from "./chat";
 
 // Sources: a `search:` question over the member's own documents, answered by
 // the fake model's tool_use, with the "Sources" footer under the reply.
@@ -18,8 +18,6 @@ test.describe.configure({ mode: "serial" });
 
 const API_URL = "http://localhost:8001";
 const WEB_ORIGIN = "http://localhost:3001";
-const DESKTOP = { width: 1280, height: 800 };
-const PHONE = { width: 390, height: 844 };
 const ANSWER = "Here is what your documents say.";
 
 const stamp = `${Date.now()}`;

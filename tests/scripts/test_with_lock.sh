@@ -22,7 +22,7 @@ set -uo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
 with_lock=$root/scripts/with-lock.sh
 work=$(mktemp -d "${TMPDIR:-/tmp}/with-lock-test.XXXXXX")
-fails=0
+. "$root/tests/scripts/lib.sh"
 bg_env=""
 bg_shell=""
 
@@ -59,11 +59,6 @@ cleanup() {
   rm -rf "$work"
 }
 trap cleanup EXIT
-
-report() {
-  echo "$1: $2"
-  [ "$1" = PASS ] || fails=$((fails + 1))
-}
 
 # wait_for_file <path> <tenths-of-a-second>
 wait_for_file() {
@@ -770,8 +765,4 @@ else
   report FAIL "the wrapper takes the lock with noclobber (set -C or set -o noclobber): no such line"
 fi
 
-if [ "$fails" -gt 0 ]; then
-  echo "$fails failed"
-  exit 1
-fi
-echo "all passed"
+finish

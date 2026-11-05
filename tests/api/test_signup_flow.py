@@ -12,22 +12,10 @@ from sqlalchemy.orm.attributes import set_committed_value
 import apps.api.routers.auth as auth_router
 from apps.api import enqueue
 from packages.core.auth.email_tokens import hash_token
+from tests.api.conftest import token_from
 from tests.api.factories import make_email_token, make_user
 
 BODY = {"status": "check_inbox"}
-
-
-@pytest.fixture
-def outbox(monkeypatch):
-    calls: list[tuple] = []
-
-    def record(task, *args, log_ref):
-        # The loggable ref is the template, never arg 0 — that's the address.
-        assert task is auth_router.send_email and log_ref == args[1]
-        calls.append(args)
-
-    monkeypatch.setattr(auth_router, "fire_and_forget", record)
-    return calls
 
 
 @pytest.fixture
@@ -67,11 +55,6 @@ async def _tokens(admin_engine, user_id):
         ).all()
 
 
-def _token_from(call):
-    to, template, params = call
-    return params["link"].split("token=")[1]
-
-
 async def test_new_signup_creates_unverified_user_and_emails_link(
     client, admin_engine, outbox
 ):
@@ -94,8 +77,8 @@ async def test_new_signup_creates_unverified_user_and_emails_link(
         stored = (
             await conn.execute(text("SELECT token_hash FROM email_tokens"))
         ).scalar_one()
-    assert stored == hash_token(_token_from(outbox[0]))
-    assert _token_from(outbox[0]) != stored
+    assert stored == hash_token(token_from(outbox[0]))
+    assert token_from(outbox[0]) != stored
 
 
 async def test_existing_verified_user_gets_account_exists_email(
@@ -145,7 +128,7 @@ async def test_resignup_on_unverified_placeholder_replaces_pending_password(
 
 
 async def test_lost_first_signup_race_takes_the_resignup_branch(
-    client, admin_engine, pw_user, outbox, fake_redis, monkeypatch
+    client, admin_engine, pw_user, outbox, monkeypatch
 ):
     # Two signups for the same NEW address race. Simulate the loser: its
     # lookup ran before the winner committed (patched to miss once), so its
@@ -324,9 +307,7 @@ async def test_google_born_user_is_verified_so_signup_says_account_exists(
     assert (await _user_row(admin_engine, "g@example.com")).password_hash is None
 
 
-async def test_no_email_sent_when_commit_fails(
-    client, admin_engine, outbox, monkeypatch
-):
+async def test_no_email_sent_when_commit_fails(client, outbox, monkeypatch):
     from sqlalchemy.ext.asyncio import AsyncSession
 
     async def boom(self):
@@ -364,7 +345,7 @@ async def test_a_dead_broker_leaves_the_202_untouched(client, pw_user, monkeypat
     assert signup.json() == resend.json() == BODY
 
 
-async def test_signup_per_email_cap_limits_outgoing_mail(client, admin_engine, outbox):
+async def test_signup_per_email_cap_limits_outgoing_mail(client, outbox):
     # First POST creates the user; the next two hit the unverified-placeholder
     # branch (re-signup on the same, still-unverified address). All three
     # stay under the per-email cap (3/h); the 4th trips it. The IP cap is

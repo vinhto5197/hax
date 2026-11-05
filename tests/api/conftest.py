@@ -9,6 +9,7 @@ Never seed through the app engine: RLS rejects un-announced writes.
 """
 
 import asyncio
+import contextlib
 import copy
 import os
 import time
@@ -24,8 +25,9 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 
 import apps.api.redis_client as redis_client
+import apps.api.routers.auth as auth_router
 import apps.api.routers.chat as chat_router
-from apps.api import turns
+from apps.api import enqueue, turns
 from packages.db import engine
 from packages.db.session import to_async_url
 from packages.db.user_context import current_user_id
@@ -173,6 +175,31 @@ def reset_identity():
     current_user_id.reset(token)
 
 
+@contextlib.contextmanager
+def as_user(user):
+    """Announces `user` for the block, as a request announces it."""
+    token = current_user_id.set(user.id)
+    try:
+        yield
+    finally:
+        current_user_id.reset(token)
+
+
+@pytest.fixture
+async def no_background_outlives_its_test():
+    """Teardown for modules that start turns or enqueue: opt in with
+    `pytestmark = pytest.mark.usefixtures("no_background_outlives_its_test")`."""
+    yield
+    await turns.drain_turns(5)
+    # A leaked publish would run after monkeypatch is undone, i.e. against the
+    # real task and a real broker connection.
+    await asyncio.gather(*enqueue._pending, return_exceptions=True)
+    # gather returns when the tasks are done; the done-callback that discards
+    # them is scheduled via call_soon and needs one more loop iteration.
+    await asyncio.sleep(0)
+    assert enqueue._pending == set()
+
+
 # Generous: a scripted turn ends in milliseconds, so reaching this is a hang.
 TURN_WAIT_SECONDS = 10
 
@@ -188,23 +215,33 @@ async def wait_for_turns(timeout: float = TURN_WAIT_SECONDS) -> None:
     assert loop.time() - started < timeout, "a turn outlived wait_for_turns"
 
 
+class ModelCalls(list):
+    """The messages the model was given, one deep-copied list per call;
+    `kwargs` holds each call's keyword arguments (system, tools, model…)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.kwargs: list[dict] = []
+
+
 @pytest.fixture
 async def model_stream(monkeypatch):
     """Scripts the model behind POST /api/chat: `model_stream(*events,
     error=None)` makes the next turns yield `events` (harness events such as
     {"content": "..."}) and then raise `error`, if given. Returns the
-    messages the model was given, one deep-copied list per call.
+    ModelCalls recorder.
 
     The one place that knows where the route's model stream is patched: when
     generation moves, this fixture changes and the tests using it do not.
 
     A turn runs as a task that outlives its request; the teardown drains it
     so none outlives this test's event loop (or the patched stream)."""
-    calls: list[list] = []
+    calls = ModelCalls()
 
-    def script(*events, error: BaseException | None = None) -> list[list]:
+    def script(*events, error: BaseException | None = None) -> ModelCalls:
         async def fake(messages, **kwargs):
             calls.append(copy.deepcopy(list(messages)))
+            calls.kwargs.append(kwargs)
             for event in events:
                 yield event
             if error is not None:
@@ -227,6 +264,46 @@ async def client():
 
 
 @pytest.fixture
+async def raw_client():
+    """A client that returns the app's response (a 500 for an unhandled
+    exception, as a browser would see it) instead of raising it into the
+    test."""
+    from apps.api.main import app
+
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+        yield c
+
+
+@pytest.fixture
+def stub_storage(monkeypatch):
+    from packages.core import storage
+
+    monkeypatch.setattr(storage, "put", lambda key, content, mime: None)
+
+
+@pytest.fixture
+def outbox(monkeypatch):
+    """The auth router's emails, recorded as (to, template, params), never
+    published."""
+    calls: list[tuple] = []
+
+    def record(task, *args, log_ref):
+        # The loggable ref is the template, never arg 0 — that's the address.
+        assert task is auth_router.send_email and log_ref == args[1]
+        calls.append(args)
+
+    monkeypatch.setattr(auth_router, "fire_and_forget", record)
+    return calls
+
+
+def token_from(call) -> str:
+    """The raw token in a recorded email's link."""
+    _to, _template, params = call
+    return params["link"].split("token=")[1]
+
+
+@pytest.fixture
 async def user_a(admin_engine):
     return await make_user(admin_engine, "a@test.local")
 
@@ -236,19 +313,23 @@ async def user_b(admin_engine):
     return await make_user(admin_engine, "b@test.local")
 
 
-def bearer(user, *, anonymous: bool = False) -> dict[str, str]:
+def bearer(
+    user, *, anonymous: bool = False, auth_time: int | None = None
+) -> dict[str, str]:
     """Authorization header for `user` — the Bearer path, no cookie needed.
     anonymous mints what auth.ts emits for a demo visitor: the email claim
-    present and null (the key is always emitted)."""
+    present and null (the key is always emitted). auth_time, when given, is
+    the session's login time (iat and auth_time); otherwise now."""
     now = int(time.time())
+    minted = now if auth_time is None else auth_time
     claims: dict[str, object] = {
         "sub": str(user.id),
         "iss": "hax",
         "aud": "hax-api",
-        "iat": now,
+        "iat": minted,
         "exp": now + 600,
         "jti": "test",
-        "auth_time": now,
+        "auth_time": minted,
     }
     claims["email"] = None if anonymous else user.email
     token = jwt.encode(claims, os.environ["AUTH_SECRET"], algorithm="HS256")

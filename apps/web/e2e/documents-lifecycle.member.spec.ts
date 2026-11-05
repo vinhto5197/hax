@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
+import { DESKTOP } from "./chat";
 
 // A document's whole life in the panel, against the real API, the worker and
 // the S3 stand-in, with the fake model's embeddings.
@@ -15,7 +16,6 @@ test.describe.configure({ mode: "serial" });
 
 const API_URL = "http://localhost:8001";
 const WEB_ORIGIN = "http://localhost:3001";
-const DESKTOP = { width: 1280, height: 800 };
 
 const stamp = `${Date.now()}`;
 const READY = {

@@ -1,15 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { REPLY, send } from "./chat";
+import { BUSY, DESKTOP, INTERRUPTED, PHONE, REPLY, send } from "./chat";
 
 // The fake model streams "Failing reply, part N. " for a "fail:" prompt, then
 // cuts the connection without finishing the message: the API's model-failure
 // path, which ends the stream with the reply_failed frame.
 const FAIL_TEXT = "fail: failed reply journey, the model breaks off mid-reply";
 const RESEND_TEXT = "Failed reply journey: sent after the failure";
-const INTERRUPTED = "The reply was interrupted.";
-const BUSY = "A reply is already in progress in this conversation.";
-const DESKTOP = { width: 1280, height: 800 };
-const PHONE = { width: 390, height: 844 };
 
 test("A reply the model breaks off is dropped and reported as interrupted, a reload keeps the user's message and still reports it interrupted, and the conversation takes the next message", async ({
   page,

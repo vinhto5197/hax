@@ -12,13 +12,8 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
 script=$root/scripts/check_personal.sh
 work=$(mktemp -d "${TMPDIR:-/tmp}/personal-test.XXXXXX")
-fails=0
+. "$root/tests/scripts/lib.sh"
 trap 'rm -rf "$work"' EXIT
-
-report() {
-  echo "$1: $2"
-  [ "$1" = PASS ] || fails=$((fails + 1))
-}
 
 r=$work/repo
 git init -q -b main "$r"
@@ -227,4 +222,4 @@ rc=0; out=$(cd "$r" && PERSONAL_DENYLIST=Zorblat "$script" --range HEAD~1..HEAD 
 [ "$rc" -eq 1 ] && report PASS "--range: a .txt hit under a new '*.txt -diff' .gitattributes fails" \
   || report FAIL "-diff attribute range: exit $rc, want 1: $out"
 
-[ "$fails" -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }
+finish

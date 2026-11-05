@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
-import { composer, REPLY } from "./chat";
+import { composer, DESKTOP, PHONE, REPLY } from "./chat";
 
-test.use({ viewport: { width: 390, height: 844 } });
+test.use({ viewport: PHONE });
 
 // startConversation in chat.ts waits for the sidebar row, which a phone does
 // not mount while the drawer is closed.
@@ -115,7 +115,7 @@ test("the open drawer goes away when the window becomes desktop width", async ({
   await menuButton(page).click();
   await expect(drawer(page)).toBeVisible();
 
-  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.setViewportSize(DESKTOP);
   await expect(drawer(page)).toHaveCount(0);
   await expect(page.getByRole("navigation")).toBeVisible();
   await expect(page.getByRole("link", { name: "+ New chat" })).toBeVisible();

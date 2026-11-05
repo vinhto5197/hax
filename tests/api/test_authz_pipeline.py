@@ -26,15 +26,7 @@ from packages.core.agent.tools import (
 )
 from packages.core.rag.ingest import PermanentIngestError
 from packages.db.user_context import current_user_id
-from tests.api.factories import make_document
-
-DIM = 1024
-
-
-def unit_vec(hot: int) -> list[float]:
-    v = [0.0] * DIM
-    v[hot] = 1.0
-    return v
+from tests.api.factories import make_document, unit_vec
 
 
 async def test_ingest_inherits_owner_and_stays_partitioned(

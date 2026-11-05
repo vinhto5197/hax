@@ -14,17 +14,10 @@ from sqlalchemy import text
 
 from tests.api.conftest import bearer
 from tests.api.factories import make_visitor
+from tests.api.helpers import stored_note
 
 URL = "/api/me/profile"
 NOTE = "I am a backend engineer; give me terse answers with code."
-
-
-async def _stored(admin_engine, user_id) -> list[str]:
-    async with admin_engine.connect() as conn:
-        rows = await conn.execute(
-            text("SELECT about FROM user_profiles WHERE user_id = :u"), {"u": user_id}
-        )
-        return [about for (about,) in rows]
 
 
 async def _put(client, user, about):
@@ -41,7 +34,7 @@ async def test_put_stores_the_note_and_returns_it(client, admin_engine, user_a):
     r = await _put(client, user_a, NOTE)
     assert r.status_code == 200
     assert r.json() == {"about": NOTE}
-    assert await _stored(admin_engine, user_a.id) == [NOTE]
+    assert await stored_note(admin_engine, user_a.id) == [NOTE]
 
 
 async def test_get_after_put_returns_the_saved_note(client, user_a):
@@ -57,14 +50,14 @@ async def test_put_strips_surrounding_whitespace_before_storing(
     r = await _put(client, user_a, f"  \n\t{NOTE} \n ")
     assert r.status_code == 200
     assert r.json() == {"about": NOTE}
-    assert await _stored(admin_engine, user_a.id) == [NOTE]
+    assert await stored_note(admin_engine, user_a.id) == [NOTE]
 
 
 async def test_a_second_put_replaces_the_note(client, admin_engine, user_a):
     await _put(client, user_a, "first version")
     r = await _put(client, user_a, NOTE)
     assert r.json() == {"about": NOTE}
-    assert await _stored(admin_engine, user_a.id) == [NOTE]
+    assert await stored_note(admin_engine, user_a.id) == [NOTE]
 
 
 @pytest.mark.parametrize("empty", ["", "   \n\t  "], ids=["empty", "blank"])
@@ -73,7 +66,7 @@ async def test_an_empty_put_deletes_the_note(client, admin_engine, user_a, empty
     r = await _put(client, user_a, empty)
     assert r.status_code == 200
     assert r.json() == {"about": None}
-    assert await _stored(admin_engine, user_a.id) == []
+    assert await stored_note(admin_engine, user_a.id) == []
     after = await client.get(URL, headers=bearer(user_a))
     assert after.json() == {"about": None}
 
@@ -82,18 +75,18 @@ async def test_an_empty_put_with_no_note_returns_null(client, admin_engine, user
     r = await _put(client, user_a, "")
     assert r.status_code == 200
     assert r.json() == {"about": None}
-    assert await _stored(admin_engine, user_a.id) == []
+    assert await stored_note(admin_engine, user_a.id) == []
 
 
 async def test_exactly_1000_characters_is_stored(client, admin_engine, user_a):
     about = "x" * 1000
     r = await _put(client, user_a, about)
     assert r.status_code == 200
-    assert await _stored(admin_engine, user_a.id) == [about]
+    assert await stored_note(admin_engine, user_a.id) == [about]
 
 
 async def test_1000_characters_plus_surrounding_whitespace_is_stored_stripped(
-    client, admin_engine, user_a
+    client, user_a
 ):
     about = "x" * 1000
     r = await _put(client, user_a, f"  {about}  ")
@@ -109,7 +102,7 @@ async def test_1000_emoji_count_as_1000_characters_and_are_stored(
     about = "\U0001f600" * 1000
     r = await _put(client, user_a, about)
     assert r.status_code == 200
-    assert await _stored(admin_engine, user_a.id) == [about]
+    assert await stored_note(admin_engine, user_a.id) == [about]
 
 
 async def test_1001_characters_is_refused_with_422_and_the_note_is_unchanged(
@@ -118,7 +111,7 @@ async def test_1001_characters_is_refused_with_422_and_the_note_is_unchanged(
     await _put(client, user_a, NOTE)
     r = await _put(client, user_a, "x" * 1001)
     assert r.status_code == 422
-    assert await _stored(admin_engine, user_a.id) == [NOTE]
+    assert await stored_note(admin_engine, user_a.id) == [NOTE]
 
 
 async def test_a_nul_character_is_refused_with_422_and_nothing_is_stored(
@@ -126,7 +119,7 @@ async def test_a_nul_character_is_refused_with_422_and_nothing_is_stored(
 ):
     r = await _put(client, user_a, "before\x00after")
     assert r.status_code == 422
-    assert await _stored(admin_engine, user_a.id) == []
+    assert await stored_note(admin_engine, user_a.id) == []
 
 
 async def test_a_non_nul_control_character_is_refused_with_422_and_nothing_is_stored(
@@ -134,7 +127,7 @@ async def test_a_non_nul_control_character_is_refused_with_422_and_nothing_is_st
 ):
     r = await _put(client, user_a, "before\x07after")
     assert r.status_code == 422
-    assert await _stored(admin_engine, user_a.id) == []
+    assert await stored_note(admin_engine, user_a.id) == []
 
 
 async def test_a_body_without_about_is_refused_with_422(client, user_a):
@@ -163,7 +156,7 @@ async def test_a_visitor_gets_the_demo_refusal_on_put_and_nothing_is_stored(
     )
     assert r.status_code == 403
     assert r.json()["detail"] == {"code": "demo_limit"}
-    assert await _stored(admin_engine, visitor.id) == []
+    assert await stored_note(admin_engine, visitor.id) == []
 
 
 @pytest.mark.parametrize("about", ["x" * 1001, "a\x00b"])

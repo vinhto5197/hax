@@ -26,20 +26,11 @@ from apps.api import enqueue, turns
 from packages.db import engine as app_engine
 from packages.db.user_context import current_user_id
 from tests.api.factories import make_conversation, make_message
+from tests.api.helpers import stored_messages
+
+pytestmark = pytest.mark.usefixtures("no_background_outlives_its_test")
 
 PROMPT = "plan a trip to hanoi"
-
-
-@pytest.fixture(autouse=True)
-async def no_enqueue_outlives_its_test():
-    # A leaked publish would run after monkeypatch is undone, i.e. against the
-    # real task and a real broker connection.
-    yield
-    await asyncio.gather(*enqueue._pending, return_exceptions=True)
-    # gather returns when the tasks are done; the done-callback that discards
-    # them is scheduled via call_soon and needs one more loop iteration.
-    await asyncio.sleep(0)
-    assert enqueue._pending == set()
 
 
 async def _as(user, coro):
@@ -52,18 +43,6 @@ async def _as(user, coro):
         current_user_id.reset(token)
     await asyncio.gather(*enqueue._pending)
     return result
-
-
-async def _messages(admin_engine, conv_id):
-    async with admin_engine.connect() as conn:
-        rows = await conn.execute(
-            text(
-                "SELECT role, content FROM messages WHERE conversation_id = :i"
-                " ORDER BY created_at, id"
-            ),
-            {"i": conv_id},
-        )
-        return [(role, content) for role, content in rows]
 
 
 async def _claim(admin_engine, conv_id):
@@ -109,9 +88,7 @@ async def test_new_conversation_enqueues_once_with_the_committed_turn(
     assert seen == [(str(conv_id), str(user_a.id), (1, 1))]
 
 
-async def test_enqueue_happens_after_the_commit(
-    admin_engine, user_a, published, monkeypatch
-):
+async def test_enqueue_happens_after_the_commit(user_a, monkeypatch):
     # The publish is fire-and-forget, so ordering is asserted at the call:
     # until the commit the session still has a pooled connection checked out.
     checked_out: list[int] = []
@@ -138,7 +115,7 @@ async def test_existing_conversation_does_not_enqueue(admin_engine, user_a, publ
     conv = await make_conversation(admin_engine, user_a.id)
     await _as(user_a, chat_service.persist_user_turn(PROMPT, conv, user_a.id))
     assert published == []
-    assert await _messages(admin_engine, conv) == [("user", PROMPT)]
+    assert await stored_messages(admin_engine, conv) == [("user", PROMPT)]
 
 
 async def test_assistant_turn_re_enqueues_while_untitled(
@@ -152,7 +129,7 @@ async def test_assistant_turn_re_enqueues_while_untitled(
             conv, user_a.id, "the answer", claimed_at=claimed_at
         ),
     )
-    assert await _messages(admin_engine, conv) == [("assistant", "the answer")]
+    assert await stored_messages(admin_engine, conv) == [("assistant", "the answer")]
     assert published == [("generate_title", (str(conv), str(user_a.id)))]
 
 
@@ -167,7 +144,7 @@ async def test_assistant_turn_on_a_titled_conversation_does_not_enqueue(
             conv, user_a.id, "the answer", claimed_at=claimed_at
         ),
     )
-    assert await _messages(admin_engine, conv) == [("assistant", "the answer")]
+    assert await stored_messages(admin_engine, conv) == [("assistant", "the answer")]
     assert published == []
 
 
@@ -180,7 +157,7 @@ async def test_assistant_turn_without_content_persists_nothing_and_enqueues_noth
         user_a,
         chat_service.persist_assistant_turn(conv, user_a.id, "", claimed_at=claimed_at),
     )
-    assert await _messages(admin_engine, conv) == []
+    assert await stored_messages(admin_engine, conv) == []
     assert published == []
 
 
@@ -197,7 +174,7 @@ async def test_enqueue_failure_on_the_user_turn_is_not_fatal(
         user_a, chat_service.persist_user_turn(PROMPT, None, user_a.id)
     )
 
-    assert await _messages(admin_engine, conv_id) == [("user", PROMPT)]
+    assert await stored_messages(admin_engine, conv_id) == [("user", PROMPT)]
     assert "OSError" in caplog.text and str(conv_id) in caplog.text
     assert PROMPT not in caplog.text
 
@@ -220,7 +197,7 @@ async def test_enqueue_failure_on_the_assistant_turn_is_not_fatal(
         ),
     )
 
-    assert await _messages(admin_engine, conv) == [("assistant", "the answer")]
+    assert await stored_messages(admin_engine, conv) == [("assistant", "the answer")]
     assert "OSError" in caplog.text and str(conv) in caplog.text
     assert "the answer" not in caplog.text
 
@@ -246,7 +223,7 @@ async def test_event_stream_forwards_the_user_id(admin_engine, user_a, published
     await asyncio.gather(*enqueue._pending)
 
     assert "[DONE]" in chunks[-1]
-    assert await _messages(admin_engine, conv) == [("assistant", "hello")]
+    assert await stored_messages(admin_engine, conv) == [("assistant", "hello")]
     assert published == [("generate_title", (str(conv), str(user_a.id)))]
 
 
@@ -261,7 +238,7 @@ async def test_foreign_conversation_404s_and_enqueues_nothing(
 
     assert excinfo.value.status_code == 404
     assert published == []
-    assert await _messages(admin_engine, conv) == [("user", "a's question")]
+    assert await stored_messages(admin_engine, conv) == [("user", "a's question")]
 
 
 SRC_A = {
@@ -302,9 +279,7 @@ async def _run_stream(admin_engine, user, conv, events):
     return frames
 
 
-async def test_event_stream_forwards_and_persists_sources(
-    admin_engine, user_a, published
-):
+async def test_event_stream_forwards_and_persists_sources(admin_engine, user_a):
     conv = await make_conversation(admin_engine, user_a.id)
     frames = await _as(
         user_a,
@@ -316,9 +291,7 @@ async def test_event_stream_forwards_and_persists_sources(
     assert await _sources(admin_engine, conv) == [SRC_A]
 
 
-async def test_event_stream_dedups_sources_across_searches(
-    admin_engine, user_a, published
-):
+async def test_event_stream_dedups_sources_across_searches(admin_engine, user_a):
     conv = await make_conversation(admin_engine, user_a.id)
     await _as(
         user_a,
@@ -339,9 +312,7 @@ async def test_event_stream_dedups_sources_across_searches(
     assert await _sources(admin_engine, conv) == [SRC_A, SRC_B]
 
 
-async def test_event_stream_persists_nothing_without_content(
-    admin_engine, user_a, published
-):
+async def test_event_stream_persists_nothing_without_content(admin_engine, user_a):
     conv = await make_conversation(admin_engine, user_a.id)
     await _as(user_a, _run_stream(admin_engine, user_a, conv, [{"sources": [SRC_A]}]))
     async with admin_engine.connect() as conn:
@@ -354,9 +325,7 @@ async def test_event_stream_persists_nothing_without_content(
     assert n == 0
 
 
-async def test_event_stream_without_sources_persists_null(
-    admin_engine, user_a, published
-):
+async def test_event_stream_without_sources_persists_null(admin_engine, user_a):
     conv = await make_conversation(admin_engine, user_a.id)
     await _as(user_a, _run_stream(admin_engine, user_a, conv, [{"content": "Hi."}]))
     async with admin_engine.connect() as conn:

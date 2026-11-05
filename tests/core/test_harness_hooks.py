@@ -3,74 +3,12 @@ MAX_ITERS fallback included) and on_tool_result once per executed tool_use.
 Without them the yielded events are unchanged. Scripted fake client; no
 network."""
 
-import uuid
-from types import SimpleNamespace
-
 import pytest
 
 from packages.core.agent import harness
-from packages.core.agent.tools import ToolContext
+from tests.core.fake_anthropic import FakeClient, collect, text_block, tool_use, usage
 
 MODEL = "claude-test-model"
-
-
-class _Stream:
-    def __init__(self, turn):
-        self._turn = turn
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *exc):
-        return False
-
-    @property
-    async def text_stream(self):
-        for t in self._turn["text"]:
-            yield t
-
-    async def get_final_message(self):
-        return SimpleNamespace(
-            content=self._turn["content"],
-            stop_reason=self._turn["stop_reason"],
-            usage=self._turn["usage"],
-        )
-
-
-class FakeClient:
-    """Each call to messages.stream consumes the next scripted turn and
-    records the kwargs it was called with."""
-
-    def __init__(self, turns):
-        self.turns = list(turns)
-        self.calls: list[dict] = []
-        self.messages = SimpleNamespace(stream=self._stream)
-
-    def _stream(self, **kwargs):
-        self.calls.append(kwargs)
-        return _Stream(self.turns.pop(0))
-
-
-def usage(
-    inp: int = 1,
-    out: int = 1,
-    cache_read: int | None = 0,
-    cache_write: int | None = 0,
-):
-    return SimpleNamespace(
-        input_tokens=inp,
-        output_tokens=out,
-        cache_read_input_tokens=cache_read,
-        cache_creation_input_tokens=cache_write,
-    )
-
-
-def tool_use(name, inp, id_="tu_1"):
-    return SimpleNamespace(type="tool_use", name=name, input=inp, id=id_)
-
-
-def text_block(text):
-    return SimpleNamespace(type="text", text=text)
 
 
 def tool_turn(name="calculator", inp=None, u=None, id_="tu_1"):
@@ -93,17 +31,8 @@ def answer_turn(text="It is 5.", u=None):
     }
 
 
-@pytest.fixture
-def ctx():
-    return ToolContext(user_id=uuid.uuid4())
-
-
-async def _collect(gen):
-    return [e async for e in gen]
-
-
 def _run(ctx, **kw):
-    return _collect(
+    return collect(
         harness.stream_completion_agentic(
             [{"role": "user", "content": "what is 2 + 3?"}], model=MODEL, ctx=ctx, **kw
         )

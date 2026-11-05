@@ -7,12 +7,7 @@
 set -euo pipefail
 
 root=$(cd "$(dirname "$0")/../.." && pwd)
-fails=0
-
-report() {
-  echo "$1: $2"
-  [ "$1" = PASS ] || fails=$((fails + 1))
-}
+. "$root/tests/scripts/lib.sh"
 
 # Every dry run starts from a clean make environment: a parent make's flags
 # and overrides would otherwise reach this one through MAKEFLAGS.
@@ -78,4 +73,4 @@ else
   report FAIL "make -n infra-down failed: $(echo "$down_out" | tail -n 3)"
 fi
 
-[ "$fails" -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }
+finish

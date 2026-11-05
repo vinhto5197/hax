@@ -6,23 +6,23 @@ read before the turn claims the conversation, so a failed read refuses the
 turn with nothing persisted and the conversation left free. The note's text
 never reaches the log.
 
-Every test goes through POST /api/chat with the harness replaced by a
-recorder of its keyword arguments; seeds and asserts go through admin_engine."""
+Every test goes through POST /api/chat with the model scripted by conftest's
+`model_stream`, which records the harness call's keyword arguments; seeds and
+asserts go through admin_engine."""
 
-import asyncio
 import logging
 
-import httpx
 import pytest
 from sqlalchemy import text
 
 import apps.api.chat_service as chat_service
 import apps.api.routers.chat as chat_router
-from apps.api import enqueue
 from packages.core.demo.prompt import DEMO_SYSTEM_PROMPT
 from packages.db.repos import profiles as profiles_repo
 from tests.api.conftest import bearer
-from tests.api.factories import make_conversation, make_visitor
+from tests.api.factories import make_conversation, make_visitor, seed_note
+
+pytestmark = pytest.mark.usefixtures("no_background_outlives_its_test")
 
 PREFACE = (
     "The user wrote this about themselves and can see it; if they ask what you "
@@ -35,35 +35,10 @@ CLOSE_TAG = "</about_the_user>"
 NOTE = "I run a small bakery in Lyon and prefer answers in plain words."
 
 
-@pytest.fixture(autouse=True)
-async def no_enqueue_outlives_its_test():
-    yield
-    await asyncio.gather(*enqueue._pending, return_exceptions=True)
-    await asyncio.sleep(0)
-
-
 @pytest.fixture
-def harness(monkeypatch):
-    """Records each harness call's keyword arguments; streams one piece."""
-    calls: list[dict] = []
-
-    async def fake(messages, **kwargs):
-        calls.append(kwargs)
-        yield {"content": "ok"}
-
-    monkeypatch.setattr(chat_router, "stream_completion_agentic", fake)
-    return calls
-
-
-@pytest.fixture
-async def raw_client():
-    """A client that returns the app's response instead of raising when an
-    exception escapes the app."""
-    from apps.api.main import app
-
-    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
-        yield c
+def harness(model_stream):
+    """Each harness call's keyword arguments; the model streams one piece."""
+    return model_stream({"content": "ok"}).kwargs
 
 
 class NoteReadFailed(Exception):
@@ -92,14 +67,6 @@ def failing_note_read(monkeypatch):
     return restore
 
 
-async def _seed_note(admin_engine, user_id, about: str) -> None:
-    async with admin_engine.begin() as conn:
-        await conn.execute(
-            text("INSERT INTO user_profiles (user_id, about) VALUES (:u, :a)"),
-            {"u": user_id, "a": about},
-        )
-
-
 async def _send(client, user, *, conv=None, anonymous: bool = False):
     body: dict[str, object] = {"prompt": "what should I bake today?"}
     if conv is not None:
@@ -122,7 +89,7 @@ def _note_in(system: str) -> str:
 async def test_a_member_with_a_note_gets_the_prompt_the_preface_and_the_note(
     client, admin_engine, user_a, harness
 ):
-    await _seed_note(admin_engine, user_a.id, NOTE)
+    await seed_note(admin_engine, user_a.id, NOTE)
     r = await _send(client, user_a)
     assert r.status_code == 200
     assert len(harness) == 1
@@ -145,7 +112,7 @@ async def test_a_note_saved_through_the_api_reaches_the_next_turn(
 async def test_every_turn_of_a_conversation_carries_the_note(
     client, admin_engine, user_a, harness
 ):
-    await _seed_note(admin_engine, user_a.id, NOTE)
+    await seed_note(admin_engine, user_a.id, NOTE)
     conv = await make_conversation(admin_engine, user_a.id)
     for _ in range(2):
         r = await _send(client, user_a, conv=conv)
@@ -165,7 +132,7 @@ async def test_a_member_without_a_note_gets_the_fixed_prompt_alone(
 async def test_a_member_whose_note_was_cleared_gets_the_fixed_prompt_alone(
     client, admin_engine, user_a, harness
 ):
-    await _seed_note(admin_engine, user_a.id, NOTE)
+    await seed_note(admin_engine, user_a.id, NOTE)
     cleared = await client.put(
         "/api/me/profile", json={"about": ""}, headers=bearer(user_a)
     )
@@ -177,7 +144,7 @@ async def test_a_member_whose_note_was_cleared_gets_the_fixed_prompt_alone(
 async def test_one_members_note_never_reaches_another_members_turn(
     client, admin_engine, user_a, user_b, harness
 ):
-    await _seed_note(admin_engine, user_a.id, NOTE)
+    await seed_note(admin_engine, user_a.id, NOTE)
     r = await _send(client, user_b)
     assert r.status_code == 200
     assert harness[0]["system"] == chat_router.AGENTIC_SYSTEM
@@ -187,7 +154,7 @@ async def test_a_visitor_gets_the_guest_prompt_and_no_note_even_with_a_note_row(
     client, admin_engine, harness
 ):
     visitor = await make_visitor(admin_engine)
-    await _seed_note(admin_engine, visitor.id, NOTE)
+    await seed_note(admin_engine, visitor.id, NOTE)
     r = await _send(client, visitor, anonymous=True)
     assert r.status_code == 200
     assert harness[0]["system"] == DEMO_SYSTEM_PROMPT
@@ -235,7 +202,7 @@ async def test_the_notes_text_never_appears_in_the_log_during_a_turn(
     client, admin_engine, user_a, harness, caplog
 ):
     caplog.set_level(logging.DEBUG)
-    await _seed_note(admin_engine, user_a.id, NOTE)
+    await seed_note(admin_engine, user_a.id, NOTE)
     r = await _send(client, user_a)
     assert r.status_code == 200
     assert "bakery in Lyon" not in caplog.text

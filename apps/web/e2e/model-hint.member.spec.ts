@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
+import { PHONE } from "./chat";
 
-const PHONE = { width: 390, height: 844 };
 // The hints ModelSelect.tsx lists, in option order.
 const HINTS = [
   "Fast and inexpensive",

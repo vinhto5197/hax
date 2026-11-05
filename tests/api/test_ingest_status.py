@@ -15,16 +15,9 @@ from packages.core.rag import ingest
 from packages.core.rag.errors import PermanentIngestError
 from packages.db import engine as app_engine
 from packages.db.user_context import current_user_id
-from tests.api.factories import make_document
+from tests.api.factories import make_document, unit_vec
 
-DIM = 1024
 DEADLINE_ERROR = "processing did not finish; upload the file again"
-
-
-def unit_vec(hot: int) -> list[float]:
-    v = [0.0] * DIM
-    v[hot] = 1.0
-    return v
 
 
 async def _row(admin_engine, doc_id):

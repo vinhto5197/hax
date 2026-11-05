@@ -13,13 +13,8 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
 ci_yml=$root/.github/workflows/ci.yml
 work=$(mktemp -d "${TMPDIR:-/tmp}/make-ci-test.XXXXXX")
-fails=0
+. "$root/tests/scripts/lib.sh"
 trap 'rm -rf "$work"' EXIT
-
-report() {
-  echo "$1: $2"
-  [ "$1" = PASS ] || fails=$((fails + 1))
-}
 
 # Every dry run starts from a clean make environment: run inside `make
 # ci-lint RUFF=ruff` (CI), the parent's overrides reach a nested make through
@@ -316,4 +311,4 @@ print(" ".join(sorted(d["jobs"]["deploy"].get("needs") or [])))
   fi
 fi
 
-[ "$fails" -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }
+finish

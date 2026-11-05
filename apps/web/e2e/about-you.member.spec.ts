@@ -1,4 +1,5 @@
-import { expect, test, type Page, type TestInfo } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+import { DESKTOP, PHONE, shot } from "./chat";
 
 // The member's note about themselves: the account menu in the sidebar, the
 // About you dialog, and the note's persistence. Every test clears the seeded
@@ -6,8 +7,6 @@ import { expect, test, type Page, type TestInfo } from "@playwright/test";
 // no /api rewrite; the session cookie is sent across ports on localhost).
 const PROFILE_URL = "http://localhost:8001/api/me/profile";
 const WEB_ORIGIN = "http://localhost:3001";
-const DESKTOP = { width: 1280, height: 800 };
-const PHONE = { width: 390, height: 844 };
 const HELP =
   "Tell Hax about yourself: what you do, what you know, how you like answers. Hax reads this in every conversation.";
 const PRIVACY_NOTE_LINE = "Your note about yourself, if you write one.";
@@ -55,12 +54,6 @@ async function openAboutYou(page: Page) {
 async function openDrawer(page: Page) {
   await page.getByRole("button", { name: "Open menu" }).click();
   await expect(drawer(page)).toBeVisible();
-}
-
-async function shot(page: Page, testInfo: TestInfo, name: string) {
-  const path = testInfo.outputPath(`${name}.png`);
-  await page.screenshot({ path });
-  await testInfo.attach(name, { path, contentType: "image/png" });
 }
 
 test.describe("desktop", () => {

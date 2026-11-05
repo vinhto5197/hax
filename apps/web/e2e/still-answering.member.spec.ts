@@ -1,7 +1,12 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 import {
   composer,
+  DESKTOP,
+  errorLine,
+  INTERRUPTED,
+  LONG_REPLY,
   openNewChat,
+  PHONE,
   REPLY,
   send,
   sidebarLink,
@@ -14,26 +19,11 @@ import { cutStream, installStreamCut } from "./network";
 // is certainly still running when the page reloads, switches or loses the
 // connection.
 const STILL = "Still answering…";
-const INTERRUPTED = "The reply was interrupted.";
 const NOT_SENT =
   "Your message wasn't sent. Check your connection and try again.";
-const LONG_REPLY = Array.from(
-  { length: 20 },
-  (_, i) => `Long reply, part ${i + 1}. `,
-)
-  .join("")
-  .trim();
 // The reply ends about ten seconds after its first part; the page checks
 // back every two seconds.
 const REPLY_LANDS_MS = 25_000;
-const DESKTOP = { width: 1280, height: 800 };
-const PHONE = { width: 390, height: 844 };
-
-// Scoped to the chat: Next.js renders an empty role="alert" route announcer
-// outside it on every page.
-function noErrorLine(page: Page) {
-  return page.getByRole("main").getByRole("alert");
-}
 
 function stillAnswering(page: Page) {
   return page.getByRole("status").filter({ hasText: STILL });
@@ -46,7 +36,7 @@ async function expectStillAnswering(page: Page, text: string) {
   await expect(stillAnswering(page)).toHaveText(STILL);
   await expect(composer(page)).toBeDisabled();
   await expect(main.getByText(/Long reply, part/)).toHaveCount(0);
-  await expect(noErrorLine(page)).toHaveCount(0);
+  await expect(errorLine(page)).toHaveCount(0);
 }
 
 async function expectWholeReply(page: Page, text: string) {
@@ -58,7 +48,7 @@ async function expectWholeReply(page: Page, text: string) {
   await expect(composer(page)).toBeEnabled();
   await expect(main.getByText(text, { exact: true })).toHaveCount(1);
   await expect(page.getByText(INTERRUPTED)).toHaveCount(0);
-  await expect(noErrorLine(page)).toHaveCount(0);
+  await expect(errorLine(page)).toHaveCount(0);
 }
 
 test("Reloading during a reply shows the message and Still answering with the composer disabled, then the whole reply", async ({
@@ -140,7 +130,7 @@ test("Losing the connection during a reply shows Still answering without an erro
   await expectStillAnswering(page, text);
   await page.waitForTimeout(3_000);
   await expect(stillAnswering(page)).toBeVisible();
-  await expect(noErrorLine(page)).toHaveCount(0);
+  await expect(errorLine(page)).toHaveCount(0);
 
   await expectWholeReply(page, text);
 

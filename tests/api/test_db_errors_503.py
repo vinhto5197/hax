@@ -26,17 +26,6 @@ SQL_MARKER = "hax_sql_marker_7f3a"
 PARAM_MARKER = "hax_param_marker_91c2"
 
 
-@pytest.fixture
-async def raw_client():
-    """A client that turns an unhandled app exception into the 500 a browser
-    would see, instead of re-raising it into the test."""
-    from apps.api.main import app
-
-    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
-        yield c
-
-
 async def _capture(admin_engine, sql: str, params: dict, setup: tuple = ()):
     async with admin_engine.connect() as conn:
         for stmt in setup:

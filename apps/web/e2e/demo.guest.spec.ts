@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { composer, REPLY, send } from "./chat";
+import { composer, INTERRUPTED, REPLY, send } from "./chat";
 
 test("a guest on the landing page sends a message and the reply appears below it", async ({
   page,
@@ -22,7 +22,6 @@ test("a guest on the landing page sends a message and the reply appears below it
 // first streaming request and answers "Recovered reply." after; "long:"
 // streams twenty "Long reply, part N. " deltas 500 ms apart
 // (fake-model/server.mjs).
-const INTERRUPTED = "The reply was interrupted.";
 const RECOVERED = "Recovered reply.";
 
 test("A visitor's Try again counts as a turn", async ({ page }) => {

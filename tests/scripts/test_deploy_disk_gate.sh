@@ -11,13 +11,8 @@ set -euo pipefail
 
 root=$(cd "$(dirname "$0")/../.." && pwd)
 work=$(mktemp -d "${TMPDIR:-/tmp}/deploy-disk-test.XXXXXX")
-fails=0
+. "$root/tests/scripts/lib.sh"
 trap 'rm -rf "$work"' EXIT
-
-report() {
-  echo "$1: $2"
-  [ "$1" = PASS ] || fails=$((fails + 1))
-}
 
 # The heredoc block, from "remote=$(cat <<REMOTE" to its closing ")".
 awk '/^  remote=\$\(cat <<REMOTE/{f=1} f{print} f&&/^\)$/{exit}' \
@@ -90,4 +85,4 @@ case "$(gate 3071)" in
   *) report FAIL "3071 MB free: not refused" ;;
 esac
 
-[ "$fails" -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }
+finish

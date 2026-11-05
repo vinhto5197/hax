@@ -16,13 +16,8 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
 ci_yml=$root/.github/workflows/ci.yml
 work=$(mktemp -d "${TMPDIR:-/tmp}/ci-python-setup-test.XXXXXX")
-fails=0
+. "$root/tests/scripts/lib.sh"
 trap 'rm -rf "$work"' EXIT
-
-report() {
-  echo "$1: $2"
-  [ "$1" = PASS ] || fails=$((fails + 1))
-}
 
 # A python with PyYAML: the venv on a laptop, the system one elsewhere.
 py=""
@@ -201,4 +196,4 @@ else
   report FAIL "cannot build the lint copy: $(tr '\n' ' ' <"$work/mutate.err")"
 fi
 
-[ "$fails" -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }
+finish

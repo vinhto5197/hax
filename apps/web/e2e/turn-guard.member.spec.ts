@@ -1,7 +1,6 @@
 import { expect, test } from "@playwright/test";
-import { REPLY, send, startConversation } from "./chat";
+import { BUSY, REPLY, send, startConversation } from "./chat";
 
-const BUSY = "A reply is already in progress in this conversation.";
 const SLOW_TEXT = "slow: turn guard journey, the reply in flight";
 const REFUSED_TEXT = "Turn guard journey: sent while the other tab streams";
 const RETRY_TEXT = "Turn guard journey: sent after the other tab finished";

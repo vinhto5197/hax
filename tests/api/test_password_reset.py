@@ -6,8 +6,6 @@ import os
 import time
 from types import SimpleNamespace
 
-import jwt
-import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,44 +14,11 @@ from apps.api import enqueue
 from packages.core.auth.email_tokens import hash_token
 from packages.core.auth.passwords import hash_password, verify_password
 from packages.db.repos import email_tokens as tokens_repo
+from tests.api.conftest import bearer
 from tests.api.factories import make_email_token, make_user
 
 BODY = {"status": "check_inbox"}
 INTERNAL = {"X-Internal-Secret": os.environ["INTERNAL_API_SECRET"]}
-
-
-@pytest.fixture
-def outbox(monkeypatch):
-    calls: list[tuple] = []
-
-    def record(task, *args, log_ref):
-        # The loggable ref is the template, never arg 0 — that's the address.
-        assert task is auth_router.send_email and log_ref == args[1]
-        calls.append(args)
-
-    monkeypatch.setattr(auth_router, "fire_and_forget", record)
-    return calls
-
-
-def _old_bearer(user, age_s=120) -> dict[str, str]:
-    # A session minted `age_s` ago — bearer() mints "now", which can't
-    # discriminate a same-second cutoff bump.
-    now = int(time.time())
-    token = jwt.encode(
-        {
-            "sub": str(user.id),
-            "email": user.email,
-            "iss": "hax",
-            "aud": "hax-api",
-            "iat": now - age_s,
-            "exp": now + 600,
-            "jti": "old",
-            "auth_time": now - age_s,
-        },
-        os.environ["AUTH_SECRET"],
-        algorithm="HS256",
-    )
-    return {"Authorization": f"Bearer {token}"}
 
 
 async def _row(admin_engine, user_id):
@@ -145,7 +110,9 @@ async def test_confirm_sets_password_verifies_and_revokes_sessions(
             ),
             {"h": hash_password("old-one-1"), "id": u.id},
         )
-    old = _old_bearer(u)
+    # Minted 120s ago: a session minted now cannot discriminate a same-second
+    # cutoff bump.
+    old = bearer(u, auth_time=int(time.time()) - 120)
     assert (await client.get("/api/conversations", headers=old)).status_code == 200
     await make_email_token(admin_engine, u.id, "reset_password", hash_token("raw1"))
     await make_email_token(admin_engine, u.id, "reset_password", hash_token("raw2"))

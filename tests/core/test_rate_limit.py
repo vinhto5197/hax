@@ -1,15 +1,6 @@
-import fakeredis.aioredis
-import pytest
 from redis.exceptions import RedisError
 
 from packages.core.auth.rate_limit import clear, hit
-
-
-@pytest.fixture
-async def redis():
-    client = fakeredis.aioredis.FakeRedis(decode_responses=True)
-    yield client
-    await client.aclose()
 
 
 async def test_allows_up_to_limit(redis):

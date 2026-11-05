@@ -4,6 +4,7 @@ import {
   openNewChat,
   REPLY,
   send,
+  sendButton,
   sidebarLink,
   startConversation,
 } from "./chat";
@@ -19,10 +20,6 @@ const PICKED_MODEL = "claude-sonnet-4-6";
 
 function isChat(request: Request) {
   return request.url().endsWith("/api/chat") && request.method() === "POST";
-}
-
-function sendButton(page: Page) {
-  return page.getByRole("button", { name: "Send", exact: true });
 }
 
 // The row is the div holding the conversation's link; a `has` locator is

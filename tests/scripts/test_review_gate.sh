@@ -16,13 +16,8 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
 hook=$root/.claude/hooks/review_gate.sh
 work=$(mktemp -d "${TMPDIR:-/tmp}/review-gate-test.XXXXXX")
-fails=0
+. "$root/tests/scripts/lib.sh"
 trap 'rm -rf "$work"' EXIT
-
-report() {
-  echo "$1: $2"
-  [ "$1" = PASS ] || fails=$((fails + 1))
-}
 
 # A transcript whose last turn is: a human prompt, a tool call, a tool result,
 # then the final message's text in two blocks.
@@ -188,4 +183,4 @@ if [ -z "${REVIEW_GATE_TEST_C:-}" ]; then
   [ "$c_status" -eq 0 ] && report PASS "every case passes under LC_ALL=C" || report FAIL "a case failed under LC_ALL=C (exit $c_status)"
 fi
 
-[ "$fails" -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }
+finish

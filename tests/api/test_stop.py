@@ -11,20 +11,26 @@ and asserts go through admin_engine.
 """
 
 import asyncio
-import contextlib
 import uuid
 
 import pytest
 from sqlalchemy import text
 
-import apps.api.chat_service as chat_service
-from apps.api import enqueue, turns
+from apps.api import turns
 from packages.db.session import AsyncSessionLocal
-from packages.db.user_context import current_user_id
 from tests.api.conftest import bearer
 from tests.api.factories import make_conversation
+from tests.api.helpers import (
+    PROMPT,
+    age_claim,
+    start_turn_as,
+    stored_messages,
+    streaming_since,
+    user_turn,
+)
 
-PROMPT = "what did I upload?"
+pytestmark = pytest.mark.usefixtures("no_background_outlives_its_test")
+
 # Bounds every wait on a turn: a hang fails the test instead of stalling it.
 GUARD_SECONDS = 10
 PART_1 = "Long reply, part 1. "
@@ -36,35 +42,6 @@ SOURCE = {
     "excerpt": "the excerpt",
     "distance": 0.1,
 }
-
-
-@pytest.fixture(autouse=True)
-async def no_turn_outlives_its_test():
-    yield
-    await turns.drain_turns(5)
-    await asyncio.gather(*enqueue._pending, return_exceptions=True)
-    await asyncio.sleep(0)
-
-
-@contextlib.contextmanager
-def _identity(user):
-    token = current_user_id.set(user.id)
-    try:
-        yield
-    finally:
-        current_user_id.reset(token)
-
-
-async def _turn(user, conv):
-    """A user turn as `user`; returns (conversation_id, claimed_at)."""
-    with _identity(user):
-        return await chat_service.persist_user_turn(PROMPT, conv, user.id)
-
-
-def _start(user, conv, claimed_at, stream_fn):
-    """Start the reply's turn as `user`, as the route does."""
-    with _identity(user):
-        return turns.start_turn(stream_fn, [], conv, user.id, claimed_at)
 
 
 def _stream(*events, until: asyncio.Event | None = None, then=(), calls=None):
@@ -93,38 +70,6 @@ async def _rest(listener) -> list:
     """Every remaining item of a listener, to its end, bounded."""
     async with asyncio.timeout(GUARD_SECONDS):
         return [item async for item in listener]
-
-
-async def _streaming_since(admin_engine, conv):
-    async with admin_engine.connect() as conn:
-        return await conn.scalar(
-            text("SELECT streaming_since FROM conversations WHERE id = :c"),
-            {"c": conv},
-        )
-
-
-async def _age_claim(admin_engine, conv, seconds: int) -> None:
-    async with admin_engine.begin() as conn:
-        await conn.execute(
-            text(
-                "UPDATE conversations"
-                " SET streaming_since = now() - make_interval(secs => :s)"
-                " WHERE id = :c"
-            ),
-            {"c": conv, "s": seconds},
-        )
-
-
-async def _messages(admin_engine, conv):
-    async with admin_engine.connect() as conn:
-        rows = await conn.execute(
-            text(
-                "SELECT role, content FROM messages WHERE conversation_id = :c"
-                " ORDER BY created_at, id"
-            ),
-            {"c": conv},
-        )
-        return [(role, content) for role, content in rows]
 
 
 async def _last_sources(admin_engine, conv):
@@ -168,8 +113,8 @@ async def test_a_stop_saves_the_partial_reply_ends_with_done_and_releases_the_cl
     admin_engine, user_a
 ):
     conv = await make_conversation(admin_engine, user_a.id)
-    _, claimed_at = await _turn(user_a, conv)
-    turn = _start(
+    _, claimed_at = await user_turn(user_a, conv)
+    turn = start_turn_as(
         user_a,
         conv,
         claimed_at,
@@ -187,20 +132,20 @@ async def test_a_stop_saves_the_partial_reply_ends_with_done_and_releases_the_cl
     turns.stop_turn(conv)
 
     assert await _rest(listener) == ["done"]
-    assert await _messages(admin_engine, conv) == [
+    assert await stored_messages(admin_engine, conv) == [
         ("user", PROMPT),
         ("assistant", PART_1 + PART_2),
     ]
     assert await _last_sources(admin_engine, conv) == [SOURCE]
-    assert await _streaming_since(admin_engine, conv) is None
+    assert await streaming_since(admin_engine, conv) is None
 
 
 async def test_turn_stop_on_the_handle_saves_the_partial_like_stop_turn(
     admin_engine, user_a
 ):
     conv = await make_conversation(admin_engine, user_a.id)
-    _, claimed_at = await _turn(user_a, conv)
-    turn = _start(
+    _, claimed_at = await user_turn(user_a, conv)
+    turn = start_turn_as(
         user_a, conv, claimed_at, _stream({"content": PART_1}, until=asyncio.Event())
     )
     listener = turn.listen()
@@ -209,19 +154,19 @@ async def test_turn_stop_on_the_handle_saves_the_partial_like_stop_turn(
     turn.stop()
 
     assert await _rest(listener) == ["done"]
-    assert await _messages(admin_engine, conv) == [
+    assert await stored_messages(admin_engine, conv) == [
         ("user", PROMPT),
         ("assistant", PART_1),
     ]
-    assert await _streaming_since(admin_engine, conv) is None
+    assert await streaming_since(admin_engine, conv) is None
 
 
 async def test_the_conversation_takes_a_new_turn_at_once_after_a_stop(
     admin_engine, user_a
 ):
     conv = await make_conversation(admin_engine, user_a.id)
-    _, claimed_at = await _turn(user_a, conv)
-    turn = _start(
+    _, claimed_at = await user_turn(user_a, conv)
+    turn = start_turn_as(
         user_a, conv, claimed_at, _stream({"content": PART_1}, until=asyncio.Event())
     )
     listener = turn.listen()
@@ -229,7 +174,7 @@ async def test_the_conversation_takes_a_new_turn_at_once_after_a_stop(
     turns.stop_turn(conv)
     await _rest(listener)
 
-    _, next_claim = await _turn(user_a, conv)
+    _, next_claim = await user_turn(user_a, conv)
 
     assert next_claim is not None
 
@@ -238,7 +183,7 @@ async def test_a_stop_during_a_search_documents_call_cancels_its_query_releases_
     admin_engine, user_a
 ):
     conv = await make_conversation(admin_engine, user_a.id)
-    _, claimed_at = await _turn(user_a, conv)
+    _, claimed_at = await user_turn(user_a, conv)
     marker = f"stop-test-{conv}"
 
     async def stream_fn(messages, **kwargs):
@@ -249,7 +194,7 @@ async def test_a_stop_during_a_search_documents_call_cancels_its_query_releases_
             await session.execute(text(f"SELECT pg_sleep(5) /* {marker} */"))
         yield {"content": "never written"}
 
-    turn = _start(user_a, conv, claimed_at, stream_fn)
+    turn = start_turn_as(user_a, conv, claimed_at, stream_fn)
     listener = turn.listen()
     await _read(listener, 2)
     assert await _until(lambda: _active_queries_positive(admin_engine, marker))
@@ -262,11 +207,11 @@ async def test_a_stop_during_a_search_documents_call_cancels_its_query_releases_
 
     assert rest == ["done"]
     assert elapsed < 3, "the stop waited for the tool's query instead of cancelling"
-    assert await _messages(admin_engine, conv) == [
+    assert await stored_messages(admin_engine, conv) == [
         ("user", PROMPT),
         ("assistant", "Let me look. "),
     ]
-    assert await _streaming_since(admin_engine, conv) is None
+    assert await streaming_since(admin_engine, conv) is None
     assert await _until(lambda: _no_active_queries(admin_engine, marker)), (
         "the tool's query was still running after the stop"
     )
@@ -284,8 +229,8 @@ async def test_a_stop_with_only_whitespace_written_stores_nothing_ends_with_fail
     admin_engine, user_a
 ):
     conv = await make_conversation(admin_engine, user_a.id)
-    _, claimed_at = await _turn(user_a, conv)
-    turn = _start(
+    _, claimed_at = await user_turn(user_a, conv)
+    turn = start_turn_as(
         user_a,
         conv,
         claimed_at,
@@ -297,16 +242,16 @@ async def test_a_stop_with_only_whitespace_written_stores_nothing_ends_with_fail
     turns.stop_turn(conv)
 
     assert await _rest(listener) == ["failed"]
-    assert await _messages(admin_engine, conv) == [("user", PROMPT)]
-    assert await _streaming_since(admin_engine, conv) is None
+    assert await stored_messages(admin_engine, conv) == [("user", PROMPT)]
+    assert await streaming_since(admin_engine, conv) is None
 
 
 async def test_a_stop_before_any_text_stores_nothing_ends_with_failed_and_releases(
     admin_engine, user_a
 ):
     conv = await make_conversation(admin_engine, user_a.id)
-    _, claimed_at = await _turn(user_a, conv)
-    turn = _start(
+    _, claimed_at = await user_turn(user_a, conv)
+    turn = start_turn_as(
         user_a,
         conv,
         claimed_at,
@@ -318,32 +263,34 @@ async def test_a_stop_before_any_text_stores_nothing_ends_with_failed_and_releas
     turns.stop_turn(conv)
 
     assert await _rest(listener) == ["failed"]
-    assert await _messages(admin_engine, conv) == [("user", PROMPT)]
-    assert await _streaming_since(admin_engine, conv) is None
+    assert await stored_messages(admin_engine, conv) == [("user", PROMPT)]
+    assert await streaming_since(admin_engine, conv) is None
 
 
 async def test_a_stop_that_arrives_before_the_turn_starts_streaming_stores_nothing_never_calls_the_model_and_releases(  # noqa: E501 — the name is the behaviour line
     admin_engine, user_a
 ):
     conv = await make_conversation(admin_engine, user_a.id)
-    _, claimed_at = await _turn(user_a, conv)
+    _, claimed_at = await user_turn(user_a, conv)
     calls: list = []
-    turn = _start(user_a, conv, claimed_at, _stream({"content": PART_1}, calls=calls))
+    turn = start_turn_as(
+        user_a, conv, claimed_at, _stream({"content": PART_1}, calls=calls)
+    )
 
     turn.stop()
 
     assert await _rest(turn.listen()) == ["failed"]
     assert calls == []
-    assert await _messages(admin_engine, conv) == [("user", PROMPT)]
-    assert await _streaming_since(admin_engine, conv) is None
+    assert await stored_messages(admin_engine, conv) == [("user", PROMPT)]
+    assert await streaming_since(admin_engine, conv) is None
 
 
 async def test_a_stop_after_the_model_stream_finished_stores_the_whole_reply(
     admin_engine, user_a
 ):
     conv = await make_conversation(admin_engine, user_a.id)
-    _, claimed_at = await _turn(user_a, conv)
-    turn = _start(
+    _, claimed_at = await user_turn(user_a, conv)
+    turn = start_turn_as(
         user_a,
         conv,
         claimed_at,
@@ -355,24 +302,24 @@ async def test_a_stop_after_the_model_stream_finished_stores_the_whole_reply(
     turn.stop()
 
     assert await _rest(listener) == ["done"]
-    assert await _messages(admin_engine, conv) == [
+    assert await stored_messages(admin_engine, conv) == [
         ("user", PROMPT),
         ("assistant", PART_1 + PART_2),
     ]
-    assert await _streaming_since(admin_engine, conv) is None
+    assert await streaming_since(admin_engine, conv) is None
 
 
 async def test_a_stop_after_the_turn_ended_changes_nothing(admin_engine, user_a):
     conv = await make_conversation(admin_engine, user_a.id)
-    _, claimed_at = await _turn(user_a, conv)
-    turn = _start(user_a, conv, claimed_at, _stream({"content": PART_1}))
+    _, claimed_at = await user_turn(user_a, conv)
+    turn = start_turn_as(user_a, conv, claimed_at, _stream({"content": PART_1}))
     assert await _rest(turn.listen()) == [{"content": PART_1}, "done"]
 
     turn.stop()
     turns.stop_turn(conv)
     await asyncio.sleep(0)
 
-    assert await _messages(admin_engine, conv) == [
+    assert await stored_messages(admin_engine, conv) == [
         ("user", PROMPT),
         ("assistant", PART_1),
     ]
@@ -385,22 +332,22 @@ async def test_stop_turn_for_a_conversation_with_no_running_turn_does_nothing(
     conv = await make_conversation(admin_engine, user_a.id)
     turns.stop_turn(conv)
 
-    assert await _messages(admin_engine, conv) == []
+    assert await stored_messages(admin_engine, conv) == []
 
 
 async def test_stop_turn_stops_only_its_own_conversations_turn(admin_engine, user_a):
     stopped = await make_conversation(admin_engine, user_a.id)
     running = await make_conversation(admin_engine, user_a.id)
-    _, stopped_claim = await _turn(user_a, stopped)
-    _, running_claim = await _turn(user_a, running)
+    _, stopped_claim = await user_turn(user_a, stopped)
+    _, running_claim = await user_turn(user_a, running)
     go_on = asyncio.Event()
-    stopped_turn = _start(
+    stopped_turn = start_turn_as(
         user_a,
         stopped,
         stopped_claim,
         _stream({"content": PART_1}, until=asyncio.Event()),
     )
-    running_turn = _start(
+    running_turn = start_turn_as(
         user_a,
         running,
         running_claim,
@@ -416,7 +363,7 @@ async def test_stop_turn_stops_only_its_own_conversations_turn(admin_engine, use
     go_on.set()
 
     assert await _rest(running_listener) == [{"content": PART_2}, "done"]
-    assert await _messages(admin_engine, running) == [
+    assert await stored_messages(admin_engine, running) == [
         ("user", PROMPT),
         ("assistant", PART_1 + PART_2),
     ]
@@ -426,9 +373,9 @@ async def test_a_second_turns_registry_entry_survives_the_first_turns_end_so_sto
     admin_engine, user_a
 ):
     conv = await make_conversation(admin_engine, user_a.id)
-    _, first_claim = await _turn(user_a, conv)
+    _, first_claim = await user_turn(user_a, conv)
     first_go_on = asyncio.Event()
-    first = _start(
+    first = start_turn_as(
         user_a,
         conv,
         first_claim,
@@ -438,9 +385,9 @@ async def test_a_second_turns_registry_entry_survives_the_first_turns_end_so_sto
     await _read(first_listener, 1)
     # The first turn's claim lapses, so a second turn claims the same
     # conversation in the same process while the first still runs.
-    await _age_claim(admin_engine, conv, 600)
-    _, second_claim = await _turn(user_a, conv)
-    second = _start(
+    await age_claim(admin_engine, conv, 600)
+    _, second_claim = await user_turn(user_a, conv)
+    second = start_turn_as(
         user_a,
         conv,
         second_claim,
@@ -454,16 +401,16 @@ async def test_a_second_turns_registry_entry_survives_the_first_turns_end_so_sto
     turns.stop_turn(conv)
 
     assert await _rest(second_listener) == ["done"]
-    assert (await _messages(admin_engine, conv))[-1] == ("assistant", "second. ")
-    assert await _streaming_since(admin_engine, conv) is None
+    assert (await stored_messages(admin_engine, conv))[-1] == ("assistant", "second. ")
+    assert await streaming_since(admin_engine, conv) is None
 
 
 async def test_a_shutdown_drain_still_stores_nothing_of_a_partial_reply_and_releases(  # noqa: E501 — the name is the behaviour line
     admin_engine, user_a
 ):
     conv = await make_conversation(admin_engine, user_a.id)
-    _, claimed_at = await _turn(user_a, conv)
-    turn = _start(
+    _, claimed_at = await user_turn(user_a, conv)
+    turn = start_turn_as(
         user_a, conv, claimed_at, _stream({"content": PART_1}, until=asyncio.Event())
     )
     listener = turn.listen()
@@ -472,8 +419,8 @@ async def test_a_shutdown_drain_still_stores_nothing_of_a_partial_reply_and_rele
     await turns.drain_turns(0)
 
     assert await _rest(listener) == ["failed"]
-    assert await _messages(admin_engine, conv) == [("user", PROMPT)]
-    assert await _streaming_since(admin_engine, conv) is None
+    assert await stored_messages(admin_engine, conv) == [("user", PROMPT)]
+    assert await streaming_since(admin_engine, conv) is None
 
 
 def _stream_stopped_as_cancelled(turn_box: list):
@@ -496,9 +443,9 @@ async def test_a_drain_that_lands_with_a_stop_wins_and_stores_nothing(
     admin_engine, user_a
 ):
     conv = await make_conversation(admin_engine, user_a.id)
-    _, claimed_at = await _turn(user_a, conv)
+    _, claimed_at = await user_turn(user_a, conv)
     box: list = []
-    turn = _start(user_a, conv, claimed_at, _stream_stopped_as_cancelled(box))
+    turn = start_turn_as(user_a, conv, claimed_at, _stream_stopped_as_cancelled(box))
     box.append(turn)
     listener = turn.listen()
     await _read(listener, 1)
@@ -507,8 +454,8 @@ async def test_a_drain_that_lands_with_a_stop_wins_and_stores_nothing(
 
     assert turn._stopped
     assert await _rest(listener) == ["failed"]
-    assert await _messages(admin_engine, conv) == [("user", PROMPT)]
-    assert await _streaming_since(admin_engine, conv) is None
+    assert await stored_messages(admin_engine, conv) == [("user", PROMPT)]
+    assert await streaming_since(admin_engine, conv) is None
 
 
 async def test_a_deadline_that_lands_with_a_stop_stores_nothing(
@@ -516,16 +463,16 @@ async def test_a_deadline_that_lands_with_a_stop_stores_nothing(
 ):
     monkeypatch.setattr(turns, "TURN_DEADLINE_SECONDS", 0.5)
     conv = await make_conversation(admin_engine, user_a.id)
-    _, claimed_at = await _turn(user_a, conv)
+    _, claimed_at = await user_turn(user_a, conv)
     box: list = []
-    turn = _start(user_a, conv, claimed_at, _stream_stopped_as_cancelled(box))
+    turn = start_turn_as(user_a, conv, claimed_at, _stream_stopped_as_cancelled(box))
     box.append(turn)
     listener = turn.listen()
 
     assert await _rest(listener) == [{"content": PART_1}, "failed"]
     assert turn._stopped
-    assert await _messages(admin_engine, conv) == [("user", PROMPT)]
-    assert await _streaming_since(admin_engine, conv) is None
+    assert await stored_messages(admin_engine, conv) == [("user", PROMPT)]
+    assert await streaming_since(admin_engine, conv) is None
 
 
 # --- POST /api/conversations/{id}/stop ---------------------------------------
@@ -535,8 +482,8 @@ async def test_the_stop_route_stops_the_owners_running_turn_with_204_and_the_par
     client, admin_engine, user_a
 ):
     conv = await make_conversation(admin_engine, user_a.id)
-    _, claimed_at = await _turn(user_a, conv)
-    turn = _start(
+    _, claimed_at = await user_turn(user_a, conv)
+    turn = start_turn_as(
         user_a, conv, claimed_at, _stream({"content": PART_1}, until=asyncio.Event())
     )
     listener = turn.listen()
@@ -547,20 +494,20 @@ async def test_the_stop_route_stops_the_owners_running_turn_with_204_and_the_par
     assert r.status_code == 204
     assert r.content == b""
     assert await _rest(listener) == ["done"]
-    assert await _messages(admin_engine, conv) == [
+    assert await stored_messages(admin_engine, conv) == [
         ("user", PROMPT),
         ("assistant", PART_1),
     ]
-    assert await _streaming_since(admin_engine, conv) is None
+    assert await streaming_since(admin_engine, conv) is None
 
 
 async def test_stopping_another_users_conversation_is_404_and_the_owners_turn_runs_on(  # noqa: E501 — the name is the behaviour line
     client, admin_engine, user_a, user_b
 ):
     conv = await make_conversation(admin_engine, user_a.id)
-    _, claimed_at = await _turn(user_a, conv)
+    _, claimed_at = await user_turn(user_a, conv)
     go_on = asyncio.Event()
-    turn = _start(
+    turn = start_turn_as(
         user_a,
         conv,
         claimed_at,
@@ -576,7 +523,7 @@ async def test_stopping_another_users_conversation_is_404_and_the_owners_turn_ru
     assert r.status_code == 404
     assert r.json() == {"detail": "conversation not found"}
     assert await _rest(listener) == [{"content": PART_2}, "done"]
-    assert await _messages(admin_engine, conv) == [
+    assert await stored_messages(admin_engine, conv) == [
         ("user", PROMPT),
         ("assistant", PART_1 + PART_2),
     ]
@@ -604,8 +551,8 @@ async def test_stopping_an_own_conversation_with_no_running_turn_is_204(
 
 async def test_stopping_twice_is_204_both_times(client, admin_engine, user_a):
     conv = await make_conversation(admin_engine, user_a.id)
-    _, claimed_at = await _turn(user_a, conv)
-    turn = _start(
+    _, claimed_at = await user_turn(user_a, conv)
+    turn = start_turn_as(
         user_a, conv, claimed_at, _stream({"content": PART_1}, until=asyncio.Event())
     )
     listener = turn.listen()
@@ -618,7 +565,7 @@ async def test_stopping_twice_is_204_both_times(client, admin_engine, user_a):
     )
 
     assert (first.status_code, second.status_code) == (204, 204)
-    assert await _messages(admin_engine, conv) == [
+    assert await stored_messages(admin_engine, conv) == [
         ("user", PROMPT),
         ("assistant", PART_1),
     ]

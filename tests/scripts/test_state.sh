@@ -11,13 +11,9 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
 script=$root/scripts/state.sh
 work=$(mktemp -d "${TMPDIR:-/tmp}/state-test.XXXXXX")
-fails=0
+. "$root/tests/scripts/lib.sh"
 trap 'rm -rf "$work"' EXIT
 
-report() {
-  echo "$1: $2"
-  [ "$1" = PASS ] || fails=$((fails + 1))
-}
 has() { # $1 = name, $2 = needle
   case "$out" in *"$2"*) report PASS "$1" ;; *) report FAIL "$1: no '$2' in: $out" ;; esac
 }
@@ -101,4 +97,4 @@ has "a missing open-items section is named" "no '## Open items' section"
 out=$(run --next)
 case "$out" in *"1. server-turn"*) case "$out" in *"main at"*) report FAIL "--next printed the state" ;; *) report PASS "--next prints only the list" ;; esac ;; *) report FAIL "--next: '$out'" ;; esac
 
-[ "$fails" -eq 0 ] && echo "all passed" || { echo "$fails failed"; exit 1; }
+finish

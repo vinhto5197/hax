@@ -97,7 +97,7 @@ export function defaultArgs(over = {}) {
 }
 
 // The all-green result for a stage label.
-export function greenResult(label, args) {
+function greenResult(label, args) {
   if (label === 'precheck:brief') return { sha256: args.briefSha256 }
   if (label === 'build:implement' || label?.startsWith('fix:')) {
     return { status: 'done', files: ['packages/core/x.py'], calls: [], notes: '' }

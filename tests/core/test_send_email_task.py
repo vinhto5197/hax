@@ -53,7 +53,7 @@ def test_refused_connection_retries_like_an_smtp_error(monkeypatch, caplog):
     assert not any("Connection refused" in m or "to@example.com" in m for m in logged)
 
 
-def test_bad_template_is_permanent_no_retry(monkeypatch, caplog):
+def test_bad_template_is_permanent_no_retry(monkeypatch):
     retry = MagicMock()
     monkeypatch.setattr(tasks.send_email, "retry", retry)
     result = tasks.send_email.apply(args=("to@example.com", "nope", {}))

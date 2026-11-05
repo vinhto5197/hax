@@ -2,7 +2,6 @@ import time
 import uuid
 from datetime import datetime, timedelta, timezone
 
-import fakeredis.aioredis
 import pytest
 from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import RedisError, ResponseError
@@ -21,13 +20,6 @@ def claims(auth_time: int) -> SessionClaims:
     return SessionClaims(
         sub=uuid.uuid4(), email="a@example.com", auth_time=auth_time, jti="j"
     )
-
-
-@pytest.fixture
-async def redis():
-    client = fakeredis.aioredis.FakeRedis(decode_responses=True)
-    yield client
-    await client.aclose()
 
 
 async def test_fresh_login_not_revoked(redis):
