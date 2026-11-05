@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Runs one command under a directory lock so gate steps that share a resource
-# never overlap: pytest on hax_test, and the e2e stack (hax_e2e, Redis db 15,
-# ports 3001/8001/8787). The atomic primitive is creating <lockdir>/owner with
+# never overlap: pytest on hax_test, the e2e stack (hax_e2e, Redis db 15,
+# ports 3001/8001/8787), and the eval's (hax_eval, Redis db 13). The atomic primitive is creating <lockdir>/owner with
 # noclobber, which bash opens O_CREAT|O_EXCL: the process that creates it
 # holds the lock and records its pid and command there. Not `mkdir`: the Rust
 # coreutils that Ubuntu 26.04 ships as `mkdir` lets two racing callers both

@@ -317,14 +317,17 @@ EVAL_ENV := env -u RAG_TOP_K -u RAG_CHUNK_SIZE -u RAG_CHUNK_OVERLAP \
 	DATABASE_URL=postgresql://hax_app:hax_app@localhost:5432/hax_eval \
 	MIGRATIONS_DATABASE_URL=postgresql://hax:hax@localhost:5432/hax_eval \
 	S3_BUCKET=hax-eval REDIS_URL=redis://localhost:6379/13 \
-	$(foreach v,MODEL JUDGE_MODEL EVAL_CASES EVAL_CORPUS RAG_MAX_DISTANCE,$(v)='$(if $(filter command line,$(origin $(v))),$($(v)))')
+	$(foreach v,MODEL JUDGE_MODEL EVAL_CASES EVAL_CORPUS RAG_MAX_DISTANCE,$(v)="$(if $(filter command line,$(origin $(v))),$($(v)))")
 
 .PHONY: eval eval-baseline eval-compare
 
+# One run at a time: every run empties hax_eval, and a feature worktree's
+# local/ is the main checkout's, so the lock covers both lanes.
+EVAL_LOCK := $(if $(wildcard local),scripts/with-lock.sh local/.eval.lock 1800 --,)
+
 eval:
 	@nc -z localhost 5432 >/dev/null 2>&1 && nc -z localhost 6379 >/dev/null 2>&1 || { echo "Postgres/Redis down: run make infra-up"; exit 1; }
-	.venv/bin/python apps/web/e2e/prepare.py --target eval
-	$(EVAL_ENV) .venv/bin/python -m evals.run
+	$(EVAL_LOCK) sh -c '.venv/bin/python apps/web/e2e/prepare.py --target eval && $(EVAL_ENV) .venv/bin/python -m evals.run'
 
 # Marks a run in local/eval/runs/ as the one every later run reports flips against.
 eval-baseline:

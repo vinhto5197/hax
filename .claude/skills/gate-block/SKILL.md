@@ -56,6 +56,7 @@ A main-lane item is cut into bites when it is planned: a bite is one or more of 
 - **Each bite stands on its own:** it is built to pass CI with this bite committed and the later bites still shelved.
 - **Only the current bite's files are in the tree;** the later bites wait under `local/shelf/<item>/`, and that folder is deleted when the item's last bite is committed, so a shelf never outlives its item.
 - **Each bite carries its own review:** its tier, its fresh-eyes reviewer, blind tests where it changes behaviour, and its own gate block.
+- **The eval gate:** a bite that changes what the model sees or does (the list in `evals/README.md`, "When a change must run it") runs `make eval` against the baseline before it is presented; a `broke` flip on a must case is rerun once, and broken twice it is fixed or put to the maintainer, never presented as done. Its gate block carries the summary line, the flips and the cost; after its commit, that run becomes the baseline.
 - **The adversarial review runs once per item, not per bite:** when any bite is tier 1, one run over the item's whole commit range is offered after its last tier-1 bite (cost preview, the maintainer's "go"); its findings become a fix bite.
 
 ## The main-lane gate block

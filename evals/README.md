@@ -44,6 +44,44 @@ estimate from list prices, `evals/prices.py`):
 
 CI never runs it: it spends credits. CI runs its unit tests (`tests/evals/`).
 
+## When a change must run it
+
+A change to what the model sees or does runs `make eval` against the baseline
+before it is presented or merged:
+
+- the member system prompt, the About-you framing, or the request's model list
+  (`apps/api/routers/chat.py`: `AGENTIC_SYSTEM`, `ABOUT_PREFACE`,
+  `member_system`; `packages/core/schemas/chat.py`: `ModelId`);
+- the agent loop or its tools, their descriptions and output text
+  (`packages/core/agent/`);
+- retrieval: chunking, embedding, top-k, the cutoff (`packages/core/rag/`);
+- the default model (`DEFAULT_MODEL` in `packages/core/agent/harness.py`).
+
+A plain `make eval` runs `claude-haiku-4-5` whatever the harness's default is,
+so a change of model, or a model added to `ModelId`, runs
+`make eval MODEL=<that model>` and compares it with the baseline
+(`make eval-compare`).
+
+A `broke` flip on a must case is rerun once, the whole eval, because the same
+model fails a case on one run and passes it on the next. Broken on both runs,
+the change stops there and the cases are named; `fixed` flips, probes and
+errors go into the hand-off. A run costs about $0.35 on Haiku with the 27
+cases.
+
+Two things that shape the prompt are not measured here: the guest prompt
+(`packages/core/demo/prompt.md`, no cases) and history replay
+(`load_history` in `apps/api/chat_service.py`, and what `apps/api/turns.py`
+persists for it): a case's earlier turns are given as written, not replayed
+from the database. The nightly routine cannot run the eval (no stack, no
+keys), so items touching these paths are never queued for it. Runs take a
+lock (`local/.eval.lock`): one at a time across the main checkout and feature
+worktrees.
+
+When a measured change lands, or the cases change, the run that checked it
+becomes the baseline (`make eval-baseline`), so the next change is compared
+with what is now on main. The feature lane's rule is in skill
+`feature-chain`, the main lane's in skill `gate-block`.
+
 ## Read the results
 
 Each run writes `local/eval/runs/<time>_<commit>.json` and an `.html` page
@@ -59,6 +97,11 @@ Neither is committed. The terminal shows the summary:
   never counted as failures or flips, and they make the run untrustworthy.
 - **recall@k**: of the cases that name an expected passage, how many found it
   in the top results for the question.
+- **distances**: each case records the cosine distance of its expected
+  passage and of the nearest chunk. On 2026-11-05 right answers sat at
+  0.38–0.62 and off-corpus questions' nearest chunks at 0.52–0.80: the ranges
+  overlap, so `RAG_MAX_DISTANCE` stays unset and honesty is left to the
+  model.
 
 The runner (`python -m evals.run`) exits 0 when every must case passed, 1
 when a must case failed or any case errored, and 2 when the run could not
