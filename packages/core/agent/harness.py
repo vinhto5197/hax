@@ -10,8 +10,8 @@ are user-facing only: the model receives ToolOutput.text and nothing else.
 
 import logging
 import os
-from collections.abc import AsyncIterator
-from typing import Any, cast
+from collections.abc import AsyncIterator, Callable
+from typing import Any, TypedDict, cast
 
 from anthropic import AsyncAnthropic
 from anthropic.types import MessageParam, ToolResultBlockParam
@@ -27,6 +27,26 @@ _client = AsyncAnthropic()
 
 # Hard cap on tool-use iterations per turn.
 MAX_ITERS = 5
+
+
+# The two optional observers below are for callers that measure a turn (the
+# eval runner, evals/); the chat route passes neither, so what it streams and
+# persists never depends on them. They run inline and are not guarded: an
+# observer's exception is the observer's bug and ends the turn.
+class Usage(TypedDict):
+    model: str
+    input: int
+    output: int
+    cache_read: int
+    cache_write: int
+
+
+class ToolResult(TypedDict):
+    name: str
+    input: dict
+    output: str  # exactly the text the model receives
+    is_error: bool
+
 
 # On exhaustion every call so far stopped at tool_use — no answer was ever
 # produced. This drives one final NO-TOOLS call so the turn always ends in prose.
@@ -62,6 +82,31 @@ def _cache_last(messages: list[MessageParam]) -> list[MessageParam]:
     return [*messages[:-1], cast(MessageParam, last)]
 
 
+def _report_usage(
+    iteration: str,
+    model: str,
+    usage: Any,
+    on_usage: Callable[[Usage], None] | None,
+) -> None:
+    counts: Usage = {
+        "model": model,
+        "input": usage.input_tokens,
+        "output": usage.output_tokens,
+        "cache_read": usage.cache_read_input_tokens or 0,
+        "cache_write": usage.cache_creation_input_tokens or 0,
+    }
+    logger.info(
+        "agentic usage: iter=%s input=%d output=%d cache_read=%d cache_write=%d",
+        iteration,
+        counts["input"],
+        counts["output"],
+        counts["cache_read"],
+        counts["cache_write"],
+    )
+    if on_usage is not None:
+        on_usage(counts)
+
+
 async def _run_tool(
     name: str, raw_input: dict, ctx: ToolContext
 ) -> tuple[str, bool, tuple[Source, ...]]:
@@ -91,6 +136,8 @@ async def stream_completion_agentic(
     *,
     ctx: ToolContext,
     tools: bool = True,
+    on_usage: Callable[[Usage], None] | None = None,
+    on_tool_result: Callable[[ToolResult], None] | None = None,
 ) -> AsyncIterator[dict]:
     """Run the tool-use loop, yielding {"content": …} / {"status": …} /
     {"sources": …} events.
@@ -127,15 +174,7 @@ async def stream_completion_agentic(
                 yield {"content": text}
             final = await stream.get_final_message()
 
-        usage = final.usage
-        logger.info(
-            "agentic usage: iter=%d input=%d output=%d cache_read=%d cache_write=%d",
-            iteration,
-            usage.input_tokens,
-            usage.output_tokens,
-            usage.cache_read_input_tokens or 0,
-            usage.cache_creation_input_tokens or 0,
-        )
+        _report_usage(str(iteration), model, final.usage, on_usage)
 
         if final.stop_reason != "tool_use":
             return  # end_turn — the answer already streamed
@@ -165,6 +204,18 @@ async def stream_completion_agentic(
                 len(out),
                 len(sources),
             )
+            if on_tool_result is not None:
+                on_tool_result(
+                    {
+                        "name": block.name,
+                        # A copy: block.input is replayed to the model next iteration.
+                        "input": dict(block.input)
+                        if isinstance(block.input, dict)
+                        else {},
+                        "output": out,
+                        "is_error": is_error,
+                    }
+                )
             if sources:
                 # Provenance for the client; never appended to `messages`.
                 yield {"sources": [s.as_dict() for s in sources]}
@@ -200,11 +251,4 @@ async def stream_completion_agentic(
             emitted_text = True
             yield {"content": text}
         final = await stream.get_final_message()
-    usage = final.usage
-    logger.info(
-        "agentic usage: iter=fallback input=%d output=%d cache_read=%d cache_write=%d",
-        usage.input_tokens,
-        usage.output_tokens,
-        usage.cache_read_input_tokens or 0,
-        usage.cache_creation_input_tokens or 0,
-    )
+    _report_usage("fallback", model, final.usage, on_usage)

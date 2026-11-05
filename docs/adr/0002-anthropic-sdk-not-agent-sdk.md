@@ -344,3 +344,28 @@ claim lapsed and was re-taken (by a retry or a newer send) stores nothing,
 where it used to append its late reply after the newer one. Without this, a
 retry that claimed a lapsed conversation could end with two replies to one
 question.
+
+## Addendum (2026-11-04) — the eval observes the loop through two hooks
+
+`stream_completion_agentic` takes two optional keyword callbacks: `on_usage`,
+called once per model call (each iteration and the no-tools fallback) with
+the model it asked for and that call's token counts, and `on_tool_result`,
+called once per tool_use the model requested (an unknown name included) with its name, the model's input, the exact text the model
+receives back, and whether it was an error. The chat route passes neither, so
+the event protocol and what is persisted are unchanged. They exist for the
+eval runner (`evals/`, M5), which grades answers against what the model was
+actually given and reports cost; a callback is the narrowest way to hand out
+counts the harness already logs. Observers run inline and
+unguarded: an observer that raises ends the turn, which is the eval's bug to
+see, never a chat failure (the route has none).
+
+The eval runner itself is our own thin code driving this loop directly, not an
+eval framework or platform: at v0's size (tens of cases, one developer, no
+production traffic to sample) their value (shared dashboards, trace ingestion,
+labelling queues) does not apply, and a framework would sit beside a loop we
+deliberately keep provider-neutral. The case file is plain JSON lines, so a
+later platform can import it.
+
+Rejected: a `{"usage": …}` event in the stream (every consumer of the
+protocol would have to drop it); reading the counts from the logs (fragile,
+and the logs never carry tool output, by design).
