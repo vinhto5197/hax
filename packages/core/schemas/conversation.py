@@ -20,7 +20,6 @@ class SourceOut(BaseModel):
 
 
 class MessageOut(BaseModel):
-    # from_attributes lets us build these straight from ORM rows.
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID

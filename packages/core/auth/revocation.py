@@ -6,11 +6,8 @@ revocation is instant for cached users. Missing user => revoked on the next
 cache miss (a deleted account's tokens die within SVA_CACHE_TTL_S unless the
 deleter purges the key). A Redis error on the read falls back to the DB
 cutoff, the source of truth, so a revoked session stays revoked while Redis
-is down (one indexed read per request meanwhile). A publish that Redis
-refuses (a full noeviction instance still serves the old value) deletes the
-key instead, so the next check reads the DB; a failed cache fill is logged
-and ignored. DB fetch errors propagate — an unreachable DB is
-a real outage.
+is down (one indexed read per request meanwhile). DB fetch errors propagate
+— an unreachable DB is a real outage.
 """
 
 import logging

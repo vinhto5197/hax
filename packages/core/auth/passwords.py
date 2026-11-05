@@ -13,16 +13,15 @@ import os
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 
-# OWASP argon2id parameters sized for the 1GiB alpha box: 19 MiB per op is the
-# per-op memory budget. Verify reads params embedded in each stored hash, so
-# hashes minted under other settings (e.g. old 64MiB dev hashes) still verify.
+# OWASP argon2id parameters: 19 MiB per op. Verify reads the params embedded in
+# each stored hash, so hashes minted under other settings still verify.
 _hasher = PasswordHasher(time_cost=2, memory_cost=19456, parallelism=1)
 
 # Precomputed at import so dummy_verify's cost matches a real verification.
 _DUMMY_HASH = _hasher.hash("hax-dummy-password-for-timing-only")
 
 # PER-PROCESS cap on concurrent argon2 ops: cap = machine argon2 memory budget
-# / memory_cost / uvicorn worker count (v0 = 1 worker). Lazy like
+# / memory_cost / uvicorn worker count (compose.prod.yml runs 1). Lazy like
 # apps/api/redis_client.py — importing never reads env or allocates.
 _semaphore: asyncio.Semaphore | None = None
 

@@ -20,7 +20,7 @@ from packages.core.rag.retrieval import retrieve
 
 logger = logging.getLogger(__name__)
 
-# Recipient for the MOCKED send_email tool (v0 stub — logged, not really sent).
+# Recipient for the mocked send_email tool (logged, never sent).
 EMAIL_RECIPIENT = os.getenv("EMAIL_RECIPIENT", "you@example.com")
 
 
@@ -153,11 +153,8 @@ _BIN_OPS = {
 }
 _UNARY_OPS = {ast.UAdd: operator.pos, ast.USub: operator.neg}
 _MAX_POW_EXP = 1000  # cap the exponent so `2**10**9` can't wedge the process
-# The exponent cap alone doesn't bound the RESULT of a chained expression: the
-# base of an outer pow/mult can itself be the unbounded output of an inner
-# one (e.g. `((9**1000)**1000)**1000`), so a big-int op sized in the millions
-# of bits runs synchronously on the event loop before str() ever gets a
-# chance to reject it. Reject by projected bit length BEFORE computing.
+# The exponent cap alone does not bound a chained result (((9**1000)**1000)**1000):
+# reject by projected bit length before computing — big-int ops block the event loop.
 _MAX_RESULT_BITS = 1_000_000
 
 
@@ -232,14 +229,14 @@ GET_CURRENT_DATETIME = Tool(
 )
 
 
-# ── send_email (MOCKED — v0 stub, no real Gmail) ─────────────────────────────
+# ── send_email (mocked: logs, sends nothing) ─────────────────────────────────
 class SendEmailInput(BaseModel):
     subject: str = Field(description="The email subject line.")
     body: str = Field(description="The email body text.")
 
 
 async def _run_send_email(inp: SendEmailInput, ctx: ToolContext) -> str:  # ctx unused
-    # v0 stub: logs the would-be send, sends nothing (real Gmail is v1). The
+    # Mocked: logs the would-be send, sends nothing. The
     # hardcoded recipient bounds prompt-injection blast radius.
     # Subject and body are model-authored (and can be injected): sizes only.
     logger.info(

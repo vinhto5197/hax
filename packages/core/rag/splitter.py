@@ -3,8 +3,7 @@ import os
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 # Sizes are in characters (~1600 ≈ 400 tokens), ~12% overlap so a sentence
-# straddling a boundary isn't orphaned. Changing them requires re-ingest. The
-# recursive splitter cuts on structure (paragraph -> line -> word -> char).
+# straddling a boundary isn't orphaned. Changing them requires re-ingest.
 CHUNK_SIZE = int(os.getenv("RAG_CHUNK_SIZE", "1600"))
 CHUNK_OVERLAP = int(os.getenv("RAG_CHUNK_OVERLAP", "200"))
 

@@ -62,9 +62,8 @@ async def retrieve(
         qvec = await embed_query(query)
 
         async with AsyncSessionLocal() as session:
-            # Lazy SQL expression (embedding <=> qvec), evaluated per row by
-            # Postgres. When the HNSW index serves the ordering it filters on
-            # user_id after the scan, so a query can return fewer than k rows.
+            # When the HNSW index serves the ordering it filters on user_id
+            # after the scan, so a query can return fewer than k rows.
             distance = Chunk.embedding.cosine_distance(qvec)
             stmt = (
                 select(
@@ -90,7 +89,6 @@ async def retrieve(
                 )
                 for content, meta, document_id, idx, dist in rows
             ]
-            # Debug observability: what came back and how near (ascending).
             logger.info(
                 "retrieval: query_len=%d k=%d cutoff=%s hits=%d distances=%s",
                 len(query),

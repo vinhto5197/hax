@@ -11,7 +11,6 @@ import boto3
 from botocore.exceptions import ClientError
 
 S3_BUCKET = os.getenv("S3_BUCKET", "hax-documents")
-# Unset in prod -> boto3 talks to real AWS S3; set to the dev stand-in's URL.
 _ENDPOINT_URL = os.getenv("S3_ENDPOINT_URL") or None
 _REGION = os.getenv("S3_REGION", "us-east-1")
 # Dev-only static keys (the stand-in). Deliberately not the AWS_* names: those are
@@ -51,9 +50,8 @@ def _get_client():
 
 
 def _ensure_bucket() -> None:
-    """Create the bucket if it's missing (idempotent), so the dev stand-in works with no
-    manual provisioning. In prod the bucket is provisioned by Terraform, but the
-    head-then-create is harmless (head succeeds → no-op)."""
+    """Create the bucket if it's missing (idempotent), so the dev stand-in needs no
+    manual provisioning."""
     global _bucket_ready
     if _bucket_ready:
         return
@@ -79,8 +77,7 @@ def _ensure_bucket() -> None:
 
 
 def put(key: str, data: bytes, content_type: str = "application/octet-stream") -> None:
-    """Write bytes to object storage under ``key``. Blocking — offload from the
-    event loop with ``asyncio.to_thread``."""
+    """Write bytes under ``key``. Blocking."""
     _ensure_bucket()
     _get_client().put_object(
         Bucket=S3_BUCKET, Key=key, Body=data, ContentType=content_type

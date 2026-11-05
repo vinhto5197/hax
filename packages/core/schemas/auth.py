@@ -12,11 +12,8 @@ class SignupIn(BaseModel):
 
 
 class AcceptedOut(BaseModel):
-    # One body for every input on the anti-enumeration routes.
-    # A model, not a bare string: FastAPI derives the OpenAPI/TypeScript type
-    # from it (a literal "check_inbox", not string), every route returns an
-    # object, and an object can gain a field without breaking readers of
-    # .status.
+    # One body for every input on the anti-enumeration routes; a model so the
+    # TS type is the literal and the object can grow.
     status: Literal["check_inbox"] = "check_inbox"
 
 

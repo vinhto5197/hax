@@ -48,8 +48,6 @@ class ToolResult(TypedDict):
     is_error: bool
 
 
-# On exhaustion every call so far stopped at tool_use — no answer was ever
-# produced. This drives one final NO-TOOLS call so the turn always ends in prose.
 FINAL_ANSWER_PROMPT = (
     "You have reached the tool-use limit for this turn — no more tool calls are "
     "available. Answer the user's question now using only what you have gathered "

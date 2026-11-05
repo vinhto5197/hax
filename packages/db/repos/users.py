@@ -132,11 +132,8 @@ async def replace_pending_password(
     )
     if result.first() is None:
         return None
-    # Expire rather than assign: `user` was loaded before this UPDATE ran, so
-    # setting attributes here would mark it dirty against that stale snapshot
-    # and cost a redundant second UPDATE at flush/commit. Expiring instead
-    # means a later access re-reads what we just wrote, with no extra write
-    # and no extra query unless something actually touches the object again.
+    # Expire, not assign: `user` predates this UPDATE, so assigning would dirty
+    # it against a stale snapshot and flush a second UPDATE.
     session.expire(user, list(values.keys()))
     return cutoff
 

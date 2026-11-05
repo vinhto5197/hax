@@ -27,7 +27,7 @@ MIGRATIONS_DATABASE_URL_ASYNC = to_async_url(
 
 # hide_parameters=True: DBAPI error strings otherwise append [parameters: …],
 # which for the chunk insert is raw user document text — this is the
-# load-bearing control against that leaking into worker/CloudWatch logs, not
+# load-bearing control against that leaking into logs, not
 # any individual log-call tweak.
 # pool_pre_ping: a pooled connection the server already dropped (restart,
 # failover, idle reaper) is replaced at checkout instead of surfacing as a 500.

@@ -2,10 +2,10 @@
 
 Repo-layer contract: every user-facing query REQUIRES the caller's user_id;
 an ownership miss returns None/False/[] and routes map it to 404 (never 403 —
-don't confirm existence). add_message, touch, last_messages and
-delete_message take no user_id: messages are only ever reached through a
-conversation the caller proved they own earlier in the same request, and RLS
-re-checks at the DB.
+don't confirm existence). add_message, touch, last_messages, delete_message,
+release_turn and refresh_turn take no user_id: they run only after the caller
+proved ownership (or holds the claim) in the same request, and RLS re-checks
+at the DB.
 """
 
 import uuid
@@ -122,9 +122,7 @@ async def add_message(
 async def last_messages(
     session: AsyncSession, conversation_id: uuid.UUID, n: int = 2
 ) -> list[Message]:
-    """The conversation's last `n` messages, newest first. No user_id, like
-    add_message: called only under the caller's claim, whose UPDATE filtered
-    on the owner in the same transaction; RLS `messages_owner` re-checks."""
+    """The conversation's last `n` messages, newest first."""
     result = await session.scalars(
         select(Message)
         .where(Message.conversation_id == conversation_id)
@@ -135,9 +133,7 @@ async def last_messages(
 
 
 async def delete_message(session: AsyncSession, message_id: uuid.UUID) -> None:
-    """Delete one message (its sources live on the row). No user_id: same rule
-    as last_messages — only under the caller's claim; RLS re-checks. The
-    caller owns the commit."""
+    """Delete one message (its sources live on the row). The caller owns the commit."""
     await session.execute(delete(Message).where(Message.id == message_id))
 
 

@@ -21,7 +21,6 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    """Upgrade schema."""
     # Self-sufficient: init.sql enables this on a fresh local container, but a
     # managed Postgres won't run init.sql, so guarantee the extension here.
     op.execute("CREATE EXTENSION IF NOT EXISTS vector")
@@ -91,7 +90,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Downgrade schema."""
     op.drop_index(
         "chunks_embedding_idx",
         table_name="chunks",
