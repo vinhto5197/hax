@@ -1,7 +1,7 @@
 import asyncio
 import json
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
 from datetime import datetime
 from typing import TYPE_CHECKING, TypeVar
 from uuid import UUID
@@ -246,7 +246,9 @@ async def release_claim(conversation_id: UUID, claimed_at: datetime) -> None:
         await session.commit()
 
 
-async def event_stream(turn: "Turn", conversation_id: UUID) -> AsyncIterator[str]:
+async def event_stream(
+    turn: "Turn", conversation_id: UUID
+) -> AsyncGenerator[str, None]:
     """Listen to a running turn as SSE: the conversation-id prelude, every
     event the turn yields, then [DONE] when the reply is saved and the claim
     released, or {"error": "reply_failed"} (a fixed code, never an exception's

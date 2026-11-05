@@ -53,7 +53,7 @@ async def test_a_statement_blocked_by_another_sessions_lock_fails_instead_of_han
             assert 4 < time.monotonic() - started < 15
             await hold.rollback()
         # lock_not_available: the SQLSTATE the API answers as a 503.
-        assert caught.value.orig.sqlstate == "55P03"
+        assert getattr(caught.value.orig, "sqlstate", None) == "55P03"
     finally:
         async with holder.connect() as cleanup:
             await cleanup.execute(text("DROP TABLE IF EXISTS lock_probe"))

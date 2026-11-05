@@ -50,7 +50,7 @@ repos:
       # change the verdict. --pythonpath as in `make types-check`; needs the
       # project's .venv (`make setup`).
       - id: pyright
-        name: pyright (apps, packages)
+        name: pyright (apps, packages, evals, tests)
         entry: env PYRIGHT_PYTHON_IGNORE_WARNINGS=1 .venv/bin/pyright
         args: [--pythonpath, .venv/bin/python]
         language: system

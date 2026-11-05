@@ -87,8 +87,8 @@ known-first-party = ["apps", "packages"]
 [tool.pyright]
 typeCheckingMode = "standard"
 pythonVersion = "3.14"
-include = ["apps", "packages", "evals"]
-exclude = ["apps/web", "**/node_modules", "**/__pycache__"]
+include = ["apps", "packages", "evals", "tests"]
+exclude = ["**/node_modules", "**/__pycache__", "apps/web/.next"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

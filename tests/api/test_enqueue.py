@@ -11,6 +11,7 @@ import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -19,7 +20,7 @@ from apps.api import enqueue
 _retry_flags: list[bool] = []
 
 
-def fake_task(name: str, fn):
+def fake_task(name: str, fn) -> Any:
     """A stand-in Celery task whose apply_async records the retry flag and
     calls `fn` with the payload."""
 

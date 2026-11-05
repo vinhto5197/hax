@@ -68,7 +68,8 @@ async def test_a_missing_object_fails_without_leaking_the_key(
     monkeypatch.setattr(storage, "get", missing)
 
     await _run_task(doc, user_a.id)
-    _assert_scrubbed(*await _row(admin_engine, doc), doc, key)
+    status, error = await _row(admin_engine, doc)
+    _assert_scrubbed(status, error, doc, key)
 
 
 async def test_a_row_without_a_storage_key_fails_without_leaking_ids(
@@ -80,4 +81,5 @@ async def test_a_row_without_a_storage_key_fails_without_leaking_ids(
     monkeypatch.setattr(storage, "get", lambda k: b"never fetched")
 
     await _run_task(doc, user_a.id)
-    _assert_scrubbed(*await _row(admin_engine, doc), doc, f"documents/{doc}/{FILENAME}")
+    status, error = await _row(admin_engine, doc)
+    _assert_scrubbed(status, error, doc, f"documents/{doc}/{FILENAME}")

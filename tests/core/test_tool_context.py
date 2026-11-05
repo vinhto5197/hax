@@ -23,7 +23,7 @@ def test_search_documents_executor_takes_context():
 def test_tool_context_is_immutable():
     ctx = ToolContext(user_id=uuid.uuid4())
     try:
-        ctx.user_id = uuid.uuid4()
+        ctx.user_id = uuid.uuid4()  # pyright: ignore[reportAttributeAccessIssue]  # the assignment is the test
         raise AssertionError("ToolContext must be frozen")
     except AttributeError:
         pass

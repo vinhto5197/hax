@@ -12,10 +12,12 @@ backlog cap, retry flag) lives in tests/api/test_enqueue.py.
 import asyncio
 import logging
 import uuid
+from typing import cast
 
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import text
+from sqlalchemy.pool import QueuePool
 
 import apps.api.chat_service as chat_service
 from apps.api import enqueue, turns
@@ -114,7 +116,7 @@ async def test_enqueue_happens_after_the_commit(
     real = chat_service._enqueue_title
 
     def spy(conversation_id, user_id):
-        checked_out.append(app_engine.pool.checkedout())
+        checked_out.append(cast(QueuePool, app_engine.pool).checkedout())
         real(conversation_id, user_id)
 
     monkeypatch.setattr(chat_service, "_enqueue_title", spy)

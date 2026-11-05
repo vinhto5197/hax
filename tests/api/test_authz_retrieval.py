@@ -1,4 +1,7 @@
+from typing import cast
+
 from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy.pool import QueuePool
 
 from packages.core.rag import retrieval
 from packages.db.user_context import current_user_id
@@ -82,7 +85,7 @@ async def test_no_connection_is_held_across_the_embed_call(
     checked_out: list[int] = []
 
     async def spy_embed_query(query: str) -> list[float]:
-        checked_out.append(app_engine.pool.checkedout())
+        checked_out.append(cast(QueuePool, app_engine.pool).checkedout())
         return unit_vec(0)
 
     monkeypatch.setattr(retrieval, "embed_query", spy_embed_query)

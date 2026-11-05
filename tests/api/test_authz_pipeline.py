@@ -22,6 +22,7 @@ from packages.core.agent.tools import (
     SEARCH_DOCUMENTS,
     SearchDocumentsInput,
     ToolContext,
+    ToolOutput,
 )
 from packages.core.rag.ingest import PermanentIngestError
 from packages.db.user_context import current_user_id
@@ -113,11 +114,13 @@ async def test_agent_search_respects_tool_context(
     out_b = await SEARCH_DOCUMENTS.run(
         SearchDocumentsInput(query="alpha"), ToolContext(user_id=user_b.id)
     )
+    assert isinstance(out_b, str)  # no passage of A's: the plain "nothing found"
     assert "alpha secret" not in out_b
 
     out_a = await SEARCH_DOCUMENTS.run(
         SearchDocumentsInput(query="alpha"), ToolContext(user_id=user_a.id)
     )
+    assert isinstance(out_a, ToolOutput)
     assert "alpha secret" in out_a.text
 
 

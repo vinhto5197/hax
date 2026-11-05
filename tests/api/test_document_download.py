@@ -3,6 +3,10 @@ the (slow, threaded) storage fetch, so a large download cannot pin a
 connection for its whole transfer. Ownership and the response shape are
 covered in test_authz_documents.py."""
 
+from typing import cast
+
+from sqlalchemy.pool import QueuePool
+
 from packages.core import storage
 from packages.db import engine as app_engine
 from tests.api.conftest import bearer
@@ -20,7 +24,7 @@ async def test_db_connection_is_released_before_the_storage_fetch(
     seen = []
 
     def get(key):
-        seen.append(app_engine.sync_engine.pool.checkedout())
+        seen.append(cast(QueuePool, app_engine.sync_engine.pool).checkedout())
         return b"payload"
 
     monkeypatch.setattr(storage, "get", get)

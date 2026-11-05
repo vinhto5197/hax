@@ -26,6 +26,7 @@ def test_clean_title(raw, expected):
 
 def test_cut_title_fits_the_limit_and_ends_on_a_whole_word():
     cut = titles.clean_title("alpha beta " * 20)
+    assert cut is not None
     assert len(cut) <= titles.MAX_TITLE_CHARS
     assert cut.endswith(("alpha…", "beta…"))
 

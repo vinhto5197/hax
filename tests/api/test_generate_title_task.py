@@ -7,13 +7,15 @@ The titler is always faked — no test may reach the network."""
 
 import asyncio
 import logging
+from typing import cast
 from unittest.mock import AsyncMock, MagicMock
 
 import anthropic
-import httpx
+import httpx2 as httpx  # the HTTP client the pinned anthropic SDK types with
 import pytest
 from celery.exceptions import Retry
 from sqlalchemy import text
+from sqlalchemy.pool import QueuePool
 
 import apps.worker.tasks as tasks
 from packages.db import engine as app_engine
@@ -67,7 +69,7 @@ async def test_no_connection_is_held_across_the_model_call(
     checked_out = []
 
     async def spy(message):
-        checked_out.append(app_engine.pool.checkedout())
+        checked_out.append(cast(QueuePool, app_engine.pool).checkedout())
         return "Trip Planning Notes"
 
     titler.side_effect = spy
