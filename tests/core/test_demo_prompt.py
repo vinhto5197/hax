@@ -23,11 +23,11 @@ def test_both_system_prompts_name_the_product_hax_capitalized():
         assert "Hax" in prompt
 
 
-# The sign-up rules (the maintainer, 2026-11-03): an account-only ask is answered with
-# "that takes signing up" in whichever answer it comes; otherwise the
-# invitation goes in the first answer only. Checked by text over the guest
-# instructions, sentence by sentence, so a rewording keeps passing as long as
-# both rules are there and nothing contradicts them.
+# The sign-up rules: an account-only ask is answered with "that takes signing
+# up" in whichever answer it comes; otherwise the invitation goes in the first
+# answer only. Checked by text over the guest instructions, sentence by
+# sentence, so a rewording keeps passing as long as both rules are there and
+# nothing contradicts them.
 
 _SCOPE_ANY_ANSWER = re.compile(
     r"\b(any answer|every answer|whichever answer|each answer|in that answer"

@@ -27,7 +27,7 @@ done
 if [ -z "$py" ]; then
   report FAIL "no python with tomllib and PyYAML found: the config checks cannot run"
 else
-  # ── T5: [tool.pyright] sets typeCheckingMode = "standard" ──
+  # ── [tool.pyright] sets typeCheckingMode = "standard" ──
   mode=$("$py" -c '
 import sys, tomllib
 d = tomllib.load(open(sys.argv[1], "rb"))
@@ -39,7 +39,7 @@ print(d.get("tool", {}).get("pyright", {}).get("typeCheckingMode", ""))
     report FAIL "pyproject.toml's [tool.pyright] typeCheckingMode is: ${mode:-unset}"
   fi
 
-  # ── T7: pre-commit runs Pyright as CI does ─────────────────
+  # ── Pre-commit runs Pyright as CI does ─────────────────
   # The whole tree (pass_filenames false), against the venv's packages
   # (--pythonpath), and also when only the pins or the config change: a
   # pin refresh can change Pyright's verdict with no .py file staged.
@@ -104,7 +104,7 @@ CPY
   esac
 fi
 
-# ── T6: constraints.txt pins pyright==1.1.407 ────────────────
+# ── constraints.txt pins pyright==1.1.407 ────────────────
 if grep -Eiq '^pyright==1\.1\.407([[:space:]]|$)' "$root/constraints.txt"; then
   report PASS "constraints.txt pins pyright==1.1.407"
 else

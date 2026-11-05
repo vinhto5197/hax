@@ -2,8 +2,8 @@
 # Proves CI and the production image install Python packages only at the
 # versions in constraints.txt (refreshed on purpose by `make constraints`), so an
 # upstream release cannot turn CI red overnight: every `pip install -e` in the
-# workflow passes `-c constraints.txt`, and the file pins exact versions,
-# including the two that broke CI on 2026-10-28. Run by hand:
+# workflow passes `-c constraints.txt`, and the file pins exact versions.
+# Run by hand:
 #   bash tests/scripts/test_ci_constraints.sh
 set -euo pipefail
 

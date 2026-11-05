@@ -80,7 +80,7 @@ fresh usage
 check; [ "$rc" -eq 64 ] && report PASS "no arguments is bad usage (exit 64)" || report FAIL "no arguments: exit $rc, want 64: $out"
 check --range; [ "$rc" -eq 64 ] && report PASS "--range with no range is bad usage (exit 64)" || report FAIL "--range alone: exit $rc, want 64: $out"
 
-# P1: git cannot read the change
+# Git cannot read the change
 fresh badrev
 check --range deadbeef..HEAD
 [ "$rc" -eq 2 ] && report PASS "an unknown revision in --range exits 2" || report FAIL "unknown revision: exit $rc, want 2: $out"
@@ -90,7 +90,7 @@ nogit=$work/not-a-repo; mkdir -p "$nogit"
 rc=0; out=$(cd "$nogit" && PERSONAL_DENYLIST="$DENY" "$script" --staged 2>&1) || rc=$?
 [ "$rc" -eq 2 ] && report PASS "--staged outside a git repository exits 2" || report FAIL "--staged outside a repo: exit $rc, want 2: $(printf '%s\n' "$out" | head -2)"
 
-# P2: a denylisted word in an added path
+# A denylisted word in an added path
 fresh path-add
 mkdir -p "$r/docs"; printf 'nothing personal\n' > "$r/docs/jane-notes.txt"; g add -A
 check --staged
@@ -100,7 +100,7 @@ g commit -q -m 'add notes'
 check --range HEAD~1..HEAD
 [ "$rc" -eq 1 ] && report PASS "--range: an added path with a denylisted word fails" || report FAIL "--range path hit: exit $rc, want 1: $out"
 
-# P3: a rename onto a denylisted path
+# A rename onto a denylisted path
 fresh path-rename
 g mv clean.txt Roe.txt
 check --staged
@@ -109,7 +109,7 @@ g commit -q -m rename
 check --range HEAD~1..HEAD
 [ "$rc" -eq 1 ] && report PASS "--range: a rename onto a denylisted path fails" || report FAIL "--range rename hit: exit $rc, want 1: $out"
 
-# P4: a denylisted word in a commit message
+# A denylisted word in a commit message
 fresh message
 printf 'more plain text\n' >> "$r/clean.txt"; g add -A; g commit -q -m 'thanks to Jane for this'
 sha=$(g rev-parse HEAD)
@@ -118,7 +118,7 @@ check --range HEAD~1..HEAD
 case "$out" in *"${sha:0:7}"*) report PASS "the message hit names the commit's short sha" ;; *) report FAIL "message hit: no short sha ${sha:0:7}: $out" ;; esac
 case "$out" in *thanks*) report FAIL "the message hit prints the message: $out" ;; *) report PASS "the message hit never prints the message" ;; esac
 
-# P5: an added line that itself starts with "++ "
+# An added line that itself starts with "++ "
 fresh plusplus
 printf '++ Jane was here\n' >> "$r/clean.txt"; g add -A
 check --staged
@@ -127,7 +127,7 @@ g commit -q -m pp
 check --range HEAD~1..HEAD
 [ "$rc" -eq 1 ] && report PASS "--range: an added line starting with '++ ' fails" || report FAIL "--range '++ ' line: exit $rc, want 1: $out"
 
-# P6: entries with a trailing space or CR
+# Entries with a trailing space or CR
 fresh trailing
 printf 'met Quill today\nand Marrow too\n' > "$r/t.txt"; g add -A
 rc=0; out=$(cd "$r" && PERSONAL_DENYLIST=$'Quill ' "$script" --staged 2>&1) || rc=$?
@@ -137,7 +137,7 @@ rc=0; out=$(cd "$r" && PERSONAL_DENYLIST=$'Marrow\r' "$script" --staged 2>&1) ||
 rc=0; out=$(cd "$r" && PERSONAL_DENYLIST=$'Nobody\r\nMarrow\r\n' "$script" --staged 2>&1) || rc=$?
 [ "$rc" -eq 1 ] && report PASS "a CRLF denylist matches its entries" || report FAIL "CRLF list: exit $rc, want 1: $out"
 
-# P7: a hit in a path with a space
+# A hit in a path with a space
 fresh spaced
 mkdir -p "$r/my docs"; printf 'by Roe\n' > "$r/my docs/a b.txt"; g add -A
 check --staged
@@ -146,7 +146,7 @@ printf '%s\n' "$out" | grep -qF 'my docs/a b.txt:1' \
   && report PASS "a path with a space is reported whole, with its line, on one line" \
   || report FAIL "spaced path not reported whole: $out"
 
-# P8: an external diff driver does not hide added lines
+# An external diff driver does not hide added lines
 fresh extdiff
 printf 'signed, Jane\n' >> "$r/clean.txt"; g add -A
 rc=0; out=$(cd "$r" && GIT_EXTERNAL_DIFF=true PERSONAL_DENYLIST="$DENY" "$script" --staged 2>&1) || rc=$?
@@ -160,7 +160,7 @@ printf 'signed, Jane\n' >> "$r/clean.txt"; g add -A
 check --staged
 [ "$rc" -eq 1 ] && report PASS "with diff.external configured, a staged hit still fails" || report FAIL "diff.external: exit $rc, want 1: $out"
 
-# P9 (pin) and older cases: line numbers, any case, clean, skipped, no leak
+# Line numbers, any case, clean, skipped, no leak
 fresh lines
 printf 'one\ntwo\nthree\n' > "$r/README.md"; g add -A; g commit -q -m readme
 printf 'one\ntwo\nwritten by JANE here\nthree\n' > "$r/README.md"; g add -A
@@ -192,7 +192,7 @@ rc=0; out=$(cd "$r" && PERSONAL_DENYLIST="" "$script" --staged 2>&1) || rc=$?
   && report PASS "an empty PERSONAL_DENYLIST counts as no denylist (0, skipped)" \
   || report FAIL "empty PERSONAL_DENYLIST: exit $rc: $out"
 
-# P10: a non-UTF-8 byte beside the word, under each locale
+# A non-UTF-8 byte beside the word, under each locale
 fresh latin1
 printf 'Zorblat caf\xe9\n' > "$r/menu.txt"; g add -A
 for loc in default C C.UTF-8 en_US.UTF-8; do
@@ -216,7 +216,7 @@ rc=0; out=$(cd "$r" && export LC_ALL=en_US.UTF-8 && PERSONAL_DENYLIST=Zorblat "$
 [ "$rc" -eq 1 ] && report PASS "--range: a hit beside a non-UTF-8 byte fails with exit 1 (UTF-8 locale)" \
   || report FAIL "--range non-UTF-8 hit: exit $rc, want 1: $out"
 
-# P11: a .gitattributes `-diff` does not hide added lines
+# A .gitattributes `-diff` does not hide added lines
 fresh nodiff
 printf '*.txt -diff\n' > "$r/.gitattributes"; printf 'from Zorblat\n' > "$r/secret.txt"; g add -A
 rc=0; out=$(cd "$r" && PERSONAL_DENYLIST=Zorblat "$script" --staged 2>&1) || rc=$?

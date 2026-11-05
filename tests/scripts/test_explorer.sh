@@ -27,7 +27,7 @@ report() {
   [ "$1" = PASS ] || fails=$((fails + 1))
 }
 
-# (E1) Grep-level, never a run. The committed fixture is a non-empty text
+# Grep-level, never a run. The committed fixture is a non-empty text
 # file; the prompt's "The file to upload:" path sits under the run's own
 # directory ($run_dir, which the browser tool may read from); and a cp or
 # install line copies the committed fixture to that same path. Quotes and
@@ -65,7 +65,7 @@ if [ -n "$upload" ] && [ "$copied" = yes ]; then
 else
   report FAIL "the runner copies the committed fixture to the path the prompt names: no cp/install of $fixture_rel to '${upload:-<none>}'"
 fi
-# (E2) --check against a temp project. A live pid in .running is the control:
+# --check against a temp project. A live pid in .running is the control:
 # it proves --check reaches the already-running test in this setup, so the
 # dead-pid case cannot pass vacuously.
 proj=$work/proj
@@ -104,7 +104,7 @@ else
   fi
 fi
 
-# (E3) A full run whose check fails writes this week's status before exiting.
+# A full run whose check fails writes this week's status before exiting.
 # The temp project has local/, the persona files and no .running, but no root
 # .env, so the check's first failure is the .env one (the reason is asserted to
 # name it, so a failure earlier in the order cannot pass). The stale status is
@@ -145,7 +145,7 @@ case "$reason" in
   *) report FAIL "the recorded failure reason is the check's (.env): got '$reason'" ;;
 esac
 
-# (E4) A full run that finds a live run leaves that run's status byte-identical:
+# A full run that finds a live run leaves that run's status byte-identical:
 # the failed check is "already running", and the live run owns .status.json.
 # A fresh sleeper, so the earlier one's age cannot matter.
 kill "$live_pid" 2>/dev/null || true
@@ -169,9 +169,9 @@ kill "$live_pid" 2>/dev/null || true
 wait "$live_pid" 2>/dev/null || true
 live_pid=
 
-# (E5) A check failure keeps this week's "done" byte-identical: the week's run
+# A check failure keeps this week's "done" byte-identical: the week's run
 # already happened, so a later failed attempt must not unrecord it. Same
-# failing check as E3 (no root .env, no .running).
+# failing check as the one above (no root .env, no .running).
 rm -f "$proj/local/explorer/.running"
 cat > "$status" <<'EOF'
 {"week": "2026-W45", "persona": "done-persona", "state": "done", "reason": "", "notes": "three findings filed", "logs": "", "started": "2026-11-06T09:00:00Z", "updated": "2026-11-06T10:00:00Z"}
@@ -195,7 +195,7 @@ else
   report FAIL "a full run after this week's done still names the check's reason (.env): output '$(cat "$work/full.out")'"
 fi
 
-# (E6) With no status file at all, a check failure records this week as failed.
+# With no status file at all, a check failure records this week as failed.
 rm -f "$proj/local/explorer/.running" "$status"
 rc=0
 full_run || rc=$?

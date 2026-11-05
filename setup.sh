@@ -92,7 +92,7 @@ else
   echo "Node.js dependencies already installed (apps/web)."
 fi
 
-# ── Pre-commit hooks (ruff on commit) ──
+# ── Pre-commit hooks ──
 if [[ ! -f .git/hooks/pre-commit ]]; then
   echo "Installing pre-commit hooks..."
   .venv/bin/pre-commit install

@@ -66,12 +66,12 @@ allowed() {
        || report FAIL "$2 ($1) fails the hook, expected a pass"
 }
 
-# M1: the extension's case does not matter
+# The extension's case does not matter
 for f in e2e/shot.PNG e2e/photo.Jpg e2e/run.MP4 e2e/clip.WebM e2e/a.JPEG e2e/b.GIF e2e/c.WEBP e2e/trace.ZIP e2e/net.HAR; do
   blocked "$f" "an upper- or mixed-case artifact extension fails the hook"
 done
 
-# M2: other recording and photo formats
+# Other recording and photo formats
 for ext in mov heic avif mkv; do
   blocked "apps/web/test-results/rec.$ext" "a .$ext fails the hook"
 done
@@ -81,7 +81,7 @@ for ext in MOV HEIC Avif MKV; do
   blocked "apps/web/test-results/upper/recording-upper.$ext" "a .$ext in any case fails the hook"
 done
 
-# M3 (pin): the original list, at depth and at the root
+# The original list, at depth and at the root
 for ext in png jpg jpeg gif webp webm mp4 zip har; do
   blocked "apps/web/test-results/shot.$ext" "a .$ext fails the hook"
 done

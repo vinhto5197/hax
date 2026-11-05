@@ -1,7 +1,8 @@
 # Laptop override for compose.prod.yml: local stand-ins for what the box gets
 # from AWS (Postgres for RDS, RustFS for S3) plus a mail sink. Caddy serves
 # https://localhost with its internal CA — no ACME for a localhost address.
-# Nothing here publishes a port the dev stack uses, so both can run at once.
+# Nothing here publishes a port the dev stack uses, except mailpit's 8026,
+# shared with the dev stack's mailpit-e2e.
 services:
   caddy:
     environment:

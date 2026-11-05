@@ -1284,7 +1284,7 @@ describe("streamRetry", () => {
   });
 });
 
-describe("streamChat 409 after the split by detail", () => {
+describe("streamChat 409 with another detail", () => {
   it("a 409 'This message was already sent.' still rejects with TurnInProgressError carrying the detail", async () => {
     const api = await load();
     const detail = "This message was already sent.";

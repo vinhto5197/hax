@@ -81,7 +81,7 @@ else
   report FAIL "could not create worktree 'up'"
 fi
 
-# W2: uncommitted changes block a plain --remove; --force removes.
+# Uncommitted changes block a plain --remove; --force removes.
 if create dirty; then
   echo change >> "$(wt dirty)/README"
   rc=0; out=$(fw --remove dirty 2>&1) || rc=$?
@@ -97,7 +97,7 @@ else
   report FAIL "could not create worktree 'dirty'"
 fi
 
-# W3: commits on no remote branch block a plain --remove; --force removes.
+# Commits on no remote branch block a plain --remove; --force removes.
 if create ahead; then
   echo more >> "$(wt ahead)/README" && git -C "$(wt ahead)" commit -qam ahead
   rc=0; fw --remove ahead >/dev/null 2>&1 || rc=$?
@@ -124,7 +124,7 @@ else
   report FAIL "could not create worktree 'pushed'"
 fi
 
-# W6: a clean worktree with nothing unpushed is removed.
+# A clean worktree with nothing unpushed is removed.
 if create clean; then
   rc=0; fw --remove clean >/dev/null 2>&1 || rc=$?
   [ "$rc" -eq 0 ] && [ ! -e "$(wt clean)" ] && ! has_branch clean \
@@ -134,7 +134,7 @@ else
   report FAIL "could not create worktree 'clean'"
 fi
 
-# W7: a branch left behind with no registered worktree is cleared by --force.
+# A branch left behind with no registered worktree is cleared by --force.
 if create orphan; then
   rm -rf "$(wt orphan)" && git -C "$main" worktree prune
   rc=0; fw --remove --force orphan >/dev/null 2>&1 || rc=$?
@@ -147,7 +147,7 @@ else
   report FAIL "could not create worktree 'orphan'"
 fi
 
-# W8: a hand-deleted worktree whose branch has nothing unpushed needs no --force;
+# A hand-deleted worktree whose branch has nothing unpushed needs no --force;
 # the directory is already gone, so nothing uncommitted can be lost.
 if create gone; then
   rm -rf "$(wt gone)" && git -C "$main" worktree prune
@@ -159,7 +159,7 @@ else
   report FAIL "could not create worktree 'gone'"
 fi
 
-# W8: with the directory gone, unpushed commits still block a plain --remove;
+# With the directory gone, unpushed commits still block a plain --remove;
 # the branch is then their only copy.
 if create goneahead; then
   echo more >> "$(wt goneahead)/README" && git -C "$(wt goneahead)" commit -qam goneahead
@@ -172,7 +172,7 @@ else
   report FAIL "could not create worktree 'goneahead'"
 fi
 
-# W9: a directory at the worktree path that git does not know as a worktree
+# A directory at the worktree path that git does not know as a worktree
 # (a half-made add) is cleared by --force, and "removed" means both are gone.
 git -C "$main" branch -q feat/half origin/main
 mkdir -p "$(wt half)" && echo stray > "$(wt half)/file"
@@ -183,7 +183,7 @@ rc=0; out=$(fw --remove --force half 2>&1) || rc=$?
 says_removed "$out" && report PASS "--remove --force on an unregistered directory prints 'removed'" \
   || report FAIL "--remove --force on an unregistered directory does not print 'removed': '$out'"
 
-# W9: the same after a real worktree was deleted, pruned and its path remade by hand.
+# The same after a real worktree was deleted, pruned and its path remade by hand.
 if create remade; then
   rm -rf "$(wt remade)" && git -C "$main" worktree prune
   mkdir -p "$(wt remade)" && echo stray > "$(wt remade)/file"
@@ -195,7 +195,7 @@ else
   report FAIL "could not create worktree 'remade'"
 fi
 
-# W9: without --force an unregistered directory is never deleted; it may hold
+# Without --force an unregistered directory is never deleted; it may hold
 # the only copy of work that git does not track.
 git -C "$main" branch -q feat/halfkeep origin/main
 mkdir -p "$(wt halfkeep)" && echo stray > "$(wt halfkeep)/file"
@@ -204,7 +204,7 @@ rc=0; out=$(fw --remove halfkeep 2>&1) || rc=$?
   && report PASS "--remove without --force keeps an unregistered directory, exits non-zero and does not claim 'removed'" \
   || report FAIL "--remove on an unregistered directory: exit $rc, dir $([ -e "$(wt halfkeep)" ] && echo kept || echo gone), out '$out'"
 
-# W5: run from inside another worktree, both forms act on the main checkout.
+# Run from inside another worktree, both forms act on the main checkout.
 if create other && create inner; then
   o=$(wt other)
   rc=0; out=$(cd "$o" && bash scripts/feature-worktree.sh fromwt 2>&1) || rc=$?

@@ -39,7 +39,7 @@ for cand in "$root/.venv/bin/python" python3 python; do
   fi
 done
 
-# ── M1: every ci target dry-runs ─────────────────────────────
+# ── Every ci target dry-runs ─────────────────────────────
 for target in ci-lint ci-test ci-web ci; do
   if out=$(dry "$target"); then
     report PASS "make -n $target exits 0"
@@ -48,7 +48,7 @@ for target in ci-lint ci-test ci-web ci; do
   fi
 done
 
-# ── M2: make ci runs lint, test, web, e2e in that order ──────
+# ── make ci runs lint, test, web, e2e in that order ──────
 ci_out=$(dry ci || true)
 line_of() { echo "$ci_out" | grep -n -F -- "$1" | head -n 1 | cut -d: -f1 || true; }
 l_lint=$(line_of "ruff check .")
@@ -62,7 +62,7 @@ else
   report FAIL "make ci order (line of lint=${l_lint:-none} test=${l_test:-none} web=${l_web:-none} e2e=${l_e2e:-none})"
 fi
 
-# ── M3-M5: each target carries its job's checks ──────────────
+# ── Each target carries its job's checks ──────────────
 contains_all() {
   local target=$1
   shift
@@ -87,7 +87,7 @@ contains_all ci-test "check_constraints.sh constraints.txt" "pytest -W error" \
   "export_openapi" "generate:types" "git diff --exit-code -- lib/openapi.ts"
 contains_all ci-web "tsc --noEmit" "npm run lint" "npm test" "prettier@3.3.3 --check"
 
-# ── M6: ci-test's pytest runs under the gate lock only where local/ exists ──
+# ── ci-test's pytest runs under the gate lock only where local/ exists ──
 cp "$root/Makefile" "$work/Makefile"
 dry_copy() { clean_make -s -n -C "$work" "$@" 2>/dev/null || true; }
 mkdir -p "$work/local"
@@ -107,7 +107,7 @@ case "$out" in
   *) report FAIL "ci-test without local/ names no pytest -W error" ;;
 esac
 
-# ── M7: PY and RUFF override the .venv paths ─────────────────
+# ── PY and RUFF override the .venv paths ─────────────────
 override_ok=1
 out=$(dry PY=python RUFF=ruff ci-lint ci-test) || override_ok=0
 case "$override_ok:$out" in
@@ -128,7 +128,7 @@ case "$out" in
   *) report FAIL "the defaults do not use .venv/bin/ruff then .venv/bin/python" ;;
 esac
 
-# ── T3: ci-test runs pyright after the pin check, before pytest ──
+# ── ci-test runs pyright after the pin check, before pytest ──
 out=$(dry ci-test || true)
 l_of() { echo "$out" | grep -n -F -- "$1" | head -n 1 | cut -d: -f1 || true; }
 l_pin=$(l_of "check_constraints.sh constraints.txt")
@@ -141,7 +141,7 @@ else
   report FAIL "ci-test pyright order (line of pin=${l_pin:-none} pyright=${l_pyright:-none} pytest=${l_pytest:-none})"
 fi
 
-# ── T4: make types-check runs pyright locally ────────────────
+# ── make types-check runs pyright locally ────────────────
 if out=$(dry types-check); then
   case "$out" in
     *pyright*) report PASS "make -n types-check exits 0 and runs pyright" ;;
@@ -151,7 +151,7 @@ else
   report FAIL "make -n types-check failed: $(echo "$out" | tail -n 3)"
 fi
 
-# ── T4b: a bare PY (CI's PY=python) reaches Pyright as a path ──
+# ── A bare PY (CI's PY=python) reaches Pyright as a path ──
 # Pyright joins a bare --pythonpath to the current folder instead of looking
 # it up on PATH, and then every third-party import reads as missing. A real
 # run with a stub python first on PATH: the stub records Pyright's arguments.
@@ -176,7 +176,7 @@ else
   report FAIL "make types-check PY=python failed with the stub python"
 fi
 
-# ── M8/M9: ci.yml, parsed ────────────────────────────────────
+# ── ci.yml, parsed ────────────────────────────────────
 if [ -z "$py" ]; then
   report FAIL "no python with PyYAML found (.venv/bin/python, python3, python): ci.yml checks cannot run"
 else

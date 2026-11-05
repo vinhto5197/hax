@@ -21,10 +21,11 @@
 #        so an image can never carry a sha other than the tree it was built from.
 #
 # Env: GHCR_OWNER (default: gh api user), GITHUB_REPO (default <owner>/hax),
-# GHCR_TOKEN (CI: docker login with it; a laptop logs in once by hand),
+# GHCR_TOKEN (optional: push logs in with it; otherwise the login is done
+# beforehand: CI by docker/login-action, a laptop once by hand),
 # GH_TOKEN (CI: for the commit-exists check; a laptop's gh is logged in),
 # HAX_INSTANCE_ID (default: terraform output), AWS_REGION (default us-east-1).
-# CI (.github/workflows/ci.yml) sets all of these and runs `all`.
+# CI (.github/workflows/ci.yml) sets the rest and runs `all`.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 export AWS_PAGER=""
@@ -114,7 +115,7 @@ compose() { docker compose --env-file .env --env-file "\${IMAGES_ENV:-images.env
 # Only images no container uses go; the running ones stay.
 docker image prune -af > /dev/null
 # Refuse the pull when the root volume is still nearly full after the prune:
-# a pull that fills it fails mid-extract (incident 2026-10-09), and a full
+# a pull that fills it fails mid-extract, and a full
 # disk then breaks container logs and Redis's AOF. A new image pair is about
 # 1.1 GB unpacked; 3 GB leaves room for its download beside the running stack.
 free_mb=\$(( \$(df --output=avail -k /var/lib/docker | tail -1) / 1024 ))

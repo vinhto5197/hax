@@ -701,7 +701,7 @@ def test_concurrency_reads_the_environment(monkeypatch):
     assert run.concurrency() == 2
 
 
-# ── Review fixes (adversarial review, 2026-11-05) ────────────────────────────
+# ── Storage and retrieval guards ─────────────────────────────────────────────
 
 
 def test_storage_outside_the_stand_in_exits_2_before_any_case(monkeypatch, capsys):

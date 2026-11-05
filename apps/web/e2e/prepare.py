@@ -11,8 +11,8 @@ grants the app role, empties every table but the migration ledger, seeds one
 verified member, flushes the Redis db. The `e2e` and `eval` targets also
 require the dev S3 stand-in (their own buckets, hax-e2e and hax-eval) and
 never empty it: object keys are unique per document and the database is
-truncated, so a leftover object is never referenced. It also requires the
-journeys' own Mailpit (mailpit-e2e, :8026) and empties it; dev's inbox is a
+truncated, so a leftover object is never referenced. The `e2e` target also
+requires the journeys' own Mailpit (mailpit-e2e, :8026) and empties it; dev's inbox is a
 separate container.
 The connection targets are literals, never env: the dev shell exports the
 root .env (direnv), and this script must be unable to reach dev data.

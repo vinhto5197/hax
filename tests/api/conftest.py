@@ -148,7 +148,7 @@ class Published(list):
 def published(monkeypatch):
     # The broker hand-off itself is replaced, below apps/api/enqueue.py, so
     # its thread pool, backlog and error handling still run; a test that
-    # forgets a stub can no longer reach the unroutable test broker. A test
+    # forgets a stub cannot reach the unroutable test broker. A test
     # that swaps a task for its own stand-in bypasses this recorder.
     calls = Published()
 

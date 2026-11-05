@@ -37,10 +37,6 @@ describe("inert", () => {
   });
 });
 
-// Spreadsheets read a pasted field that starts with a double quote as a
-// quoted field: they drop the quotes, and an unclosed one swallows the tabs
-// and line breaks after it, even after leading spaces (probed in Google
-// Sheets, 2026-11-03).
 describe("toTsv", () => {
   it.each([
     ['"Acme" Ltd', '"""Acme"" Ltd"'],

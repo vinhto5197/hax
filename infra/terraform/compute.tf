@@ -24,15 +24,15 @@ resource "aws_instance" "box" {
     encrypted   = true
   }
 
-  # IMDSv2 only: a session token is required, so an SSRF in any container
-  # cannot read the instance-role credentials with a plain GET. Hop limit 2
-  # lets containers on the Docker bridge (one extra hop) still reach IMDS.
   # Burstable credits throttle rather than bill when exhausted: a runaway
   # ingest cannot become a surprise line item.
   credit_specification {
     cpu_credits = "standard"
   }
 
+  # IMDSv2 only: a session token is required, so an SSRF in any container
+  # cannot read the instance-role credentials with a plain GET. Hop limit 2
+  # lets containers on the Docker bridge (one extra hop) still reach IMDS.
   metadata_options {
     http_tokens                 = "required"
     http_put_response_hop_limit = 2

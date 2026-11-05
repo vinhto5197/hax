@@ -196,8 +196,9 @@ export function MessageList({
               </time>
             ) : null;
             return (
-              // Index keys are safe: messages only append, or drop the trailing
-              // optimistic turn, neither of which breaks positional matching.
+              // Index keys: the list changes at its end, or is replaced whole
+              // by a re-read; a row's local state may carry to the message
+              // that replaces it.
               <div
                 key={`${message.role}-${index}`}
                 className={`group flex flex-col ${isUser ? "items-end" : "items-start"}`}

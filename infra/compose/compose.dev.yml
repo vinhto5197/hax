@@ -10,9 +10,8 @@ services:
       POSTGRES_PASSWORD: hax
       POSTGRES_DB: hax
     ports:
-      # Bind to loopback only: the short form "5432:5432" binds 0.0.0.0, exposing
-      # Postgres (creds hax/hax) to the whole LAN. Containers reach each other via
-      # the compose network, not this published port, so this is non-breaking.
+      # Loopback only: the short form binds 0.0.0.0 and exposes Postgres
+      # (hax/hax) to the LAN; containers use the compose network, not this port.
       - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -42,8 +41,7 @@ services:
     # S3-compatible object storage for raw uploaded files (RustFS). boto3
     # talks to this in dev and real AWS S3 in prod — same client, swapped
     # endpoint (the Postgres↔RDS dev/prod-parity pattern). Pinned by version
-    # and digest: MinIO's images vanished from the public registries in 2026
-    # (ADR 0013 addendum), so nothing here floats.
+    # and digest, so nothing here floats.
     image: rustfs/rustfs:1.0.1@sha256:1803faef57627e2d9c2e7d89d655d712ddded5389040054987163043fecb6a3c
     container_name: hax-s3
     environment:

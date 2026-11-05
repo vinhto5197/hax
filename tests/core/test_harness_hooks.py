@@ -221,7 +221,7 @@ async def test_without_hooks_the_events_are_unchanged(monkeypatch, ctx):
 
 
 async def test_an_observer_that_raises_ends_the_turn(monkeypatch, ctx):
-    # The contract (ADR 0002, 2026-11-04 addendum): observers are unguarded.
+    # The contract (ADR 0002 addendum): observers are unguarded.
     client = FakeClient([tool_turn("calculator"), answer_turn()])
     monkeypatch.setattr(harness, "_client", client)
 

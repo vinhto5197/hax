@@ -20,9 +20,6 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
-      # The repo is public: what this push or PR adds must not carry the
-      # maintainer's personal details. The denylist is a repository secret;
-      # without it the check says it skipped. Logs show only file:line.
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.11"
@@ -33,9 +30,10 @@ jobs:
         run: pip install "ruff==0.15.0" "PyYAML==6.0.3"
       # Every check this job runs lives in `make ci-lint` (Makefile), so the
       # local `make ci` runs the same commands: the personal-details check
-      # (CI logs are public: it prints file:line only), ruff, the lane
-      # tooling's shell tests, the workflow tests, and the compose/Caddyfile
-      # validation.
+      # (the denylist is a repository secret; without it the check says it
+      # skipped; CI logs are public, so it prints file:line only), ruff, the
+      # lane tooling's shell tests, the workflow tests, and the
+      # compose/Caddyfile validation.
       - name: Lint and tooling checks
         env:
           PERSONAL_DENYLIST: ${{ secrets.PERSONAL_DENYLIST }}
@@ -67,8 +65,7 @@ jobs:
       # distribution found for pip"). The step below repeats it only after a
       # failure, so a retried run is green with one red step; a job with a
       # 3.14 setup keeps this pair (tests/scripts/test_ci_python_setup.sh).
-      # No pip cache: measured 2026-11-05, a cache hit installed no faster
-      # (22-37 s against 30 s on the miss); the time is resolving and
+      # No pip cache: a hit installs no faster; the time is resolving and
       # installing, not downloading.
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         id: py

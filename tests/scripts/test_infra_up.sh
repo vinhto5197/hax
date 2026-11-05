@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Proves `make infra-up` starts the dev compose file with --remove-orphans, so
-# a container left by a service no longer in compose.dev.yml (an old hax-minio
-# holding 9000/9001) goes on the next start, and that `make infra-down` never
-# deletes volumes. Dry runs only (make -n): no container starts. Run by hand:
+# a container left by a service no longer in compose.dev.yml goes on the next
+# start, and that `make infra-down` never deletes volumes. Dry runs only
+# (make -n): no container starts. Run by hand:
 #   bash tests/scripts/test_infra_up.sh
 set -euo pipefail
 

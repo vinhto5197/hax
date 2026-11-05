@@ -104,8 +104,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-
-# Usage:
-#   python scripts/corpus.py                  # list all documents + chunk counts
-#   python scripts/corpus.py glimmerwick.md   # dump one document's chunk content

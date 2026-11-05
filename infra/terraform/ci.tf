@@ -2,10 +2,10 @@
 # key exists in GitHub. Trust is narrowed to one workflow file on one branch
 # of one repo. What the role grants is one thing, and it is not small: a
 # shell on the box as root, through SSM's run-shell-script document. That is
-# what a deploy is today (infra/deploy/deploy.sh), and it reaches everything
+# what a deploy is (infra/deploy/deploy.sh), and it reaches everything
 # on the box, /opt/hax/.env included. It cannot open an interactive session
 # or touch AWS state, the database or the bucket directly. Narrowing it to a
-# single custom SSM document that takes only a sha is the M3.5 upgrade.
+# single custom SSM document that takes only a sha is the upgrade path.
 resource "aws_iam_openid_connect_provider" "github" {
   url            = "https://token.actions.githubusercontent.com"
   client_id_list = ["sts.amazonaws.com"]

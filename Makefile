@@ -11,7 +11,7 @@ infra-up:
 	  exit 1; \
 	}
 	@# --remove-orphans: a container from a service since dropped from the file
-	@# (the old hax-minio) would otherwise keep running and hold its ports. Every
+	@# would otherwise keep running and hold its ports. Every
 	@# worktree shares the hax-dev project, so a service only another worktree's
 	@# file declares is removed too.
 	$(COMPOSE_DEV) up -d --remove-orphans
@@ -119,9 +119,9 @@ sync-web:
 
 # CI and the production image install Python packages only at these
 # versions (scripts/check_constraints.sh fails CI on any package outside
-# them), so an upstream release cannot turn CI red overnight (2026-10-28: langsmith 0.14.14 and
-# pytest-asyncio 1.4.1). Refresh on purpose, from a dev venv whose suite is
-# green, and land the new file in its own commit. The build toolchain sits
+# them), so an upstream release cannot turn CI red overnight. Refresh on
+# purpose, from a dev venv whose suite is green, and land the new file in
+# its own commit. The build toolchain sits
 # outside this file: setuptools in pyproject.toml's [build-system], pip with
 # the Python image's tag; bump those by hand in the same refresh.
 constraints:

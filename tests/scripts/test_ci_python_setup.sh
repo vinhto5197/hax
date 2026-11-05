@@ -67,13 +67,13 @@ def check_job(name, steps):
     first_with = first.get("with") or {}
     step_id = first.get("id")
 
-    # B1: the first attempt
+    # The first attempt
     if not step_id:
         bad.append(f"{name}: first setup-python step has no id")
     if first.get("continue-on-error") is not True:
         bad.append(f"{name}: first setup-python step lacks continue-on-error: true")
 
-    # B2/B3: the twin, immediately after
+    # The twin, immediately after
     twin = steps[first_i + 1] if first_i + 1 < len(steps) else None
     if twin is None or not is_setup(twin):
         bad.append(f"{name}: no twin setup-python step immediately after the first")
@@ -92,7 +92,7 @@ def check_job(name, steps):
         if twin.get("uses") != first.get("uses"):
             bad.append(f"{name}: twin uses {twin.get('uses')!r}, first uses {first.get('uses')!r}")
 
-    # B4: no third setup-python
+    # No third setup-python
     if len(idx) != 2:
         bad.append(f"{name}: {len(idx)} setup-python steps, want exactly 2")
     return bad

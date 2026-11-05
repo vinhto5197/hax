@@ -1,6 +1,8 @@
 """The chat path's title triggers: one enqueue when a conversation is created,
 one more per persisted assistant turn while the title is still NULL, never
-before the commit and never fatal.
+before the commit and never fatal. The same `event_stream` path also forwards
+the harness's sources events and persists them, deduplicated, on the assistant
+message (NULL when a reply found none, nothing at all without content).
 
 Drives the service functions directly with identity announced exactly as a
 request announces it (RLS is on for the app engine); seeds and asserts go

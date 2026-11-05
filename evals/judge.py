@@ -55,8 +55,7 @@ _VERDICT = {
     "required": ["pass", "reason"],
 }
 # The verdict travels as a tool call: the API returns its input as parsed JSON,
-# where a text reply came back with its closing brace missing or doubled on
-# claude-sonnet-4-6 in about one case in twenty (2026-11-05 runs).
+# where a text reply could come back with a brace missing or doubled.
 VERDICT_TOOL: ToolParam = {
     "name": "record_verdict",
     "description": "Record the verdict on each key point and, if asked, on grounding.",
