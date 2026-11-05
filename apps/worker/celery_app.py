@@ -31,6 +31,11 @@ celery_app.conf.update(
     task_serializer="json",
     result_serializer="json",
     accept_content=["json"],
+    # Every task defaults to ignore_result: nobody reads a result, and without
+    # it every publish also subscribes to the result backend, which is what
+    # makes an enqueue hang for many seconds when Redis is unreachable.
+    # Consequence: no task's state is ever visible in the result backend.
+    task_ignore_result=True,
     # Ack only AFTER the task finishes: a warm shutdown (a deploy) restores
     # unfinished messages and they run again — every task here is idempotent
     # (ingestion via delete-then-insert, titles via a conditional UPDATE). A
@@ -48,7 +53,6 @@ celery_app.conf.update(
     worker_prefetch_multiplier=1,
     task_soft_time_limit=270,
     task_time_limit=300,
-    task_track_started=True,
     # Producers (the API) must fail fast when the broker is unreachable: with
     # no connect timeout a publish hangs on the OS TCP timeout, pinning a
     # thread per enqueue. Connect only — established-connection reads (the
@@ -96,6 +100,21 @@ celery_app.conf.update(
 )
 
 
+def run_async(coro):
+    """Run `coro` on a fresh loop, then dispose the engine's pool: its asyncpg
+    connections are bound to the loop that opened them, so the next call (a
+    retry, the failure write) would otherwise get connections from a closed loop.
+    """
+
+    async def _runner():
+        try:
+            return await coro
+        finally:
+            await engine.dispose()
+
+    return asyncio.run(_runner())
+
+
 def task(**options: Any) -> Callable[[Callable[..., Any]], Task]:
     """`celery_app.task` with the type it has at runtime. Celery ships no
     annotations, so a type checker reads a function under the bare decorator
@@ -107,23 +126,15 @@ def task(**options: Any) -> Callable[[Callable[..., Any]], Task]:
 @worker_process_init.connect
 def _check_rls_bound_role(**kwargs) -> None:
     # Fail closed before the worker pulls any task rather than run every
-    # ingestion as a role that silently bypasses RLS. Fresh loop per process
-    # init, same dispose pattern as tasks.py::_run_async (the pooled asyncpg
-    # connections here are otherwise loop-bound).
+    # ingestion as a role that silently bypasses RLS.
     #
     # Celery's Signal.send wraps every receiver in try/except Exception (logs
     # and continues) so a plain `raise` here would be swallowed and the
     # prefork child would start pulling tasks anyway. SystemExit is a
     # BaseException, not an Exception, so it passes through that guard and
     # actually aborts the child — that's the only reason this handler works.
-    async def _runner() -> None:
-        try:
-            await assert_rls_bound_role()
-        finally:
-            await engine.dispose()
-
     try:
-        asyncio.run(_runner())
+        run_async(assert_rls_bound_role())
     except RuntimeError as exc:
         logger.critical(
             "worker process init: %s — refusing to start; connect as the "

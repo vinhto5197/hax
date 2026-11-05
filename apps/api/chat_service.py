@@ -9,6 +9,7 @@ from uuid import UUID
 from anthropic.types import MessageParam
 from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.enqueue import fire_and_forget
 from apps.worker.tasks import generate_title
@@ -55,6 +56,21 @@ def sse_event(data: dict) -> str:
     return f"data: {json.dumps(data)}\n\n"
 
 
+async def _claim_turn(
+    session: AsyncSession, user_id: UUID, conversation_id: UUID
+) -> datetime:
+    """Claim the turn, or 404 (not the caller's) / 409 (a reply holds it)."""
+    claimed_at = await conversations_repo.claim_turn(session, user_id, conversation_id)
+    if claimed_at is None:
+        if (
+            await conversations_repo.get_owned(session, user_id, conversation_id)
+            is None
+        ):
+            raise HTTPException(status_code=404, detail="conversation not found")
+        raise HTTPException(status_code=409, detail=TURN_IN_PROGRESS)
+    return claimed_at
+
+
 async def persist_user_turn(
     prompt: str,
     conversation_id: UUID | None,
@@ -82,16 +98,7 @@ async def persist_user_turn(
         if conversation_id is None:
             conversation = await conversations_repo.create(session, user_id)
             conversation_id = conversation.id
-        claimed_at = await conversations_repo.claim_turn(
-            session, user_id, conversation_id
-        )
-        if claimed_at is None:
-            if (
-                await conversations_repo.get_owned(session, user_id, conversation_id)
-                is None
-            ):
-                raise HTTPException(status_code=404, detail="conversation not found")
-            raise HTTPException(status_code=409, detail=TURN_IN_PROGRESS)
+        claimed_at = await _claim_turn(session, user_id, conversation_id)
 
         await conversations_repo.add_message(
             session, conversation_id, "user", prompt, id=message_id
@@ -135,21 +142,12 @@ async def claim_for_retry(
     `after`, or with an assistant reply directly after it — deleted (its
     sources ride on the row) only when `replace` says the page shows that
     reply; otherwise 409 already_answered, since another page answered it.
-    Anything else is 409 nothing_to_retry. 404 / 409 TURN_IN_PROGRESS as
-    persist_user_turn. Every refusal rolls back, so the claim stays free and
-    nothing is deleted; a delete commits with the claim.
+    Anything else is 409 nothing_to_retry. 404 / 409 as _claim_turn. Every
+    refusal rolls back, so the claim stays free and nothing is deleted; a
+    delete commits with the claim.
     """
     async with AsyncSessionLocal() as session:
-        claimed_at = await conversations_repo.claim_turn(
-            session, user_id, conversation_id
-        )
-        if claimed_at is None:
-            if (
-                await conversations_repo.get_owned(session, user_id, conversation_id)
-                is None
-            ):
-                raise HTTPException(status_code=404, detail="conversation not found")
-            raise HTTPException(status_code=409, detail=TURN_IN_PROGRESS)
+        claimed_at = await _claim_turn(session, user_id, conversation_id)
 
         last = await conversations_repo.last_messages(session, conversation_id, n=2)
         answered = (

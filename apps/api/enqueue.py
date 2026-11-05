@@ -24,9 +24,10 @@ Everything here runs on the event-loop thread (`_pending` is not locked);
 `fire_and_forget` must not be called from a worker thread.
 
 Caller contract: publish only AFTER the DB commit. Tasks are handed ids, and
-the worker can see only committed rows. Tasks published from here should also
-be declared `ignore_result=True` — a result-backend subscription is what
-makes a publish hang for many seconds when Redis is unreachable.
+the worker can see only committed rows. Tasks published from here must keep
+`ignore_result=True` (the default in apps/worker/celery_app.py) — a
+result-backend subscription is what makes a publish hang for many seconds
+when Redis is unreachable.
 """
 
 import asyncio

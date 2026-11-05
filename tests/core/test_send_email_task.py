@@ -69,7 +69,7 @@ def test_gives_up_after_max_retries_without_raising(monkeypatch, caplog):
     monkeypatch.setattr(tasks.send_email, "retry", retry)
     result = tasks.send_email.apply(
         args=("to@example.com", "verify_email", {"link": "l"}),
-        retries=tasks.EMAIL_MAX_RETRIES,
+        retries=tasks.MAX_RETRIES,
     )
     assert result.successful()
     retry.assert_not_called()

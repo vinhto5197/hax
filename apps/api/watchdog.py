@@ -55,13 +55,12 @@ class SlowRequestWatchdog:
         started_at = loop.time()
         answered = False
 
-        def label() -> str:
-            return route_label(scope)
-
         async def warn_while_waiting() -> None:
             await asyncio.sleep(self.threshold)
             logger.warning(
-                "still running: %s after %.1fs", label(), loop.time() - started_at
+                "still running: %s after %.1fs",
+                route_label(scope),
+                loop.time() - started_at,
             )
 
         warning = asyncio.create_task(warn_while_waiting())
@@ -73,7 +72,9 @@ class SlowRequestWatchdog:
                 warning.cancel()
                 elapsed = loop.time() - started_at
                 if elapsed >= self.threshold:
-                    logger.warning("slow: %s answered after %.1fs", label(), elapsed)
+                    logger.warning(
+                        "slow: %s answered after %.1fs", route_label(scope), elapsed
+                    )
             await send(message)
 
         try:
@@ -83,5 +84,7 @@ class SlowRequestWatchdog:
             elapsed = loop.time() - started_at
             if not answered and elapsed >= self.threshold:
                 logger.warning(
-                    "slow: %s ended without answering after %.1fs", label(), elapsed
+                    "slow: %s ended without answering after %.1fs",
+                    route_label(scope),
+                    elapsed,
                 )

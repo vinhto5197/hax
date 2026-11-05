@@ -2,7 +2,6 @@
 email, conversation titles, the daily sweep of aged demo visitors, and the
 daily sweep of dead email links."""
 
-import asyncio
 import logging
 import os
 import smtplib
@@ -15,13 +14,14 @@ from celery.exceptions import SoftTimeLimitExceeded
 from redis.exceptions import RedisError
 from sqlalchemy.exc import InterfaceError, OperationalError
 
-from apps.worker.celery_app import task
+from apps.worker.celery_app import REDIS_URL, task
+from apps.worker.celery_app import run_async as _run_async
 from packages.core import titles
 from packages.core.auth.revocation import sva_cache_key
 from packages.core.email import smtp, templates
 from packages.core.rag.errors import PermanentIngestError
 from packages.core.rag.ingest import ingest_document_async, mark_document_failed
-from packages.db import AsyncSessionLocal, engine
+from packages.db import AsyncSessionLocal
 from packages.db.repos import conversations as conversations_repo
 from packages.db.repos import email_tokens as email_tokens_repo
 from packages.db.repos import users as users_repo
@@ -36,7 +36,7 @@ MAX_RETRIES = 3
 RETRY_BACKOFF_BASE = 5  # seconds
 
 
-def _retry_transient(task, exc: BaseException, *, max_retries: int, label: str) -> None:
+def _retry_transient(task, exc: BaseException, *, label: str) -> None:
     """Backoff 5/10/20 s, then give up QUIETLY (return) — for work whose loss is
     recoverable elsewhere: email has a resend path, an untitled conversation is
     re-enqueued on its next turn. Logs the exception TYPE only; relay replies
@@ -50,7 +50,7 @@ def _retry_transient(task, exc: BaseException, *, max_retries: int, label: str) 
     # Full detail at DEBUG only: the laptop runs there, production never does
     # (DEBUG would put raw exception text in the container log).
     logger.debug("%s failure detail", label, exc_info=exc)
-    if task.request.retries >= max_retries:
+    if task.request.retries >= MAX_RETRIES:
         logger.error("%s giving up: %s", label, type(exc).__name__)
         return
     countdown = RETRY_BACKOFF_BASE * 2**task.request.retries
@@ -58,7 +58,7 @@ def _retry_transient(task, exc: BaseException, *, max_retries: int, label: str) 
         "%s transient failure (attempt %d/%d): %s; retrying in %ds",
         label,
         task.request.retries + 1,
-        max_retries,
+        MAX_RETRIES,
         type(exc).__name__,
         countdown,
     )
@@ -80,21 +80,6 @@ def _public_error(exc: BaseException) -> str:
     return str(exc) if isinstance(exc, PermanentIngestError) else GENERIC_INGEST_ERROR
 
 
-def _run_async(coro):
-    """Run `coro` on a fresh loop, then dispose the engine's pool: its asyncpg
-    connections are bound to the loop that opened them, so the next call (a
-    retry, the failure write) would otherwise get connections from a closed loop.
-    """
-
-    async def _runner():
-        try:
-            return await coro
-        finally:
-            await engine.dispose()
-
-    return asyncio.run(_runner())
-
-
 def _record_failed(doc_id: UUID, error: str) -> None:
     """Best-effort terminal 'failed'; never raises, so a failed write can't mask
     the ingest error being re-raised. On a double failure the API's deadline
@@ -106,8 +91,7 @@ def _record_failed(doc_id: UUID, error: str) -> None:
         logger.exception("failed to record 'failed' status for document %s", doc_id)
 
 
-# ignore_result: see generate_title.
-@task(bind=True, name="ingest_document", max_retries=MAX_RETRIES, ignore_result=True)
+@task(bind=True, name="ingest_document", max_retries=MAX_RETRIES)
 def ingest_document(self, document_id: str, user_id: str) -> None:
     """Sync Celery entrypoint: run the async pipeline and own retry + terminal status.
 
@@ -183,11 +167,7 @@ def ingest_document(self, document_id: str, user_id: str) -> None:
         current_user_id.reset(token)
 
 
-EMAIL_MAX_RETRIES = 3
-
-
-# ignore_result: see generate_title.
-@task(bind=True, name="send_email", max_retries=EMAIL_MAX_RETRIES, ignore_result=True)
+@task(bind=True, name="send_email", max_retries=MAX_RETRIES)
 def send_email(self, to: str, template: str, params: dict[str, str]) -> None:
     # Sync on purpose: smtplib is blocking and the worker is a prefork process.
     # Rendering errors are ours (bad template/params) — no retry. Transport
@@ -197,9 +177,7 @@ def send_email(self, to: str, template: str, params: dict[str, str]) -> None:
     try:
         smtp.send(to, rendered)
     except (smtplib.SMTPException, OSError) as exc:
-        _retry_transient(
-            self, exc, max_retries=EMAIL_MAX_RETRIES, label=f"send_email[{template}]"
-        )
+        _retry_transient(self, exc, label=f"send_email[{template}]")
 
 
 def _is_transient(exc: BaseException) -> bool:
@@ -236,11 +214,7 @@ async def generate_title_async(conversation_id: UUID, user_id: UUID) -> None:
         await session.commit()
 
 
-# ignore_result: nobody reads this task's result, and without it every publish
-# also subscribes to the result backend — which is what makes an enqueue hang
-# for many seconds when Redis is unreachable. Consequence: this task's state
-# is never visible in the result backend.
-@task(bind=True, name="generate_title", max_retries=MAX_RETRIES, ignore_result=True)
+@task(bind=True, name="generate_title", max_retries=MAX_RETRIES)
 def generate_title(self, conversation_id: str, user_id: str) -> None:
     """Write a conversation's title from its first user message, once.
 
@@ -265,7 +239,7 @@ def generate_title(self, conversation_id: str, user_id: str) -> None:
         _run_async(generate_title_async(conv_id, owner_id))
     except Exception as exc:
         if _is_transient(exc):
-            _retry_transient(self, exc, max_retries=MAX_RETRIES, label="generate_title")
+            _retry_transient(self, exc, label="generate_title")
             return
         logger.error(
             "generate_title permanent failure for %s: %s (status=%s)",
@@ -284,9 +258,7 @@ def _anon_retention() -> timedelta:
 
 
 def _async_redis():
-    return redis.asyncio.from_url(
-        os.environ.get("REDIS_URL", "redis://localhost:6379/0")
-    )
+    return redis.asyncio.from_url(REDIS_URL)
 
 
 # Visitors per DELETE: each one cascades into its conversations, messages,
@@ -309,12 +281,13 @@ async def sweep_anonymous_users_async(now: datetime | None = None) -> int:
     total = 0
     async with AsyncSessionLocal() as session:
         while True:
-            batch = ANON_SWEEP_BATCH
-            swept = await users_repo.delete_stale_anonymous(session, cutoff, batch)
+            swept = await users_repo.delete_stale_anonymous(
+                session, cutoff, ANON_SWEEP_BATCH
+            )
             await session.commit()
             await _purge_revocation_cache(swept)
             total += len(swept)
-            if len(swept) < batch:
+            if len(swept) < ANON_SWEEP_BATCH:
                 return total
 
 
@@ -331,8 +304,7 @@ async def _purge_revocation_cache(user_ids: list[UUID]) -> None:
 
 
 # No retries: beat runs it again tomorrow and the work is idempotent.
-# ignore_result: see generate_title.
-@task(name="sweep_anonymous_users", ignore_result=True)
+@task(name="sweep_anonymous_users")
 def sweep_anonymous_users() -> None:
     """Scheduled by celery_app's beat_schedule, daily. Logs counts and ids
     only: a visitor has no email, and content is never logged."""
@@ -352,17 +324,17 @@ async def sweep_email_tokens_async() -> int:
     total = 0
     async with AsyncSessionLocal() as session:
         while True:
-            batch = TOKEN_SWEEP_BATCH
-            deleted = await email_tokens_repo.delete_dead(session, limit=batch)
+            deleted = await email_tokens_repo.delete_dead(
+                session, limit=TOKEN_SWEEP_BATCH
+            )
             await session.commit()
             total += deleted
-            if deleted < batch:
+            if deleted < TOKEN_SWEEP_BATCH:
                 return total
 
 
 # No retries: beat runs it again tomorrow and the work is idempotent.
-# ignore_result: see generate_title.
-@task(name="sweep_email_tokens", ignore_result=True)
+@task(name="sweep_email_tokens")
 def sweep_email_tokens() -> None:
     """Scheduled by celery_app's beat_schedule, daily. Logs the count only:
     a row holds a user id and a token hash."""
