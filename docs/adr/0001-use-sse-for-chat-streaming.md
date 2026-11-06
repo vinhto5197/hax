@@ -43,3 +43,7 @@ Implementation: FastAPI's `StreamingResponse` wraps an async generator that yiel
 - One-directional only. The client cannot send anything mid-stream. Acceptable: chat input is a separate HTTP POST.
 - Browsers cap concurrent connections to ~6 per origin. Not a problem for chat (one connection per active chat).
 - Some proxies/middlewares (notably Next.js's dev rewrite — see [0005](0005-bypass-next-dev-rewrite-for-sse.md)) buffer SSE despite headers like `X-Accel-Buffering: no`. Mitigated by bypassing them in dev.
+
+## Addendum (2026-11-06): production's proxy is Caddy, not an ALB
+
+The ALB named above was the plan; production runs Caddy on the one box (ADR 0013), which streams SSE unbuffered with `flush_interval -1` (`infra/compose/Caddyfile`).
