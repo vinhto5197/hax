@@ -285,7 +285,7 @@ GATE_LOCK := $(if $(wildcard local),scripts/with-lock.sh local/.gate.lock 1800 -
 
 # -W error matches CI: a warning fails the run here as it does there.
 test:
-	$(GATE_LOCK) .venv/bin/pytest -W error
+	$(GATE_LOCK) .venv/bin/pytest -W error$(if $(ARGS), $(ARGS))
 
 test-web:
 	cd apps/web && npm test
