@@ -1,6 +1,6 @@
 ---
 name: gate-block
-description: The hand-off format for a finished change, what the maintainer reads instead of the diff; the feature gate block (filled by the feature chain) and the main-lane gate block (one per bite, bites built and reviewed in sequence), plus the public PR body
+description: The hand-off format for a finished change, what the maintainer reads instead of the diff; the feature gate block (filled by the feature chain) and the main-lane gate block (one per bite; bites built in parallel where they can be, reviewed and committed in order), plus the public PR body
 ---
 
 # Gate block
@@ -48,7 +48,7 @@ Rules:
 
 ## Bites (main lane)
 
-A main-lane item is cut into bites when it is planned: a bite is one or more of the plan's tasks, small enough for the maintainer to read its gate block and diff in one sitting (10–15 minutes). Each bite is built, checked (its tests and the pre-commit hooks), reviewed and committed on the maintainer's word, one commit per bite, before the next bite starts. Bites are never combined into one review; when combining looks cheaper, say so and the maintainer decides.
+A main-lane item is cut into bites when it is planned: a bite is one or more of the plan's tasks, small enough for the maintainer to read its gate block and diff in one sitting (10–15 minutes). Each bite is checked (its tests and the pre-commit hooks), reviewed and committed on the maintainer's word, one commit per bite, in order. Building runs in parallel wherever it can: when the plan is cut, the controller offers to build every bite that does not need an earlier bite in the tree at the same time, each in its own worktree (`scripts/feature-worktree.sh <item>-b<n>`) with its own blind tests and implementer, so no one waits on implementation; a bite that needs an earlier one waits for that commit, and a later bite rebases onto it. Only the bite under review is in the main checkout. Bites are never combined into one review; when combining looks cheaper, say so and the maintainer decides.
 - **Order by what the reviewer needs in the tree to check the bite, never by risk tier.** For a fix-up item, for example:
   - first what surfaces the problem: the tool and its config, reporting but not yet gated;
   - then the fixes, each with its visible effect: a count that drops, a test that turns green (a failing test ships in the same bite as its fix);
