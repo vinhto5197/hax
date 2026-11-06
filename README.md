@@ -325,3 +325,19 @@ This project was developed with [Claude Code](https://www.anthropic.com/claude-c
   — Forrest Chang's Karpathy-derived guidelines that curb common LLM coding
   pitfalls: think before coding, simplicity first, surgical changes, and
   verifiable success criteria.
+
+Some of the working process was lifted, idea by idea, rather than installed:
+
+- **[gstack](https://github.com/garrytan/gstack)** (MIT) — Garry Tan's skill
+  pack. Its **office-hours** forcing questions shape the feature brief
+  (`.claude/skills/feature-brief/template.md`), and its **retro** shaped the
+  Friday retro.
+- **pstack** (MIT; [mirror](https://github.com/backnotprop/pstack)) — Lauren
+  Tan's (poteto) Agent Skills. Its **opening-a-pr** shapes the public PR body
+  (`.claude/skills/gate-block/pr-body.md`), and its **orchestrate** and
+  **correct** informed the feature chain and the retro.
+- **Kun Chen's [gnhf](https://github.com/kunchenguid/gnhf)** — its bounded
+  loop, notes kept as memory and stop after repeated failures shape the weekly
+  product explorer (`.claude/skills/product-explorer/`); his
+  [firstmate](https://github.com/kunchenguid/firstmate) informed running one
+  orchestrator over a crew of agents.

@@ -93,6 +93,33 @@ rollback rarely needs this. One known exception: the migration that made
 `DELETE FROM users WHERE email IS NULL` as the owner role first, or the
 downgrade fails on the NOT NULL constraint.
 
+**Rehearse it on the laptop** before it is needed, with the laptop prod
+overlay (`make prod-*`, `infra/compose/.env.local`; never the box, and never
+`make prod-psql`, which opens the live database). First check the env file
+cannot reach production: `grep -c 'rds.amazonaws.com\|smtp.resend.com'
+infra/compose/.env.local` must print `0`; stop `hax-mailpit-e2e` (it shares
+port 8026). Define `prod` as the Makefile's `COMPOSE_PROD`:
+
+```sh
+prod() { HAX_ENV_FILE="$PWD/infra/compose/.env.local" docker-compose --env-file "$PWD/infra/compose/.env.local" -f infra/compose/compose.prod.yml -f infra/compose/compose.prod.local.yml "$@"; }
+```
+
+On `main`, `make prod-build && make prod-up`, sign up (the verify email is in
+Mailpit at `http://localhost:8026`) and send a message, then keep the image
+with `docker tag hax-python hax-python:current`. Check out the commit before
+the newest migration, `make prod-build`, then run the migrate on its own,
+the way a roll does: `prod run --rm migrate` fails with "Can't locate revision
+identified by …" and the newer api, workers and web keep running (`prod ps`).
+Never `make prod-up` at that point: it is `up -d`, which recreates the api
+before the migrate runs (`deploy.sh` says why). Downgrade with the current
+image, `HAX_PYTHON_IMAGE=hax-python:current prod run --rm migrate alembic -c
+alembic.ini downgrade <revision at the older sha>`, and only then
+`make prod-up`: the older images start and the earlier conversation is still
+there. Return with `git checkout main && make prod-build && make prod-up`.
+`make prod-clean` ends it; it runs `down -v`, so it wipes every laptop prod
+volume, Caddy's local CA included. Then `docker rmi hax-python:current` and
+`docker start hax-mailpit-e2e`.
+
 On the box, `roll` takes `/opt/hax/.deploy.lock` (a second roll waits, up
 to ten minutes), fetches `compose.prod.yml` and `Caddyfile` and writes the
 image tags as staged copies next to `.env`, pulls, imports the new image's

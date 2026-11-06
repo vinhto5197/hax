@@ -40,3 +40,5 @@ The chain has no loops: one brief check, at most two build agents, three gates, 
 ## Smoke test (any change to the workflow)
 
 Two runs with `ship: false` against throwaway briefs under `local/briefs/smoke*/`: a one-line change that must reach the gate block with every Conformance line `as specified` and `UNSHIPPED: Ship skipped`; a brief whose Interface leaves one point open, which must stop at `Build` with `blockedOn` naming it; then that run resumed with a `stage: "Build"` ruling settling the point, which must get past `Build`. Remove the worktrees afterwards (`scripts/feature-worktree.sh --remove <id>`).
+
+<!-- one orchestrator running staged agents over a ledger, after pstack's orchestrate (MIT) -->

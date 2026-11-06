@@ -54,3 +54,5 @@ Cross off merged items in `local/DEV_BACKLOG.local.md` (PR number beside each), 
 ## Friday
 
 After the digest, the retro: read the hook's tally, run source 3, then write at most fifteen lines: the week's recurring mistakes and, for each, first what can be deleted or simplified, and only then the smallest change that absorbs it (a line in an existing skill, CLAUDE.md or memory index; a new script, hook or skill only when it retires one); the index sweep: a fresh agent compares every `MEMORY.md` line with its memory file and every drift is fixed, since only the index survives a compaction; cost by lane for the week against the previous one; changes to the brief template or the chain the week's gate blocks argue for.
+
+<!-- the Friday retro after gstack's retro and pstack's correct (MIT) -->

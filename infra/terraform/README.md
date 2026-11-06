@@ -23,8 +23,18 @@ the database until its `prevent_destroy` block in `database.tf` is removed on
 purpose.
 
 Replacing the box (`terraform apply -replace=aws_instance.box`, e.g. for a new
-AMI) must not touch the database: read the plan and confirm
-`aws_db_instance.postgres` is absent from it before typing yes. After the
+AMI) must not touch the database. Take a manual snapshot first
+(`aws rds create-db-snapshot --db-instance-identifier <project>-db
+--db-snapshot-identifier pre-replace-<date>`, then `aws rds wait
+db-snapshot-available --db-snapshot-identifier pre-replace-<date>`), run
+`terraform plan -replace=aws_instance.box` and read its actions before any
+apply. A safe plan replaces `aws_instance.box` and `aws_eip_association.box`
+(its `instance_id` forces a new one) and updates `aws_iam_role_policy.deploy`
+in place (it follows the instance ARN), and nothing else; the "Objects have
+changed outside of Terraform" note is drift, not an action. Stop if the plan
+acts on `aws_db_instance.postgres`, `aws_eip.box` (a new public IP breaks DNS),
+`aws_security_group.db` or `aws_db_subnet_group.postgres`. Delete the snapshot
+once the next automated backup has run. After the
 replace: the new box has no `/opt/hax/.env` (write it again, step 5), the
 deploy role's policy follows the new instance ARN by itself, but the GitHub
 variable `HAX_INSTANCE_ID` still names the old box — update it from

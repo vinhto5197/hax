@@ -44,6 +44,7 @@ A week later, `ac83be3` (2026-11-03) made the chain fail closed. It now stops on
 
 ## Look at
 
+- [`README.md`, "Built with Claude Code + community skills"](../../README.md#built-with-claude-code--community-skills): the outside skill packs several of these pieces were lifted from, idea by idea.
 - [`CLAUDE.md`](../../CLAUDE.md), "Working lanes".
 - [`.claude/workflows/feature-chain.js`](../../.claude/workflows/feature-chain.js): the build order and its stop rules.
 - [`.claude/skills/feature-brief/SKILL.md`](../../.claude/skills/feature-brief/SKILL.md), [`.claude/skills/feature-chain/SKILL.md`](../../.claude/skills/feature-chain/SKILL.md), [`.claude/skills/gate-block/SKILL.md`](../../.claude/skills/gate-block/SKILL.md).
