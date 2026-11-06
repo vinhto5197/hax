@@ -370,6 +370,13 @@ Rejected: a `{"usage": …}` event in the stream (every consumer of the
 protocol would have to drop it); reading the counts from the logs (fragile,
 and the logs never carry tool output, by design).
 
+Measured 2026-11-05: a full run cost about $0.43 on `claude-haiku-4-5` (35
+cases) and $0.54 on `claude-sonnet-4-6` (23 cases), model and judge together,
+from list prices. Right answers' passages sat at cosine distance 0.38–0.62 and
+off-corpus questions' nearest chunks at 0.52–0.80; the ranges overlap, so any
+`RAG_MAX_DISTANCE` tight enough to drop the off-corpus chunks would drop right
+answers too, and the cutoff stays unset.
+
 ## Addendum (2026-11-05) — the judge returns its verdict as a tool call
 
 The eval's judge (`evals/judge.py`) records its verdict by calling one tool,
@@ -380,7 +387,7 @@ its closing brace in about one case in twenty, and each such case became an
 `error`, so a whole run read as untrustworthy for a reason that had nothing
 to do with the answer graded. A forced tool call is plain tool use, which
 every provider the harness might move to offers; the same validation runs on
-its input, and a text reply is still read the old way.
+its input.
 
 Rejected: repairing the text (guessing which brace is missing grades on a
 guess); provider-side structured-output parameters (a provider-specific

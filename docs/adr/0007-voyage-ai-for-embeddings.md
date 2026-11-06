@@ -39,7 +39,7 @@ verbatim, so re-embedding is mechanical, just not free.)
 | Alternative | Why rejected |
 |---|---|
 | **OpenAI `text-embedding-3-*`** | Works fine, but adds an unrelated second LLM vendor purely for embeddings. Voyage is the Anthropic-recommended pairing and benchmarks at least as well. |
-| **Local model (sentence-transformers, e.g. bge)** | No API cost or external dependency — attractive — but adds a heavyweight inference dependency to the worker image, is slow on CPU, and is an ops burden v0 doesn't need. **Deferred, not dead:** backlogged as a post-v0 experiment (DEV_BACKLOG → Ideas). |
+| **Local model (sentence-transformers, e.g. bge)** | No API cost or external dependency — attractive — but adds a heavyweight inference dependency to the worker image, is slow on CPU, and is an ops burden v0 doesn't need. **Deferred, not dead:** a post-v0 experiment. |
 | **Cohere / others** | No advantage over Voyage for this stack; same second-vendor cost without the Anthropic-pairing rationale. |
 
 ## Consequences

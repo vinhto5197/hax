@@ -53,8 +53,8 @@ you most of the way). The **irreducible** reasons BackgroundTasks can't meet are
    (a separate ECS service); BackgroundTasks is forever bound to the web process.
 
 Plus two project-specific pulls: the worker is **reused for M2.5 title
-generation**, and the async + idempotent task is the **foundation v1's
-dev-curated batch ingestion reuses**. And it's the **standard production
+generation**, and the async + idempotent task is **reusable for batch
+ingestion**. And it's the **standard production
 topology** — web tier + worker tier + broker maps directly to ECS + ECS +
 ElastiCache.
 
@@ -72,7 +72,7 @@ without re-upload.
 |---|---|
 | **Inline ingestion** (slice 1) | Client waits the full pipeline; LB-timeout + lost-on-disconnect risk. The thing 2a fixes. |
 | **FastAPI BackgroundTasks** | Returns fast but stays in the web process: no durability (lost on restart), no separate scaling. `async` softens isolation; hand-rolled retries lack durability without a broker. |
-| **A different task queue** (RQ / Dramatiq / arq) | Same architecture; Celery is the most mature/standard, already in the stack (`celery[redis]` in `pyproject`), and reused for title-gen. arq is async-native (a fair v1 reconsideration) but Celery's prefork + ecosystem win for v0. |
+| **A different task queue** (RQ / Dramatiq / arq) | Same architecture; Celery is the most mature/standard, already in the stack (`celery[redis]` in `pyproject`), and reused for title-gen. arq is async-native (a fair later reconsideration) but Celery's prefork + ecosystem win for v0. |
 
 ## Consequences
 

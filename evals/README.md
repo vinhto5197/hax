@@ -35,13 +35,8 @@ anywhere else. The retrieval, chunking and model settings your shell may
 export are unset; a variant goes on the `make` command line, never in `.env`.
 
 A run takes about a minute: four cases run at a time (`EVAL_CONCURRENCY` in
-the environment changes it). Measured on 2026-11-05 (an estimate from list
-prices, `evals/prices.py`):
-
-| Model under test | Cases | Model | Judge | Total |
-|---|---|---|---|---|
-| claude-haiku-4-5 | 35 | ~$0.21 | ~$0.22 | ~$0.43 |
-| claude-sonnet-4-6 | 23 | ~$0.36 | ~$0.18 | ~$0.54 |
+the environment changes it). Each run's report prints its cost, estimated from
+list prices (`evals/prices.py`); a full run on Haiku is well under a dollar.
 
 CI never runs it: it spends credits. CI runs its unit tests (`tests/evals/`).
 
@@ -98,9 +93,9 @@ Neither is committed. The terminal shows the summary:
 - **recall@k**: of the cases that name an expected passage, how many found it
   in the top results for the question.
 - **distances**: each case records the cosine distance of its expected
-  passage and of the nearest chunk. On 2026-11-05 right answers sat at
-  0.38–0.62 and off-corpus questions' nearest chunks at 0.52–0.80: the ranges
-  overlap, so `RAG_MAX_DISTANCE` stays unset and honesty is left to the
+  passage and of the nearest chunk. Right answers' passages and off-corpus
+  questions' nearest chunks overlap in distance (ADR 0002, 2026-11-04
+  addendum), so `RAG_MAX_DISTANCE` stays unset and honesty is left to the
   model.
 
 The runner (`python -m evals.run`) exits 0 when every must case passed, 1
