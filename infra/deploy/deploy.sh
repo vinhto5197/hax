@@ -21,11 +21,10 @@
 #        so an image can never carry a sha other than the tree it was built from.
 #
 # Env: GHCR_OWNER (default: gh api user), GITHUB_REPO (default <owner>/hax),
-# GHCR_TOKEN (optional: push logs in with it; otherwise the login is done
-# beforehand: CI by docker/login-action, a laptop once by hand),
 # GH_TOKEN (CI: for the commit-exists check; a laptop's gh is logged in),
 # HAX_INSTANCE_ID (default: terraform output), AWS_REGION (default us-east-1).
-# CI (.github/workflows/ci.yml) sets the rest and runs `all`.
+# push needs a docker login to ghcr.io first (CI: docker/login-action; a laptop
+# once by hand). CI (.github/workflows/ci.yml) sets these and runs `all`.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 export AWS_PAGER=""
@@ -57,9 +56,6 @@ build() {
 
 push() {
   at_head_and_clean
-  if [[ -n "${GHCR_TOKEN:-}" ]]; then
-    echo "$GHCR_TOKEN" | docker login ghcr.io -u "$OWNER" --password-stdin
-  fi
   local image
   for image in "$PY_IMAGE" "$WEB_IMAGE"; do
     if [[ -z "${DEPLOY_OVERWRITE:-}" ]] && docker manifest inspect "$image" > /dev/null 2>&1; then
