@@ -38,3 +38,13 @@ test("the privacy page renders without a session and has a mailto link", async (
     "mailto:hercules.vto@gmail.com",
   );
 });
+
+test("the tab title names the product Hax on the landing and the privacy page", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page).toHaveTitle("Hax");
+
+  await page.goto("/privacy");
+  await expect(page).toHaveTitle("Privacy — Hax");
+});

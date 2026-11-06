@@ -200,6 +200,91 @@ test.describe("desktop", () => {
     ).toBeVisible();
   });
 
+  // Never Enter on Sign out: that would sign the seeded member out of the
+  // rest of the file.
+  test("the account menu opened from the keyboard focuses its first item; arrows, Home and End move and wrap; Escape returns focus to the button", async ({
+    page,
+  }) => {
+    await page.goto("/chat");
+    await accountButton(page).focus();
+    await page.keyboard.press("Enter");
+
+    const aboutYou = page.getByRole("menuitem", { name: "About you" });
+    const privacy = page.getByRole("menuitem", { name: "Privacy" });
+    const signOut = page.getByRole("menuitem", { name: "Sign out" });
+    await expect(aboutYou).toBeFocused();
+    await expect(accountButton(page)).toHaveAttribute("aria-expanded", "true");
+
+    await page.keyboard.press("ArrowDown");
+    await expect(privacy).toBeFocused();
+    await page.keyboard.press("ArrowDown");
+    await expect(signOut).toBeFocused();
+    await page.keyboard.press("ArrowDown");
+    await expect(aboutYou).toBeFocused();
+    await page.keyboard.press("ArrowUp");
+    await expect(signOut).toBeFocused();
+    await page.keyboard.press("Home");
+    await expect(aboutYou).toBeFocused();
+    await page.keyboard.press("End");
+    await expect(signOut).toBeFocused();
+
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("menu", { name: "Account" })).toHaveCount(0);
+    await expect(accountButton(page)).toBeFocused();
+  });
+
+  test("Tab from an account menu item closes the menu", async ({ page }) => {
+    await page.goto("/chat");
+    await accountButton(page).focus();
+    await page.keyboard.press("Enter");
+    await expect(
+      page.getByRole("menuitem", { name: "About you" }),
+    ).toBeFocused();
+
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("menu", { name: "Account" })).toHaveCount(0);
+  });
+
+  test("Tab and Shift+Tab stay inside the About you dialog, skipping a disabled Save, and closing it returns focus to the account button", async ({
+    page,
+  }) => {
+    await page.goto("/chat");
+    await accountButton(page).focus();
+    await page.keyboard.press("Enter");
+    await expect(
+      page.getByRole("menuitem", { name: "About you" }),
+    ).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(aboutYouDialog(page)).toBeVisible();
+    await expect(noteField(page)).toBeEnabled();
+    await expect(noteField(page)).toBeFocused();
+
+    const cancel = aboutYouDialog(page).getByRole("button", {
+      name: "Cancel",
+    });
+    // Save is disabled while the note is unchanged.
+    await expect(saveButton(page)).toBeDisabled();
+    await page.keyboard.press("Tab");
+    await expect(cancel).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(noteField(page)).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(cancel).toBeFocused();
+
+    await noteField(page).focus();
+    await page.keyboard.type("x");
+    await expect(saveButton(page)).toBeEnabled();
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Tab");
+    await expect(saveButton(page)).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(noteField(page)).toBeFocused();
+
+    await page.keyboard.press("Escape");
+    await expect(aboutYouDialog(page)).toHaveCount(0);
+    await expect(accountButton(page)).toBeFocused();
+  });
+
   // Signing out here would leave the seeded member signed out for the rest of
   // the file; routing.member.spec.ts's account block covers Sign out.
   test.skip("Sign out in the account menu signs the member out", async () => {});
