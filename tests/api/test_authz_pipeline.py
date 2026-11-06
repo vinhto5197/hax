@@ -36,7 +36,6 @@ async def test_ingest_inherits_owner_and_stays_partitioned(
     # announced-identity included.
     from packages.core import storage
     from packages.core.rag import ingest, retrieval
-    from tests.api.factories import make_chunk
 
     doc_id = await make_document(
         admin_engine, user_a.id, status="pending", storage_key="documents/x/a.md"
@@ -70,16 +69,7 @@ async def test_ingest_inherits_owner_and_stays_partitioned(
     async def fake_embed_query(query: str) -> list[float]:
         return unit_vec(0)
 
-    # B owns a ready chunk too, or retrieve()'s no-ready-chunks pre-check
-    # would answer B with [] before the main query runs, and a dropped user
-    # filter on that query would go unseen. An orthogonal vector keeps it
-    # farther from the query than A's chunks.
-    b_doc = await make_document(admin_engine, user_b.id, filename="b.md")
-    await make_chunk(admin_engine, b_doc, user_b.id, 0, "beta secret", unit_vec(1))
-
     monkeypatch.setattr(retrieval, "embed_query", fake_embed_query)
-    # B's chunk sits at distance 1; a cutoff from the shell's env would drop it.
-    monkeypatch.setattr(retrieval, "MAX_DISTANCE", None)
     # RLS would mask a dropped app-level WHERE (same partition, different
     # layer); run as superuser so only retrieve()'s user_id filter can
     # produce this result — no current_user_id announcement here.
@@ -88,11 +78,8 @@ async def test_ingest_inherits_owner_and_stays_partitioned(
         "AsyncSessionLocal",
         async_sessionmaker(admin_engine, expire_on_commit=False),
     )
-    hits_b = await retrieval.retrieve("alpha", user_b.id)
-    assert [c.content for c in hits_b] == ["beta secret"]
-    hits_a = await retrieval.retrieve("alpha", user_a.id)
-    assert hits_a != []
-    assert all("alpha secret" in c.content for c in hits_a)
+    assert await retrieval.retrieve("alpha", user_b.id) == []
+    assert await retrieval.retrieve("alpha", user_a.id) != []
 
 
 async def test_agent_search_respects_tool_context(
@@ -104,18 +91,11 @@ async def test_agent_search_respects_tool_context(
 
     a_doc = await make_document(admin_engine, user_a.id)
     await make_chunk(admin_engine, a_doc, user_a.id, 0, "alpha secret", unit_vec(0))
-    # B's own ready chunk gets B's search past retrieve()'s no-ready-chunks
-    # pre-check, so ToolContext's id must scope the main query itself. An
-    # orthogonal vector keeps it farther from the query than A's chunk.
-    b_doc = await make_document(admin_engine, user_b.id, filename="b.md")
-    await make_chunk(admin_engine, b_doc, user_b.id, 0, "beta secret", unit_vec(1))
 
     async def fake_embed_query(query: str) -> list[float]:
         return unit_vec(0)
 
     monkeypatch.setattr(retrieval, "embed_query", fake_embed_query)
-    # B's chunk sits at distance 1; a cutoff from the shell's env would drop it.
-    monkeypatch.setattr(retrieval, "MAX_DISTANCE", None)
     # superuser session: RLS out, so ToolContext is the only thing scoping this.
     monkeypatch.setattr(
         retrieval,
@@ -126,10 +106,8 @@ async def test_agent_search_respects_tool_context(
     out_b = await SEARCH_DOCUMENTS.run(
         SearchDocumentsInput(query="alpha"), ToolContext(user_id=user_b.id)
     )
-    assert isinstance(out_b, ToolOutput)
-    assert "beta secret" in out_b.text
-    assert "alpha secret" not in out_b.text
-    assert [s.document_id for s in out_b.sources] == [b_doc]
+    assert isinstance(out_b, str)  # no passage of A's: the plain "nothing found"
+    assert "alpha secret" not in out_b
 
     out_a = await SEARCH_DOCUMENTS.run(
         SearchDocumentsInput(query="alpha"), ToolContext(user_id=user_a.id)

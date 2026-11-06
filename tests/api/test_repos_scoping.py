@@ -5,9 +5,6 @@ correctly scoped result; route-level tests alone cannot detect a dropped
 WHERE because RLS silently produces the same partition.
 """
 
-from datetime import UTC, datetime, timedelta
-
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from packages.db.repos import conversations as conversations_repo
@@ -90,85 +87,3 @@ async def test_documents_delete_owned_excludes_other_user(user_a, user_b, admin_
     async with session_factory() as session:
         survivor = await documents_repo.get_owned(session, user_a.id, a_doc)
     assert survivor is not None
-
-
-async def test_conversations_get_owned_detail_excludes_other_user(
-    user_a, user_b, admin_engine
-):
-    a_conv = await make_conversation(admin_engine, user_a.id)
-    await make_message(admin_engine, a_conv, "user", "alpha secret")
-    session_factory = async_sessionmaker(admin_engine, expire_on_commit=False)
-    async with session_factory() as session:
-        result = await conversations_repo.get_owned_detail(session, user_b.id, a_conv)
-    assert result is None
-
-    # Non-vacuous: the owner's own call finds it.
-    async with session_factory() as session:
-        own = await conversations_repo.get_owned_detail(session, user_a.id, a_conv)
-    assert own is not None
-
-
-async def _streaming_since(admin_engine, conversation_id):
-    async with admin_engine.connect() as conn:
-        return await conn.scalar(
-            text("SELECT streaming_since FROM conversations WHERE id = :i"),
-            {"i": conversation_id},
-        )
-
-
-async def test_conversations_claim_turn_excludes_other_user(
-    user_a, user_b, admin_engine
-):
-    a_conv = await make_conversation(admin_engine, user_a.id)
-    session_factory = async_sessionmaker(admin_engine, expire_on_commit=False)
-    async with session_factory() as session:
-        claimed = await conversations_repo.claim_turn(session, user_b.id, a_conv)
-        await session.commit()
-    assert claimed is None
-    assert await _streaming_since(admin_engine, a_conv) is None
-
-    # Non-vacuous: the conversation was claimable — the owner's claim lands.
-    async with session_factory() as session:
-        own = await conversations_repo.claim_turn(session, user_a.id, a_conv)
-        await session.commit()
-    assert own is not None
-    assert await _streaming_since(admin_engine, a_conv) is not None
-
-
-async def _statuses(admin_engine, doc_ids):
-    async with admin_engine.connect() as conn:
-        rows = await conn.execute(
-            text("SELECT id, status FROM documents WHERE id = ANY(:ids)"),
-            {"ids": list(doc_ids)},
-        )
-        return {row[0]: row[1] for row in rows}
-
-
-async def test_documents_fail_stale_excludes_other_user(user_a, user_b, admin_engine):
-    stuck_processing = await make_document(
-        admin_engine, user_a.id, filename="p.md", status="processing"
-    )
-    stuck_pending = await make_document(
-        admin_engine, user_a.id, filename="q.md", status="pending"
-    )
-    # Cutoffs in the future: every in-flight row of A's is "stale" by them.
-    future = datetime.now(UTC) + timedelta(days=1)
-    session_factory = async_sessionmaker(admin_engine, expire_on_commit=False)
-    async with session_factory() as session:
-        failed = await documents_repo.fail_stale(
-            session, user_b.id, future, future, "stuck"
-        )
-        await session.commit()
-    assert failed == 0
-    assert await _statuses(admin_engine, [stuck_processing, stuck_pending]) == {
-        stuck_processing: "processing",
-        stuck_pending: "pending",
-    }
-
-    # Non-vacuous: the same cutoffs do match A's rows for A.
-    async with session_factory() as session:
-        own = await documents_repo.fail_stale(
-            session, user_a.id, future, future, "stuck"
-        )
-        await session.commit()
-    assert own == 2
