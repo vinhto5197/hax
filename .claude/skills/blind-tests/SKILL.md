@@ -45,5 +45,5 @@ A failure against the real code is one of two things, and the controller sorts i
 ## After
 
 - **Mutation check, by hand:** for each new test file, break the product code it covers in two or three deliberate ways, confirm the expected test fails each time, restore the file exactly (`cmp` against a backup).
-- **One fresh-eyes reviewer** over the whole change (in the main lane, the whole bite), as always.
+- **One fresh-eyes reviewer** over the whole change (in the main lane, the whole bite), as always. A change that fixes a class of bug asks the reviewer to grep for every other instance of the class, not only the one fixed.
 - **The maintainer reads test names and flagged behaviours only**, never bodies. Flag any test that pins a behaviour the controller is unsure is intended (a 404 counted as success, a merged consecutive turn), because a test written against current behaviour locks it in.

@@ -55,6 +55,19 @@ repos:
         language: system
         files: (\.pyi?|^pyproject\.toml|^constraints\.txt)$
         pass_filenames: false
+      # A route docstring or schema is part of the OpenAPI spec, so the
+      # committed apps/web/lib/openapi.ts must be regenerated with it; CI's
+      # drift check fails otherwise. Dummy secrets as in `make ci-test`.
+      - id: openapi-drift
+        name: generated API types match the API
+        entry: >-
+          bash -c 'AUTH_SECRET=ci-not-a-real-secret-padding-32ch
+          INTERNAL_API_SECRET=ci-not-a-real-secret make -s types >/dev/null
+          && git diff --quiet -- apps/web/lib/openapi.ts
+          || { echo "apps/web/lib/openapi.ts is stale: stage the regenerated file"; exit 1; }'
+        language: system
+        files: ^(apps/api|packages/core/schemas)/.*\.py$
+        pass_filenames: false
       # Frontend: ESLint runs via the project's own npm script,
       # so it picks up eslint-config-next and all its plugins correctly.
       - id: eslint
