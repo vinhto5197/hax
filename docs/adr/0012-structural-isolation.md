@@ -76,3 +76,21 @@ superuser, so dev now mirrors prod.
 
 - [0011](0011-auth-architecture.md) — auth architecture this isolation
   layer builds on.
+
+## Addendum (2026-11-06) — every public table, and the two more exemptions
+
+The RLS guard (`tests/api/test_rls_coverage.py`) now reads every table in the
+public schema, not only those with a `user_id` column, so a table owned
+through a parent (`messages`, through its conversation) is covered and a new
+one cannot ship without RLS unnoticed. Two tables join `accounts` and
+`email_tokens` outside RLS, each a standing decision:
+
+- `users`: credential checks, the OAuth upsert and every request's revocation
+  check (`apps/api/auth.py`) read it before an identity exists to announce,
+  so a policy would refuse exactly the reads that establish identity. It is
+  bounded the way the other two are: its queries live in
+  `packages/db/repos/users.py` (and the OAuth join in `accounts.py`), and none
+  takes an id the caller chose: they key on the token's own `sub`, the email
+  being signed in, a provider identity, or (the anonymous sweep) age.
+- `alembic_version`: the migration ledger holds no user rows; the app role
+  only reads it (migration `6b2f9c4d1e7a`).
