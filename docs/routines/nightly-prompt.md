@@ -74,7 +74,10 @@ minutes after the last PR was opened; a PR still red or running then stays
 open for the human. Then go to Step 5.
 
 ## Step 5 — report, notify, stop
-Final message (it is read back by the maintainer): one line per queue item —
+Final message (it is read back by the maintainer). When Step 1 left no item
+to work (the queue is empty, or every item already has a PR), the message is
+the one line `nothing to do. Open routine PRs now = N.`, no line per item,
+and the notification says the same. Otherwise, one line per queue item —
 `<id>: PR <url> — CI green` | `PR <url> — CI red after 3 attempts (<why>)` |
 `skipped (<why>)` | `abandoned (<why>)`. Then: open routine PRs now = N.
 Then send ONE push notification summarising that list in a sentence, and
