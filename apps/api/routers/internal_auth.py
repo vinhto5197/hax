@@ -81,6 +81,10 @@ async def verify_credentials(
         raise HTTPException(401, detail={"code": "invalid_credentials"})
     if _require_verified() and unverified:
         raise HTTPException(403, detail={"code": "email_unverified"})
+    # Only failures should add up: a member signing in on several devices
+    # must not lock themselves out. The per-address count stays, so spraying
+    # many accounts from one place is still capped.
+    await rate_limit.clear(get_redis(), "login_email", email)
     return found
 
 
