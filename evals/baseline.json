@@ -1,0 +1,229 @@
+{
+  "cases": [
+    {
+      "case_hash": "0f262ef2ecd2",
+      "id": "calculator",
+      "outcome": "pass",
+      "tier": "must"
+    },
+    {
+      "case_hash": "0757f795f31b",
+      "id": "chamber-table",
+      "outcome": "pass",
+      "tier": "must"
+    },
+    {
+      "case_hash": "c524c878cf58",
+      "id": "datetime",
+      "outcome": "pass",
+      "tier": "must"
+    },
+    {
+      "case_hash": "c8492bbcc9e2",
+      "id": "decode-novel",
+      "outcome": "pass",
+      "tier": "probe"
+    },
+    {
+      "case_hash": "3e893343c436",
+      "id": "email-multitool",
+      "outcome": "pass",
+      "tier": "must"
+    },
+    {
+      "case_hash": "9451a924603e",
+      "id": "ex110-depth",
+      "outcome": "pass",
+      "tier": "must"
+    },
+    {
+      "case_hash": "ff431c8c1e6f",
+      "id": "ex110-descent",
+      "outcome": "pass",
+      "tier": "must"
+    },
+    {
+      "case_hash": "c74bed69ea83",
+      "id": "ex110-mascot",
+      "outcome": "pass",
+      "tier": "must"
+    },
+    {
+      "case_hash": "1e7e0f467a8c",
+      "id": "ex110-recall",
+      "outcome": "pass",
+      "tier": "must"
+    },
+    {
+      "case_hash": "63fddfb0227a",
+      "id": "ex110-resupply",
+      "outcome": "pass",
+      "tier": "must"
+    },
+    {
+      "case_hash": "6b6fbd1f3563",
+      "id": "ex110-sallowmere",
+      "outcome": "pass",
+      "tier": "must"
+    },
+    {
+      "case_hash": "5e388233476f",
+      "id": "ex110-staging",
+      "outcome": "pass",
+      "tier": "must"
+    },
+    {
+      "case_hash": "1987a36d0bc0",
+      "id": "ex110-winch",
+      "outcome": "pass",
+      "tier": "must"
+    },
+    {
+      "case_hash": "c637a43d97d9",
+      "id": "grammar-fact",
+      "outcome": "pass",
+      "tier": "must"
+    },
+    {
+      "case_hash": "467cee1b5aa9",
+      "id": "greeting",
+      "outcome": "pass",
+      "tier": "must"
+    },
+    {
+      "case_hash": "9972eaa3eca0",
+      "id": "history-followup",
+      "outcome": "pass",
+      "tier": "must"
+    },
+    {
+      "case_hash": "16a41c7f946f",
+      "id": "no-documents",
+      "outcome": "pass",
+      "tier": "must"
+    },
+    {
+      "case_hash": "59aa28331e77",
+      "id": "note-irrelevant",
+      "outcome": "pass",
+      "tier": "must"
+    },
+    {
+      "case_hash": "3b100658d256",
+      "id": "note-preference",
+      "outcome": "pass",
+      "tier": "must"
+    },
+    {
+      "case_hash": "bc786b5275b8",
+      "id": "note-relevant",
+      "outcome": "pass",
+      "tier": "must"
+    },
+    {
+      "case_hash": "de399b2639f7",
+      "id": "off-corpus",
+      "outcome": "pass",
+      "tier": "must"
+    },
+    {
+      "case_hash": "f4ea495dc2b4",
+      "id": "off-corpus-air-temp",
+      "outcome": "pass",
+      "tier": "must"
+    },
+    {
+      "case_hash": "9a263e95e2a1",
+      "id": "off-corpus-budget",
+      "outcome": "pass",
+      "tier": "must"
+    },
+    {
+      "case_hash": "8042c1a76c84",
+      "id": "off-corpus-dual",
+      "outcome": "pass",
+      "tier": "must"
+    },
+    {
+      "case_hash": "313713937bd6",
+      "id": "off-corpus-lease",
+      "outcome": "pass",
+      "tier": "must"
+    },
+    {
+      "case_hash": "937f6f8e3b6b",
+      "id": "plural-suffix",
+      "outcome": "pass",
+      "tier": "must"
+    },
+    {
+      "case_hash": "0adfa9109870",
+      "id": "radio-channel",
+      "outcome": "pass",
+      "tier": "must"
+    },
+    {
+      "case_hash": "0dd3f2397a8f",
+      "id": "seasons",
+      "outcome": "pass",
+      "tier": "must"
+    },
+    {
+      "case_hash": "e7f3616e7313",
+      "id": "second-doc-fact",
+      "outcome": "pass",
+      "tier": "must"
+    },
+    {
+      "case_hash": "a18dcf39d6c8",
+      "id": "sky-blue",
+      "outcome": "pass",
+      "tier": "must"
+    },
+    {
+      "case_hash": "8da0e653f79c",
+      "id": "tides",
+      "outcome": "pass",
+      "tier": "must"
+    },
+    {
+      "case_hash": "621495a5b91c",
+      "id": "translate-covered",
+      "outcome": "pass",
+      "tier": "probe"
+    },
+    {
+      "case_hash": "33db3daf65d9",
+      "id": "translate-novel",
+      "outcome": "pass",
+      "tier": "probe"
+    },
+    {
+      "case_hash": "cad9ce08a93c",
+      "id": "two-doc-fact",
+      "outcome": "pass",
+      "tier": "must"
+    },
+    {
+      "case_hash": "3a0960c350f6",
+      "id": "vocab-lookup",
+      "outcome": "pass",
+      "tier": "must"
+    }
+  ],
+  "commit": "713d45a",
+  "judge": "claude-sonnet-4-6",
+  "model": "claude-haiku-4-5",
+  "run": "2026-11-06T03-29-14_713d45a.json",
+  "summary": {
+    "by_check": {
+      "contains_any": "19/19",
+      "contains_none": "3/3",
+      "exact_reply": "1/1",
+      "grounded": "14/14",
+      "key_point": "28/28",
+      "table": "1/1",
+      "tools": "30/30"
+    }
+  }
+}

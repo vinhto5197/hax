@@ -332,7 +332,8 @@ eval:
 	@nc -z localhost 5432 >/dev/null 2>&1 && nc -z localhost 6379 >/dev/null 2>&1 || { echo "Postgres/Redis down: run make infra-up"; exit 1; }
 	$(EVAL_LOCK) sh -c '.venv/bin/python apps/web/e2e/prepare.py --target eval && $(EVAL_ENV) .venv/bin/python -m evals.run'
 
-# Marks a run in local/eval/runs/ as the one every later run reports flips against.
+# Writes evals/baseline.json (committed) from a run in local/eval/runs/; every
+# later run reports flips against it.
 eval-baseline:
 	$(EVAL_ENV) .venv/bin/python -m evals.run --baseline $(RUN)
 

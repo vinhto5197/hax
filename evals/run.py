@@ -51,6 +51,8 @@ ROOT = Path(__file__).resolve().parents[1]
 CASES = ROOT / "evals" / "cases.jsonl"
 CORPUS = ROOT / "evals" / "corpus"
 EVAL_DIR = ROOT / "local" / "eval"
+# Committed, so a baseline move is a reviewed diff and travels with the repo.
+BASELINE = ROOT / "evals" / "baseline.json"
 # The first is seeded by apps/web/e2e/prepare.py --target eval and owns the
 # corpus; the second owns nothing, for cases whose honest answer is "you have
 # no documents". Both have an email: a user without one is a demo visitor.
@@ -459,13 +461,11 @@ def _evaluate() -> int:
     except (StartError, CaseFileError, OSError, RuntimeError) as exc:
         print(f"eval: {exc}", file=sys.stderr)
         return 2
-    baseline = report.load_baseline(EVAL_DIR / "baseline.json")
+    baseline = report.load_baseline(BASELINE)
     if baseline is not None:
         flips = report.compare(baseline, run)
         run["summary"]["flips"] = {"broke": flips["broke"], "fixed": flips["fixed"]}
-        run["run"]["baseline"] = json.loads((EVAL_DIR / "baseline.json").read_text())[
-            "run"
-        ]
+        run["run"]["baseline"] = baseline.get("run")
     runs = EVAL_DIR / "runs"
     runs.mkdir(parents=True, exist_ok=True)
     # Named on the local clock, the maintainer's day; the run's own times stay UTC.
@@ -483,7 +483,8 @@ def _set_baseline(name: str) -> int:
     if not run.is_file():
         print(f"eval: no run {run}", file=sys.stderr)
         return 2
-    (EVAL_DIR / "baseline.json").write_text(json.dumps({"run": run.name}) + "\n")
+    snapshot = report.baseline_snapshot(json.loads(run.read_text()), run.name)
+    BASELINE.write_text(json.dumps(snapshot, indent=2, sort_keys=True) + "\n")
     print(f"baseline: {run.name}")
     return 0
 

@@ -78,17 +78,42 @@ def compare(a: dict, b: dict) -> dict:
     }
 
 
-def load_baseline(pointer: Path) -> dict | None:
-    # A missing or broken baseline means "no baseline", never a failed run. The
-    # pointer names a file in runs/, nothing else.
+def baseline_snapshot(run: dict, name: str) -> dict:
+    """The committed baseline (evals/baseline.json): what compare() reads, each
+    case's tier for a reader, and where it came from. No answers, questions or
+    judge reasons: the repository is public, and outcomes alone are what a
+    reviewer diffs."""
+    meta = run["run"]
+    return {
+        "run": name,
+        "commit": meta.get("commit"),
+        "model": meta.get("model"),
+        "judge": meta.get("judge"),
+        "summary": {"by_check": run["summary"]["by_check"]},
+        "cases": [
+            {k: c[k] for k in ("id", "tier", "case_hash", "outcome")}
+            for c in sorted(run["cases"], key=lambda c: c["id"])
+        ],
+    }
+
+
+def load_baseline(path: Path) -> dict | None:
+    # A missing or broken baseline means "no baseline", never a failed run.
     try:
-        name = json.loads(pointer.read_text())["run"]
-        if not isinstance(name, str) or Path(name).name != name:
-            return None
-        run = json.loads((pointer.parent / "runs" / name).read_text())
-    except (OSError, ValueError, KeyError, TypeError):
+        snapshot = json.loads(path.read_text())
+    except (OSError, ValueError):
         return None
-    return run if isinstance(run, dict) else None
+    # Hand edits and merge resolutions land here, and compare() runs after the
+    # paid run: a shape it cannot read must be "no baseline", not a KeyError.
+    try:
+        if not isinstance(snapshot["summary"]["by_check"], dict):
+            return None
+        for case in snapshot["cases"]:
+            if not {"id", "case_hash", "outcome"} <= case.keys():
+                return None
+    except (KeyError, TypeError, AttributeError):
+        return None
+    return snapshot
 
 
 def _cost(label: str, cost: dict) -> str:

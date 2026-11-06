@@ -4,13 +4,14 @@ unready eval corpus; exit_code turns a run into CI's verdict. The harness,
 retrieval and database probes are monkeypatched: no real API or database."""
 
 import asyncio
+import json
 import uuid
 from typing import Any
 
 import anthropic
 import httpx2
 import pytest
-from evals import run
+from evals import report, run
 from evals.cases import Case, Expect, Passage
 from evals.checks import Check
 from evals.judge import JudgeResult, Seen
@@ -860,3 +861,90 @@ async def test_a_rejected_search_call_is_graded_not_a_stack_error(monkeypatch):
 
     assert result["outcome"] == "pass"
     assert result["error"] is None
+
+
+# --- _set_baseline -------------------------------------------------------------
+
+
+def _saved_run() -> dict[str, Any]:
+    def case(id: str, outcome: str, hash: str) -> dict[str, Any]:
+        return {
+            "id": id,
+            "tier": "must",
+            "tags": [],
+            "question": f"question for {id}",
+            "answer": f"answer for {id}",
+            "checks": [
+                {
+                    "check": "tools",
+                    "pass": outcome == "pass",
+                    "detail": None,
+                    "reason": "why",
+                }
+            ],
+            "outcome": outcome,
+            "error": None,
+            "case_hash": hash,
+            "tokens": {"in": 10, "out": 2},
+        }
+
+    return {
+        "run": {
+            "started": "2026-11-05T10:00:00Z",
+            "commit": "37d25e8",
+            "dirty": False,
+            "model": MODEL,
+            "judge": "claude-sonnet-4-6",
+            "baseline": None,
+        },
+        "summary": {"by_check": {"tools": "1/2"}},
+        "cases": [case("zeta", "fail", "hz"), case("alpha", "pass", "ha")],
+    }
+
+
+@pytest.fixture
+def baseline_paths(monkeypatch, tmp_path):
+    # The module's committed baseline path is assumed to be `run.BASELINE`;
+    # setattr raises if it is named otherwise, so a test can never write the
+    # real evals/baseline.json.
+    eval_dir = tmp_path / "local" / "eval"
+    (eval_dir / "runs").mkdir(parents=True)
+    baseline = tmp_path / "evals" / "baseline.json"
+    baseline.parent.mkdir()
+    monkeypatch.setattr(run, "EVAL_DIR", eval_dir)
+    monkeypatch.setattr(run, "BASELINE", baseline)
+    return eval_dir, baseline
+
+
+def test_set_baseline_writes_the_snapshot_of_the_named_run(baseline_paths, capsys):
+    eval_dir, baseline = baseline_paths
+    saved = _saved_run()
+    name = "2026-11-05-a.json"
+    (eval_dir / "runs" / name).write_text(json.dumps(saved))
+
+    assert run._set_baseline(name) == 0
+
+    assert json.loads(baseline.read_text()) == report.baseline_snapshot(saved, name)
+    assert name in capsys.readouterr().out
+    assert not (eval_dir / "baseline.json").exists()
+
+
+def test_set_baseline_twice_writes_identical_bytes(baseline_paths):
+    eval_dir, baseline = baseline_paths
+    name = "2026-11-05-a.json"
+    (eval_dir / "runs" / name).write_text(json.dumps(_saved_run()))
+
+    assert run._set_baseline(name) == 0
+    first = baseline.read_bytes()
+    assert run._set_baseline(name) == 0
+
+    assert baseline.read_bytes() == first
+
+
+def test_set_baseline_with_a_missing_run_exits_2_and_writes_nothing(baseline_paths):
+    eval_dir, baseline = baseline_paths
+
+    assert run._set_baseline("gone.json") == 2
+
+    assert not baseline.exists()
+    assert not (eval_dir / "baseline.json").exists()

@@ -74,7 +74,9 @@ worktrees.
 
 When a measured change lands, or the cases change, the run that checked it
 becomes the baseline (`make eval-baseline`), so the next change is compared
-with what is now on main. The feature lane's rule is in skill
+with what is now on main. The baseline is `evals/baseline.json`, committed with
+the change: each case's outcome and the per-check summary, no answers, so a
+baseline move is a diff a reviewer sees. The full runs stay in `local/eval/runs/`. The feature lane's rule is in skill
 `feature-chain`, the main lane's in skill `gate-block`.
 
 ## Read the results
@@ -104,7 +106,7 @@ start (a bad case file, the wrong stack, a setup failure or a failed
 preflight); `make eval` itself reports any non-zero exit as make's own 2.
 
 ```sh
-make eval-baseline RUN=<file>.json   # flips are reported against this run
+make eval-baseline RUN=<file>.json   # writes evals/baseline.json; flips are reported against it
 make eval-compare A=<file>.json B=<file>.json
 ```
 

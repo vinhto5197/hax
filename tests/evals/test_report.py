@@ -1,5 +1,5 @@
 """The run report: a summary over case results, a comparison between two runs,
-the baseline pointer, and the terminal and HTML renderings of one run."""
+the committed baseline snapshot, and the terminal and HTML renderings of one run."""
 
 import json
 import re
@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 import pytest
+from evals import report
 from evals.report import compare, load_baseline, render_html, render_terminal, summarize
 
 SUMMARY_KEYS = {"cases", "must", "probes", "by_check", "by_tag", "retrieval", "errors"}
@@ -364,66 +365,189 @@ def test_compare_by_check_delta():
     }
 
 
+# --- baseline snapshot -------------------------------------------------------
+
+SNAPSHOT_CASE_KEYS = {"id", "tier", "case_hash", "outcome"}
+
+
+def _rich_run() -> dict[str, Any]:
+    return _run(
+        [
+            _case(
+                "zeta",
+                "fail",
+                tier="probe",
+                hash="hz",
+                answer="SECRET-ANSWER-zeta",
+                question="SECRET-QUESTION-zeta",
+                checks=[
+                    _check("tools", True),
+                    _check(
+                        "key_point",
+                        False,
+                        detail="SECRET-DETAIL",
+                        reason="SECRET-REASON",
+                    ),
+                ],
+            ),
+            _case("alpha", "pass", hash="ha", answer="SECRET-ANSWER-alpha"),
+            _case("mid", "error", hash="hm"),
+        ]
+    )
+
+
+def test_snapshot_holds_run_name_commit_model_by_check_and_case_outcomes_only():
+    run = _rich_run()
+
+    snapshot = report.baseline_snapshot(run, "2026-11-05-a.json")
+
+    assert snapshot["run"] == "2026-11-05-a.json"
+    assert snapshot["commit"] == run["run"]["commit"]
+    assert snapshot["model"] == run["run"]["model"]
+    assert snapshot["judge"] == run["run"]["judge"]
+    assert snapshot["summary"] == {"by_check": run["summary"]["by_check"]}
+    assert len(snapshot["cases"]) == len(run["cases"])
+    by_id = {c["id"]: c for c in snapshot["cases"]}
+    for case in run["cases"]:
+        entry = by_id[case["id"]]
+        assert set(entry) == SNAPSHOT_CASE_KEYS
+        assert entry == {k: case[k] for k in SNAPSHOT_CASE_KEYS}
+
+    text = json.dumps(snapshot)
+    for leaked in (
+        "SECRET-ANSWER",
+        "SECRET-QUESTION",
+        "SECRET-DETAIL",
+        "SECRET-REASON",
+        "question for",
+        "answer for",
+    ):
+        assert leaked not in text, leaked
+    for case in snapshot["cases"]:
+        for key in ("answer", "checks", "question", "tokens", "reason", "seen"):
+            assert key not in case
+
+
+def test_snapshot_cases_are_sorted_by_id():
+    snapshot = report.baseline_snapshot(_rich_run(), "r.json")
+
+    assert [c["id"] for c in snapshot["cases"]] == ["alpha", "mid", "zeta"]
+
+
+def test_compare_against_a_snapshot_matches_compare_against_the_full_run():
+    full = _run(
+        [
+            _case("broke", "pass", checks=[_check("tools", True)]),
+            _case("fixed", "fail", checks=[_check("tools", False)]),
+            _case("edited", "pass", hash="h1"),
+            _case("gone", "pass"),
+            _case("steady", "pass", checks=[_check("key_point", True)]),
+            _case("errored", "error"),
+        ]
+    )
+    new = _run(
+        [
+            _case("broke", "fail", checks=[_check("tools", False)]),
+            _case("fixed", "pass", checks=[_check("tools", True)]),
+            _case("edited", "fail", hash="h2"),
+            _case("fresh", "pass", checks=[_check("grounded", True)]),
+            _case("steady", "pass", checks=[_check("key_point", True)]),
+            _case("errored", "pass"),
+        ]
+    )
+
+    snapshot = report.baseline_snapshot(full, "full.json")
+    expected = compare(full, new)
+
+    assert _ids(expected) == {
+        "broke": ["broke"],
+        "fixed": ["fixed"],
+        "changed": ["edited"],
+        "added": ["fresh"],
+        "removed": ["gone"],
+    }
+    got = compare(snapshot, new)
+    assert _ids(got) == _ids(expected)
+    assert got["by_check_delta"] == expected["by_check_delta"]
+
+
 # --- load_baseline -----------------------------------------------------------
 
 
-def _no_pointer(tmp: Path) -> None:
-    (tmp / "runs").mkdir()
+def test_load_baseline_returns_the_snapshot_on_disk(tmp_path: Path):
+    snapshot = report.baseline_snapshot(_rich_run(), "2026-11-05-a.json")
+    path = tmp_path / "baseline.json"
+    path.write_text(json.dumps(snapshot, indent=2))
+
+    assert load_baseline(path) == snapshot
 
 
-def _pointer_not_json(tmp: Path) -> None:
-    (tmp / "baseline.json").write_text("{not json")
+def _missing(path: Path) -> None:
+    pass
 
 
-def _pointer_without_run(tmp: Path) -> None:
-    (tmp / "baseline.json").write_text(json.dumps({"file": "r1.json"}))
+def _not_json(path: Path) -> None:
+    path.write_text("{not json")
 
 
-def _target_missing(tmp: Path) -> None:
-    (tmp / "runs").mkdir()
-    (tmp / "baseline.json").write_text(json.dumps({"run": "gone.json"}))
+def _not_an_object(path: Path) -> None:
+    path.write_text("[]")
 
 
-def _target_not_json(tmp: Path) -> None:
-    (tmp / "runs").mkdir()
-    (tmp / "runs" / "r1.json").write_text("{truncated")
-    (tmp / "baseline.json").write_text(json.dumps({"run": "r1.json"}))
+def _without_cases(path: Path) -> None:
+    path.write_text(json.dumps({"run": "r.json", "summary": {"by_check": {}}}))
+
+
+def _without_summary(path: Path) -> None:
+    path.write_text(json.dumps({"run": "r.json", "cases": []}))
+
+
+def _summary_without_by_check(path: Path) -> None:
+    snapshot = report.baseline_snapshot(_rich_run(), "r.json")
+    snapshot["summary"] = {}
+    path.write_text(json.dumps(snapshot))
+
+
+def _case_without_hash(path: Path) -> None:
+    snapshot = report.baseline_snapshot(_run([_case("only")]), "r.json")
+    del snapshot["cases"][0]["case_hash"]
+    path.write_text(json.dumps(snapshot))
+
+
+def _old_pointer(path: Path) -> None:
+    path.write_text(json.dumps({"run": "r.json"}))
 
 
 @pytest.mark.parametrize(
     "setup",
     [
-        _no_pointer,
-        _pointer_not_json,
-        _pointer_without_run,
-        _target_missing,
-        _target_not_json,
+        _missing,
+        _not_json,
+        _not_an_object,
+        _without_cases,
+        _without_summary,
+        _old_pointer,
+        _summary_without_by_check,
+        _case_without_hash,
     ],
     ids=[
-        "no-pointer",
-        "pointer-not-json",
-        "pointer-without-run",
-        "target-missing",
-        "target-not-json",
+        "missing",
+        "not-json",
+        "not-an-object",
+        "without-cases",
+        "without-summary",
+        "old-pointer",
+        "summary-without-by-check",
+        "case-without-hash",
     ],
 )
-def test_missing_baseline_reports_none(tmp_path: Path, setup: Callable[[Path], None]):
-    setup(tmp_path)
+def test_load_baseline_reports_none_for_an_unusable_file(
+    tmp_path: Path, setup: Callable[[Path], None]
+):
+    path = tmp_path / "baseline.json"
+    setup(path)
 
-    assert load_baseline(tmp_path / "baseline.json") is None
-
-
-def test_baseline_loads_the_pointed_run(tmp_path: Path):
-    run = _run([_case("a"), _case("b", "fail")])
-    (tmp_path / "runs").mkdir()
-    (tmp_path / "runs" / "2026-11-05-a.json").write_text(json.dumps(run))
-    (tmp_path / "runs" / "2026-11-04-b.json").write_text(
-        json.dumps(_run([_case("other")]))
-    )
-    pointer = tmp_path / "baseline.json"
-    pointer.write_text(json.dumps({"run": "2026-11-05-a.json"}))
-
-    assert load_baseline(pointer) == run
+    assert load_baseline(path) is None
 
 
 # --- render_html -------------------------------------------------------------
@@ -592,27 +716,6 @@ def test_terminal_says_no_baseline():
     run = _run([_case("a"), _case("b", "fail")], baseline=None)
 
     assert "no baseline" in render_terminal(run)
-
-
-@pytest.mark.parametrize("kind", ["parent", "absolute", "not-a-string"])
-def test_baseline_pointer_names_a_file_in_runs_only(tmp_path: Path, kind: str):
-    outside = tmp_path / "eval" / "outside.json"
-    (tmp_path / "eval" / "runs").mkdir(parents=True)
-    outside.write_text(json.dumps(_run([_case("a")])))
-    name = {"parent": "../outside.json", "absolute": str(outside), "not-a-string": 5}
-    pointer = tmp_path / "eval" / "baseline.json"
-    pointer.write_text(json.dumps({"run": name[kind]}))
-
-    assert load_baseline(pointer) is None
-
-
-def test_baseline_that_is_not_a_run_reports_none(tmp_path: Path):
-    (tmp_path / "runs").mkdir()
-    (tmp_path / "runs" / "r.json").write_text("[]")
-    pointer = tmp_path / "baseline.json"
-    pointer.write_text(json.dumps({"run": "r.json"}))
-
-    assert load_baseline(pointer) is None
 
 
 def test_html_escapes_ids_in_attributes():
