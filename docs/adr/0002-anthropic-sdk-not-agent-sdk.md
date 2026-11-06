@@ -341,7 +341,9 @@ regenerated it, deletes that regenerated reply on its own Try again.
 A reply is stored only by the turn that still holds the claim: the save
 writes the assistant message only when `release_turn` matched. A turn whose
 claim lapsed and was re-taken (by a retry or a newer send) stores nothing,
-where it used to append its late reply after the newer one. Without this, a
+where it used to append its late reply after the newer one, and its stream
+ends with `reply_failed`, never `[DONE]` (2026-11-06; it used to send `[DONE]`
+for the reply it had just discarded). Without this, a
 retry that claimed a lapsed conversation could end with two replies to one
 question.
 

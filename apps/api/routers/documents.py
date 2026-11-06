@@ -39,6 +39,9 @@ SUFFIX_MIME = {
     ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 }
 TEXT_SUFFIXES = {".txt", ".md"}
+MAX_FILENAME_CHARS = 255
+# The storage key is documents/<uuid>/<name>; S3 caps keys at 1024 bytes.
+MAX_FILENAME_BYTES = 900
 # Whole file is buffered in memory; streaming uploads are out of v0 scope.
 # Text is dense, so its cap is smaller; binary formats carry layout overhead.
 TEXT_MAX_BYTES = 256 * 1024
@@ -97,6 +100,20 @@ async def upload_document(
 ) -> DocumentOut:
     refuse_visitor(user)
     filename = file.filename or "upload"
+    # Refused before the limiter is charged. A NUL cannot be stored in a
+    # Postgres text column, and the name is part of the storage key.
+    if any(ord(c) < 0x20 or ord(c) == 0x7F for c in filename):
+        raise HTTPException(
+            status_code=400, detail="filename must not contain control characters"
+        )
+    if (
+        len(filename) > MAX_FILENAME_CHARS
+        or len(filename.encode()) > MAX_FILENAME_BYTES
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=f"filename must be at most {MAX_FILENAME_CHARS} characters",
+        )
     suffix = next((s for s in SUFFIX_MIME if filename.lower().endswith(s)), None)
     if suffix is None:
         raise HTTPException(
