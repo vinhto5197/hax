@@ -457,7 +457,9 @@ def _evaluate() -> int:
         ]
     runs = EVAL_DIR / "runs"
     runs.mkdir(parents=True, exist_ok=True)
-    stem = f"{datetime.now(UTC):%Y-%m-%dT%H-%M-%S}_{run['run']['commit'] or 'nogit'}"
+    # Named on the local clock, the maintainer's day; the run's own times stay UTC.
+    local = datetime.now().astimezone()
+    stem = f"{local:%Y-%m-%dT%H-%M-%S}_{run['run']['commit'] or 'nogit'}"
     (runs / f"{stem}.json").write_text(json.dumps(run, indent=2) + "\n")
     (runs / f"{stem}.html").write_text(report.render_html(run))
     print(report.render_terminal(run))

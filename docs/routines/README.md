@@ -10,7 +10,7 @@ describe a weakness before it is fixed.
 - `nightly-prompt.md` — one branch and pull request per eligible item, CI as
   the only gate (up to 3 fix attempts per PR), one notification, no
   connectors. `main` is protected; the routine's GitHub app cannot push to it.
-- `journeys-prompt.md` — the weekly journeys sweep (cron, Friday 06:00 UTC):
+- `journeys-prompt.md` — the weekly journeys sweep (cron, Friday 2:00am America/New_York):
   it reads the `Swept through:` cursor in `docs/testing-map.md`, looks only
   at the user-visible changes merged since, writes journeys for any that
   reached `main` without one, and always opens one PR that moves the cursor.
