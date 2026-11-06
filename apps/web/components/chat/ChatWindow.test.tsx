@@ -2,6 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ChatWindow } from "@/components/chat/ChatWindow";
+import { stubMatchMedia } from "@/test-utils/matchMedia";
 
 // Plain functions reading a mutable value, not vi.fn: the config's mockReset
 // would clear a queued return value before each test.
@@ -9,6 +10,9 @@ let chatError: string | null = null;
 let restoreDraft: string | null = null;
 let stoppedNotice = false;
 let canRetry = false;
+
+// jsdom has no matchMedia; the composer reads it before focusing.
+beforeEach(() => stubMatchMedia());
 
 vi.mock("@/components/chat/ConversationsProvider", () => ({
   useConversations: () => ({

@@ -15,9 +15,14 @@ import type {
   getProfile as GetProfileFn,
   saveProfile as SaveProfileFn,
 } from "@/lib/profileApi";
+import { stubMatchMedia } from "@/test-utils/matchMedia";
+
+// jsdom has no matchMedia; the dialog reads it before focusing the composer.
+beforeEach(() => stubMatchMedia());
 
 // The signed-in member is read through next-auth's useSession; a test
 // switches members by reassigning `session.current` and rerendering.
+
 const { session, getSession, getProfile, saveProfile } = vi.hoisted(() => ({
   session: {
     current: null as null | {

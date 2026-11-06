@@ -2,6 +2,10 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ChatInput, PROMPT_MAX_LENGTH } from "@/components/chat/ChatInput";
+import { stubMatchMedia } from "@/test-utils/matchMedia";
+
+// jsdom has no matchMedia; the composer reads it before focusing.
+beforeEach(() => stubMatchMedia());
 
 describe("ChatInput composer", () => {
   it("names the textarea 'Message'", () => {

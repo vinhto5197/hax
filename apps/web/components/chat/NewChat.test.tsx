@@ -4,9 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NewChat } from "@/components/chat/NewChat";
 import { pickGreeting } from "@/lib/greeting";
+import { stubMatchMedia } from "@/test-utils/matchMedia";
+
+// jsdom has no matchMedia; the composer reads it before focusing.
+beforeEach(() => stubMatchMedia());
 
 // Local-time constructor so getHours() is 9 regardless of the runner's zone;
 // only Date is faked, so React's scheduling keeps real timers.
+
 const morning = new Date(2026, 9, 21, 9, 0);
 // A member: no example chips (a non-empty list marks the visitor's screen).
 const member = { name: "Ada Lovelace", chips: [], onSend: async () => {} };

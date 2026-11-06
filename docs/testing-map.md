@@ -17,7 +17,7 @@ What the e2e stack can stage today, and what it cannot:
 |---|---|---|---|
 | 1 | Enter sends; the question shows above the reply | demo, every member journey | – |
 | 2 | Shift+Enter adds a line; Enter during IME composition is ignored | `chat-basics.member` (Shift+Enter; IME: U) | – |
-| 3 | Send disabled when empty; composer and picker disabled while streaming; focus returns after | `chat-basics.member`, useChat.test (whitespace only) | – |
+| 3 | Send disabled when empty; composer and picker disabled while streaming; focus returns after (never on a touch device: no autofocus on load, after a reply or after a password login, so no keyboard pops) | `chat-basics.member`, `touch-focus.member`, `touch-focus.guest`, useChat.test (whitespace only) | – |
 | 4 | Reply streams piece by piece | switch, guard | – |
 | 5 | "Assistant is thinking…" and the tool status line | MessageList.test, useChat.test | – |
 | 6 | URL becomes `/chat/<id>`; a sidebar row appears | newchat, hist | – |
@@ -102,7 +102,7 @@ What the e2e stack can stage today, and what it cannot:
 | 75 | The dialog and its text survive a resize across the breakpoint and a remount of the sidebar; it closes when the signed-in member changes, and a save under another member's cookie does not go out | `about-you.member` (resize), AboutYouProvider.test, Shell.test (route change: no journey can open the dialog in time) | – |
 | 77 | Delete targets (conversation and document rows) are at least 44 px wide, conversation ones 44 px tall, and never overlap a neighbour; AA contrast at rest | `chat-basics.member`, `documents-panel.member` (the contrast: L) | – |
 | 83 | Skeleton rows match the real rows' height and spacing; still under reduced motion; hidden from assistive tech, the list aria-busy until its first fetch lands or fails | `chat-basics.member` (the documents geometry and the look: L), Sidebar.test, DocumentsPanel.test (aria-hidden, aria-busy) | – |
-| 87 | Keyboard: the account menu opened from the keyboard focuses its first item; ArrowUp/ArrowDown wrap, Home and End jump, Tab closes it, Escape returns focus to the button; Tab and Shift+Tab cycle inside the About you dialog, skipping a disabled Save; closing the dialog returns focus to the account button (the composer if the drawer has gone) | `about-you.member` (desktop), AccountMenu.test, AboutYouDialog.test (the composer fallback) | – |
+| 87 | Keyboard: the account menu opened from the keyboard focuses its first item; ArrowUp/ArrowDown wrap, Home and End jump, Tab closes it, Escape returns focus to the button; Tab and Shift+Tab cycle inside the About you dialog, skipping a disabled Save; closing the dialog returns focus to the account button (the composer if the drawer has gone, never on a touch device) | `about-you.member` (desktop), `touch-focus.member` (phone close), AccountMenu.test, AboutYouDialog.test (the composer fallback, and its touch exception) | – |
 
 ## Auth
 

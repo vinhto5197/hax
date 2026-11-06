@@ -11,6 +11,7 @@ import {
 } from "react";
 
 import { ModelSelect } from "@/components/chat/ModelSelect";
+import { isTouch } from "@/lib/media";
 
 // Mirrors ChatRequest.prompt's max_length (packages/core/schemas/chat.py).
 export const PROMPT_MAX_LENGTH = 20000;
@@ -60,9 +61,11 @@ export function ChatInput({
 
   // A disabled input drops focus, so after a turn streams (disabled while it
   // runs) the keyboard would land nowhere; take it back as soon as the
-  // composer re-enables, and on first mount.
+  // composer re-enables, and on first mount. Never on a touch device: there a
+  // focus right after a tap (a password login lands here inside it) raises the
+  // on-screen keyboard and pushes the page up; the member taps to type.
   useEffect(() => {
-    if (!disabled) inputRef.current?.focus();
+    if (!disabled && !isTouch()) inputRef.current?.focus();
   }, [disabled]);
 
   // The composer grows with its content up to the CSS max-height, after which

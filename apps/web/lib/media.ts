@@ -7,6 +7,14 @@ import { useSyncExternalStore } from "react";
 export const DESKTOP = "(min-width: 48rem)";
 export const SHORT = "(max-height: 500px)";
 export const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
+// Must match the `touch` custom variant in globals.css.
+export const TOUCH = "(hover: none)";
+
+// Read at the moment of use, not subscribed: a focus decision needs only the
+// current device, and the server never focuses anything.
+export function isTouch(): boolean {
+  return typeof window !== "undefined" && window.matchMedia(TOUCH).matches;
+}
 
 type Subscribe = (onChange: () => void) => () => void;
 

@@ -3,6 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AboutYouDialog } from "@/components/chat/AboutYouDialog";
 import type { ProfileOut } from "@/lib/profileApi";
+import { stubMatchMedia } from "@/test-utils/matchMedia";
+
+// jsdom has no matchMedia; the dialog reads it before focusing the composer.
+beforeEach(() => stubMatchMedia());
 
 const { getProfile, saveProfile } = vi.hoisted(() => ({
   getProfile: vi.fn<() => Promise<ProfileOut>>(),
@@ -420,6 +424,17 @@ describe("AboutYouDialog focus", () => {
       const box = addMessageBox();
       await renderThenUnmount();
       await vi.waitFor(() => expect(document.activeElement).toBe(box));
+    });
+
+    it("leaves the Message box unfocused on a touch device when there is no Account menu button", async () => {
+      stubMatchMedia((query) => query === "(hover: none)");
+      const box = addMessageBox();
+      await renderThenUnmount();
+      // Give any deferred focus (microtask, frame or timer) time to land.
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      });
+      expect(document.activeElement).not.toBe(box);
     });
   });
 });

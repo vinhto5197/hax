@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { getProfile, saveProfile } from "@/lib/profileApi";
+import { isTouch } from "@/lib/media";
 
 // Mirrors the server's cap (ProfileIn, the user_profiles CHECK), which counts
 // code points of the stripped text.
@@ -69,6 +70,8 @@ export function AboutYouDialog({
         button.focus();
         return;
       }
+      // Same rule as the composer's own focus: never raise a touch keyboard.
+      if (isTouch()) return;
       const composer = document.querySelector<HTMLElement>(
         'textarea[aria-label="Message"]',
       );
