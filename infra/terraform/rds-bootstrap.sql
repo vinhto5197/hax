@@ -23,6 +23,10 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO hax_app;
 ALTER DEFAULT PRIVILEGES FOR ROLE hax IN SCHEMA public
   GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO hax_app;
 
+-- hax_app reads alembic_version, never writes it; the grant above re-gives write on a re-run (no table before the first migration).
+SELECT 'REVOKE INSERT, UPDATE, DELETE ON alembic_version FROM hax_app'
+  WHERE to_regclass('public.alembic_version') IS NOT NULL \gexec
+
 -- Verification: hax_app present without superuser/bypassrls; vector installed.
 SELECT rolname, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = 'hax_app';
 SELECT extname, extversion FROM pg_extension WHERE extname = 'vector';

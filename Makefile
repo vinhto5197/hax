@@ -246,8 +246,10 @@ ci-lint:
 	$(RUFF) check . && $(RUFF) format --check .
 	for t in tests/scripts/*.sh; do bash "$$t" || exit 1; done
 	node --test tests/workflows/feature-chain.test.mjs
+	@# The Caddy compose.prod.yml runs, by the same tag@digest: bump both together.
 	docker run --rm -v "$$PWD/infra/compose/Caddyfile:/etc/caddy/Caddyfile:ro" \
-	  -e SITE_ADDRESS=example.com caddy:2-alpine \
+	  -e SITE_ADDRESS=example.com \
+	  caddy:2.11.9-alpine@sha256:0bbb055bda6793c999bde78b1b5ce3e89f829fb031af2cf50056ea1246559fee \
 	  caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 	@# The compose plugin (CI's runner) or the standalone docker-compose (this
 	@# Makefile's dev targets): whichever is installed.

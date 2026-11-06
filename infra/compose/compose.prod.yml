@@ -13,7 +13,8 @@ x-logging: &logging
 services:
   caddy:
     <<: *logging
-    image: caddy:2-alpine
+    # Pinned by tag and index digest so a roll never pulls new bytes; a bump is its own commit.
+    image: caddy:2.11.9-alpine@sha256:0bbb055bda6793c999bde78b1b5ce3e89f829fb031af2cf50056ea1246559fee
     restart: unless-stopped
     ports: ["80:80", "443:443", "443:443/udp"]
     environment:
@@ -141,7 +142,8 @@ services:
 
   redis:
     <<: *logging
-    image: redis:7-alpine
+    # Pinned by tag and index digest so a roll never pulls new bytes; a bump is its own commit.
+    image: redis:7.4.12-alpine@sha256:c5d34a98396a4775e223c74e929162c35c5a2182901ba26b50ade939941ce14b
     restart: unless-stopped
     # noeviction: Redis is the Celery broker, and an evicted queue message is a
     # lost job. Memory stays bounded by the API's own caps (enqueue backlog,
