@@ -120,6 +120,20 @@ test("each ?error= code the login page handles shows its own message", async ({
   }
 });
 
+// Google's own redirect when the consent screen is cancelled: no code, no iss.
+test("a guest who cancels Google's consent screen lands on /login with the Google-retry message, not the unavailable one", async ({
+  page,
+}) => {
+  const retry = ERROR_MESSAGES.find((e) => e.code === "OAuthCallbackError")!;
+  const unavailable = ERROR_MESSAGES.find((e) => e.code === "Configuration")!;
+
+  await page.goto("/auth/callback/google?error=access_denied&state=x");
+
+  await expect(page).toHaveURL(/\/login\?(.*&)?error=OAuthCallbackError(&|$)/);
+  await expect(page.getByText(retry.message)).toBeVisible();
+  await expect(page.getByText(unavailable.message)).toHaveCount(0);
+});
+
 test("the ?verified=1 and ?reset=1 banners show, with the email prefilled", async ({
   page,
 }) => {
