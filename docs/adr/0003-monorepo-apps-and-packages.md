@@ -57,3 +57,11 @@ packages/    ← shared internal libraries (imported, not run)
 ## Related
 
 - [CLAUDE.md](../../CLAUDE.md) documents the same structure as intent; this ADR captures it as a decision.
+
+## Addendum (2026-11-06): the API imports worker task objects to enqueue them
+
+`apps/api` imports `generate_title`, `ingest_document` and `send_email` from
+`apps.worker.tasks`, only to publish them through `apps/api/enqueue.py`; it
+never runs them. Both services ship in one image, and the deploy's import
+check (`infra/deploy/deploy.sh`) proves both import before a roll changes
+anything. Any other cross-service import still follows the rule above.

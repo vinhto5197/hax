@@ -279,7 +279,9 @@ Check what's running at any time with `make status` (a TCP probe of each service
 
 Milestones 1–4 (streaming chat, data + RAG, auth, live on AWS, structured
 outputs + polish) have shipped; milestone 5 (cleanup, hardening, eval) is in
-progress. Decisions are recorded in the [ADR index](docs/adr/README.md).
+its final pass, with its test infrastructure and the eval shipped. Decisions
+are recorded in the [ADR index](docs/adr/README.md); how the project was
+built, decision by decision, is the [course](docs/course/README.md).
 
 ## Architecture (v0)
 
