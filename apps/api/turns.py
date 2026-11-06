@@ -9,8 +9,7 @@ cancellation) detaches; the task carries on and the reply is still saved.
 A stored reply is always complete, or cut short by its user's Stop: a model
 failure, the turn deadline, or a cancellation (drain_turns at shutdown) stores
 nothing and releases the claim. A Stop stores the text written so far, or
-nothing if that text is blank; a drain always wins over a Stop. A turn whose
-claim is no longer its own at the save stores nothing and ends failed.
+nothing if that text is blank; a drain always wins over a Stop.
 
 The registry is the only strong reference to a running task (the event loop
 holds tasks weakly), so a turn whose request is gone is not collected
@@ -202,7 +201,7 @@ class Turn:
         # Saved and released before the terminal marker: a client that sees
         # [DONE] may send at once and must find the conversation free.
         try:
-            released = await chat_service.persist_assistant_turn(
+            await chat_service.persist_assistant_turn(
                 self.conversation_id,
                 self.user_id,
                 "".join(buffer),
@@ -221,16 +220,7 @@ class Turn:
                     type(exc).__name__,
                 )
             raise
-        if not released:
-            # The claim was no longer this turn's (taken over by another
-            # turn, the conversation deleted, or a refresh whose reply was
-            # lost), so nothing was stored: the listener gets the failed
-            # marker, never [DONE].
-            logger.warning(
-                "reply discarded for conversation %s: its claim was no longer held",
-                self.conversation_id,
-            )
-        return released
+        return True
 
     async def _heartbeat(self, stop: asyncio.Event) -> None:
         # Stopped by the event, never cancelled: a cancel could land between a

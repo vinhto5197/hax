@@ -36,7 +36,7 @@ What the e2e stack can stage today, and what it cannot:
 | 17 | Delete conversation: confirm or cancel; deleting the open one goes to `/chat`; error line | `chat-basics.member`, py:test_authz_conversations (error line: no journey can fail a delete) | – |
 | 18 | Sidebar while loading: skeleton rows, never "No conversations yet"; a failed first list clears them; empty sidebar shows "No conversations yet" once loaded | `chat-basics.member`, ConversationsProvider.test | – |
 | 19 | "Couldn't load this conversation." | useChat.test | – |
-| 20 | 409 "reply in progress": message, refused turn removed, retry works; a reply whose claim was taken over ends failed, not saved | guard, useChat.test, chatApi.test, py:test_turn_guard, py:test_reply_takeover | – |
+| 20 | 409 "reply in progress": message, refused turn removed, retry works | guard, useChat.test, chatApi.test, py:test_turn_guard | – |
 | 21a | Model error mid-reply: "The reply was interrupted." with Try again (row 22c), no partial, nothing stored, conversation free | `failed-reply.member`, useChat.test, chatApi.test, py:test_failed_reply, py:test_turn_guard | – |
 | 21b | Connection lost mid-reply (or silent for 45 s): no error, the partial replaced by "Still answering…", then the whole reply; a message that never arrived: "Your message wasn't sent…" and the text back in the composer | `still-answering.member` (connection cut, never sent), useChat.test, chatApi.test (silence limit), py:test_server_turn | – |
 | 22 | Stream ends without `[DONE]`: a lost connection (row 21b); the reply finishes on the server and is stored whole, never partial (a Stop: row 22b) | `still-answering.member` (connection cut, then reload), chatApi.test, useChat.test, py:test_server_turn, py:test_turn_guard | – |
@@ -75,7 +75,7 @@ What the e2e stack can stage today, and what it cannot:
 | 86 | An upload that resolves while the first list is in flight keeps its row when that list lands without it; a later list carrying it takes over; a list requested after the upload that lacks it drops the row and polling stops | DocumentsPanel.test (upload during the first list: keeps its row, takes over its row, a list requested after the upload drops the row) | – |
 | 37 | Failed status; tapping it shows the reason | `documents-lifecycle.member`, py:test_ingest_status, py:test_authz_documents | – |
 | 38 | Order: failed, then in progress, then ready | `documents-lifecycle.member` | – |
-| 39 | Upload refusals (type, 5 MB, 256 KB, hourly and daily caps, a bad filename) shown | `documents-panel.member` (type, 5 MB, 256 KB), chatApi.test, py:test_upload_limits (caps), py:test_authz_documents, py:test_upload_filename (control characters, length) | – |
+| 39 | Upload refusals (type, 5 MB, 256 KB, hourly and daily caps) shown | `documents-panel.member` (type, 5 MB, 256 KB), chatApi.test, py:test_upload_limits (caps), py:test_authz_documents | – |
 | 40 | Delete with confirm; a 404 counts as success | `documents-lifecycle.member`, chatApi.test, py:test_authz_documents | – |
 | 41 | Download by clicking the filename (labelled "Download <filename>", ↓ after the name); download error message | `documents-lifecycle.member`, DocumentsPanel.test, chatApi.test, py:test_authz_documents | – |
 | 42 | Empty state, count, help text, collapse; closed by default on short screens; skeleton rows and no count while loading; a failed first list shows neither | `documents-panel.member`, DocumentsPanel.test | – |

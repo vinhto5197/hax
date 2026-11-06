@@ -196,11 +196,10 @@ async def persist_assistant_turn(
     sources: list[dict] | None = None,
     *,
     claimed_at: datetime,
-) -> bool:
+) -> None:
     """Release the turn's claim and persist the assistant message (text +
     sources), bumping updated_at, in one transaction — "reply saved" and
-    "conversation free" cannot disagree. True when this call released the
-    turn's own claim; False when the claim was no longer its own.
+    "conversation free" cannot disagree.
 
     The message is written only if this call released the turn's own claim (a
     lapsed turn whose claim another turn or a retry took stores nothing: that
@@ -230,7 +229,6 @@ async def persist_assistant_turn(
 
     if untitled:
         _enqueue_title(conversation_id, user_id)
-    return released
 
 
 async def release_claim(conversation_id: UUID, claimed_at: datetime) -> None:
