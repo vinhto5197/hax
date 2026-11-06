@@ -107,7 +107,7 @@ What the e2e stack can stage today, and what it cannot:
 | # | Behaviour | Pinned by | Gap |
 |---|---|---|---|
 | 50 | Login success goes to `/chat` | setup (not a spec) | – |
-| 51 | Wrong-credentials message with Google hint; rate-limit message | `auth-login.guest` (rate limit: py:test_login_gate, API side) | – |
+| 51 | Wrong-credentials message with Google hint; rate-limit message; the per-address login limit counts each browser's address, not the Next server's | `auth-login.guest` (rate limit: py:test_login_gate, py:test_login_ip_limit, API side; the forwarded address: visitorIp.test) | – |
 | 52 | Unverified-email message and Resend button | `auth-login.guest`, py:test_login_gate, useResend.test | – |
 | 53 | `?error=` messages; `?verified` / `?reset` banners; email prefilled | `auth-login.guest` | – |
 | 85 | A login the API does not answer within 10 s shows "That took too long, please try again." and the button comes back (Google: the temporarily-unavailable message) | `auth-login.guest` (the page), internalApi.test (the 10 s limit on Next's server-side call: no browser can slow it) | – |

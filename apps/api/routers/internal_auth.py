@@ -27,6 +27,14 @@ from packages.db.repos import users as users_repo
 router = APIRouter(prefix="/internal/auth", dependencies=[Depends(internal_only)])
 
 
+def _visitor_ip(request: Request) -> str:
+    """The browser's address as Next's server saw it (X-Visitor-IP, from
+    Caddy's X-Forwarded-For); trusted because this router is reachable only
+    with the internal secret. Without it a per-address limit would key on
+    Next's own address and every caller would share one bucket."""
+    return request.headers.get("x-visitor-ip") or client_ip(request)
+
+
 def _require_verified() -> bool:
     return os.getenv("AUTH_REQUIRE_EMAIL_VERIFICATION", "true").lower() in (
         "1",
@@ -42,7 +50,7 @@ async def verify_credentials(
 ) -> AuthUserOut:
     email = body.email.strip().lower()
     ip_ok = await rate_limit.hit(
-        get_redis(), "login_ip", client_ip(request), limit=30, window_s=900
+        get_redis(), "login_ip", _visitor_ip(request), limit=30, window_s=900
     )
     email_ok = await rate_limit.hit(
         get_redis(), "login_email", email, limit=5, window_s=900
@@ -141,16 +149,13 @@ async def create_anonymous(
     request: Request,
     session: AsyncSession = Depends(get_session),
 ) -> AnonymousOut:
-    """A demo visitor: a user row with no email.
-
-    X-Visitor-IP is the browser's address as Next's server saw it (Caddy's
-    X-Forwarded-For); trusted because this router is reachable only with the
-    internal secret. Without it the limit would key on Next's own address and
-    every visitor would share one bucket.
-    """
-    ip = request.headers.get("x-visitor-ip") or client_ip(request)
+    """A demo visitor: a user row with no email."""
     if not await rate_limit.hit(
-        get_redis(), "anon_ip", ip, limit=_anon_per_ip_per_day(), window_s=86400
+        get_redis(),
+        "anon_ip",
+        _visitor_ip(request),
+        limit=_anon_per_ip_per_day(),
+        window_s=86400,
     ):
         raise HTTPException(429, detail={"code": "rate_limited"})
     user = await users_repo.create_anonymous(session)
