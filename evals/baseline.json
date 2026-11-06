@@ -91,6 +91,12 @@
       "tier": "must"
     },
     {
+      "case_hash": "115c1740e07c",
+      "id": "history-doc-gone",
+      "outcome": "fail",
+      "tier": "probe"
+    },
+    {
       "case_hash": "9972eaa3eca0",
       "id": "history-followup",
       "outcome": "pass",
@@ -117,6 +123,12 @@
     {
       "case_hash": "bc786b5275b8",
       "id": "note-relevant",
+      "outcome": "pass",
+      "tier": "must"
+    },
+    {
+      "case_hash": "a95542dc6dd1",
+      "id": "noun-swap",
       "outcome": "pass",
       "tier": "must"
     },
@@ -211,19 +223,19 @@
       "tier": "must"
     }
   ],
-  "commit": "713d45a",
+  "commit": "c2be3b3",
   "judge": "claude-sonnet-4-6",
   "model": "claude-haiku-4-5",
-  "run": "2026-11-06T03-29-14_713d45a.json",
+  "run": "2026-11-06T12-50-25_c2be3b3.json",
   "summary": {
     "by_check": {
       "contains_any": "19/19",
-      "contains_none": "3/3",
+      "contains_none": "5/5",
       "exact_reply": "1/1",
-      "grounded": "14/14",
-      "key_point": "28/28",
+      "grounded": "15/16",
+      "key_point": "29/30",
       "table": "1/1",
-      "tools": "30/30"
+      "tools": "31/31"
     }
   }
 }
