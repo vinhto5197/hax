@@ -20,6 +20,16 @@ _max_distance = os.getenv("RAG_MAX_DISTANCE")
 MAX_DISTANCE: float | None = float(_max_distance) if _max_distance else None
 
 
+class RetrievalUnavailable(Exception):
+    """Search could not run (Voyage, the database). Distinct from finding
+    nothing: search_documents lets it propagate and the agent harness
+    (_run_tool) turns it into an error result, so the model never tells a
+    member their documents lack something it could not search."""
+
+    def __init__(self, message: str = "document search is temporarily unavailable"):
+        super().__init__(message)
+
+
 @dataclass
 class RetrievedChunk:
     content: str
@@ -34,9 +44,9 @@ class RetrievedChunk:
 async def retrieve(query: str, user_id: uuid.UUID) -> list[RetrievedChunk]:
     """Embed the query and return its k nearest chunks by cosine distance.
 
-    Degrades to [] on ANY fault (no corpus, Voyage down, DB error) so chat never
-    hard-fails on retrieval; the traceback is logged so real bugs stay visible.
-    Only chunks of status='ready' documents are searched — in-flight or failed
+    [] means nothing was found, including a user with no ready chunks (the
+    paid embed is skipped then). Any fault raises RetrievalUnavailable. Only
+    chunks of status='ready' documents are searched — in-flight or failed
     ingests never leak partial chunks (delete-then-insert makes 'ready' imply a
     complete chunk set). Scoped to user_id's chunks (required — identity comes
     from the request, never from the model). RAG_MAX_DISTANCE, if set, drops
@@ -96,6 +106,9 @@ async def retrieve(query: str, user_id: uuid.UUID) -> list[RetrievedChunk]:
                 [round(r.distance, 3) for r in results],
             )
             return results
-    except Exception:
-        logger.warning("retrieval failed; serving chat without RAG", exc_info=True)
-        return []
+    except Exception as exc:
+        # Type name only at WARNING: an SDK or driver message can quote the
+        # query. The detail goes to DEBUG, below production's LOG_LEVEL=INFO.
+        logger.warning("retrieval failed: %s", type(exc).__name__)
+        logger.debug("retrieval failure detail", exc_info=exc)
+        raise RetrievalUnavailable() from None

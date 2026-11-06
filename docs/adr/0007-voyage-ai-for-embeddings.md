@@ -72,3 +72,16 @@ verbatim, so re-embedding is mechanical, just not free.)
 
 - [0004](0004-skip-langchain-in-v0-llm-client.md) — kept LangChain out of v0; M2 is its planned re-entry point.
 - [0008](0008-langchain-boundaries-for-rag.md) — where LangChain is (and isn't) used in the RAG stack.
+
+## Addendum (2026-11-05) — an outage is an error, not an empty search
+
+"Degrades chat to non-RAG" was written when retrieval was injected into the
+prompt. Retrieval is now a tool the model calls (ADR 0002 addenda), and an
+empty result there reads to the model as "the documents don't say", so a
+Voyage or database fault made the model tell a member, falsely, that their
+documents lack the answer. `retrieve()` now raises `RetrievalUnavailable` on
+any fault; the search tool returns it as an error result ("document search is
+temporarily unavailable"), and `[]` keeps meaning only that nothing was found.
+Chat still never fails on retrieval: the model answers without the documents
+and says it could not search them. The warning log carries the exception type
+only.

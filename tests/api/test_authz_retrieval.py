@@ -44,8 +44,8 @@ async def test_no_corpus_for_user_skips_embed(
     a_doc = await make_document(admin_engine, user_a.id)
     await make_chunk(admin_engine, a_doc, user_a.id, 0, "alpha", unit_vec(0))
 
-    # A raising fake would be swallowed by retrieve()'s degrade-to-[] except;
-    # a call flag survives it.
+    # A call flag, not a raising fake: a fault would raise RetrievalUnavailable
+    # and hide whether the embed was skipped.
     called = False
 
     async def spy_embed(query: str) -> list[float]:

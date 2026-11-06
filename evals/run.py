@@ -41,7 +41,7 @@ from packages.core.agent.tools import ToolContext
 from packages.core.auth.passwords import hash_password
 from packages.core.rag import retrieval
 from packages.core.rag.ingest import ingest_document_async
-from packages.core.rag.retrieval import retrieve
+from packages.core.rag.retrieval import RetrievalUnavailable, retrieve
 from packages.db import AsyncSessionLocal, engine
 from packages.db.models import Document
 from packages.db.repos import documents, users
@@ -131,9 +131,8 @@ async def document_statuses(owner: uuid.UUID) -> list[str]:
 
 
 async def preflight(owner: uuid.UUID, probe_query: str) -> str | None:
-    # retrieve() turns every fault into [] so chat never fails on it; without
-    # this check a broken stack would grade as a model that never finds
-    # anything.
+    # Without this check a broken stack would grade as a model that never
+    # finds anything.
     if not await at_head():
         return "the eval database is not migrated to head"
     statuses = await document_statuses(owner)
@@ -143,8 +142,11 @@ async def preflight(owner: uuid.UUID, probe_query: str) -> str | None:
     if unready:
         return f"{len(unready)} of {len(statuses)} corpus documents are not ready"
     with _acting_as(owner):
-        if not await retrieve(probe_query, owner):
-            return "retrieval returned nothing for the probe query"
+        try:
+            if not await retrieve(probe_query, owner):
+                return "retrieval returned nothing for the probe query"
+        except RetrievalUnavailable:
+            return "retrieval is unavailable (embeddings or the database)"
     return None
 
 
@@ -165,20 +167,29 @@ def _score_retrieval(case: Case, chunks: list) -> dict:
     return scored
 
 
-# What search_documents tells the model when retrieval returned nothing
-# (packages/core/agent/tools.py). retrieve() turns every fault into that, so
-# for the corpus owner with no cutoff it means the stack failed, not the model.
+# What search_documents tells the model when retrieval returned nothing, and
+# the error it gets when retrieval could not run (packages/core/agent/tools.py;
+# the message is RetrievalUnavailable's, wrapped by the harness's _run_tool).
+# For the corpus owner with no cutoff, nothing found means the stack failed,
+# not the model.
 NO_PASSAGES = "No relevant passages were found"
+UNAVAILABLE = str(RetrievalUnavailable())
 
 
 def _stack_fault(
     case: Case, results: list[ToolResult], chunks: list | None
 ) -> str | None:
+    for r in results:
+        if (
+            r["name"] == "search_documents"
+            and r["is_error"]
+            and UNAVAILABLE in r["output"]
+        ):
+            return "document search was unavailable: a stack fault"
     if not case.documents or retrieval.MAX_DISTANCE is not None:
         return None
     for r in results:
-        # Not is_error: a rejected search is the model's malformed call, which
-        # retrieval faults never produce (retrieve() returns [] instead).
+        # Not is_error: any other error is the model's malformed call.
         if r["name"] == "search_documents" and r["output"].startswith(NO_PASSAGES):
             return "retrieval returned nothing for the corpus owner: a stack fault"
     if chunks is not None and not chunks:
