@@ -161,16 +161,23 @@ async def delete_stale_anonymous(
     through referential-integrity triggers, which Postgres exempts from row
     security, so the caller needs no announced identity.
     """
+    # The batch is chosen once, in a CTE that MATERIALIZED keeps Postgres from
+    # folding back into the delete. As a plain IN (subquery) the planner may
+    # rescan the locking LIMIT per outer row; each rescan drops the rows this
+    # statement already deleted and fills up with fresh ones, so one call could
+    # delete every candidate (plain FOR UPDATE does the same as SKIP LOCKED).
     stale = (
         select(User.id)
         .where(User.email.is_(None), User.created_at < cutoff)
         .order_by(User.created_at)
         .limit(limit)
         .with_for_update(skip_locked=True)
+        .cte("stale")
+        .prefix_with("MATERIALIZED")
     )
     result = await session.execute(
         delete(User)
-        .where(User.id.in_(stale))
+        .where(User.id.in_(select(stale.c.id)))
         .returning(User.id)
         .execution_options(synchronize_session=False)
     )

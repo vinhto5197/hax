@@ -81,6 +81,10 @@ async def delete_dead(session: AsyncSession, *, limit: int) -> int:
         )
         .limit(limit)
         .with_for_update(skip_locked=True)
+        # Chosen once (see users.delete_stale_anonymous): a rescanned locking
+        # LIMIT subquery would take fresh rows each time.
+        .cte("dead")
+        .prefix_with("MATERIALIZED")
     )
     # A DELETE always executes to a CursorResult; the session's signature
     # only promises the Result base, which has no rowcount.
@@ -88,7 +92,7 @@ async def delete_dead(session: AsyncSession, *, limit: int) -> int:
         CursorResult[Any],
         await session.execute(
             delete(EmailToken)
-            .where(EmailToken.id.in_(dead))
+            .where(EmailToken.id.in_(select(dead.c.id)))
             .execution_options(synchronize_session=False)
         ),
     )
