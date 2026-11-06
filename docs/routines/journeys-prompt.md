@@ -102,6 +102,17 @@ If it is empty, skip to Step 4 with no new journeys.
 4. A gap the stack cannot stage (see the facts above) gets its row with the
    lane marked (`J*` needs a fake-model prefix) and no test; list it under
    "Gaps left".
+5. Redundancy review, independent: a gap found is not a reason to write a
+   journey that already exists under another name. Before committing, have a
+   SUBAGENT review every new or changed test. Give it the new tests' code,
+   `apps/web/e2e/` and `docs/testing-map.md` as they are on `origin/main`,
+   and the unit tests of the same code; NOT your gap list or your reasoning.
+   It returns per test: REDUNDANT (an existing journey already asserts the
+   same trigger and the same visible outcome: cite its file:line), PARTIAL
+   (which assertions are already pinned, and where) or NEW. A unit test alone
+   never makes a journey redundant. Drop every REDUNDANT test (and its new
+   map row), trim the already-pinned assertions of a PARTIAL one, and put the
+   verdicts, with their citations, in the PR body.
 
 ## Step 4 — the PR, always one
 `git switch -c journey/sweep-<today> origin/main`. Move the cursor line to
@@ -110,7 +121,8 @@ If it is empty, skip to Step 4 with no new journeys.
 open a PR against `main`:
 - title: `journeys: sweep <today> — <N> new journeys` (or `— no gaps`)
 - body: the commit range swept; per behaviour found: file, behaviour, and
-  "pinned by <test>" / "new: <test name>" / "gap left: <why>"; tests written
+  "pinned by <test>" / "new: <test name>" / "gap left: <why>"; the
+  redundancy review's verdicts and what was dropped or trimmed; tests written
   as skip or fixme and why; "CI is the gate; not run here."
 
 ## Step 5 — CI, then fix (up to 3 attempts)
