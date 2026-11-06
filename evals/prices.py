@@ -5,8 +5,6 @@ model missing here is reported at $0 with its token counts, never guessed.
 
 from packages.core.agent.harness import Usage
 
-PRICES_READ = "2026-11-05"
-
 # (input, output) per million tokens; cache reads bill at 0.1x input and
 # 5-minute cache writes at 1.25x input on these models.
 PRICES: dict[str, tuple[float, float]] = {

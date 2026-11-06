@@ -385,3 +385,6 @@ its input, and a text reply is still read the old way.
 Rejected: repairing the text (guessing which brace is missing grades on a
 guess); provider-side structured-output parameters (a provider-specific
 request surface, which these addenda keep out).
+
+The text fallback is gone: with the call forced, a reply without one is
+retried once and then becomes an `error`, like any reply that fails validation.

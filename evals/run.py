@@ -32,7 +32,7 @@ from sqlalchemy import select, text
 from apps.api.routers.chat import member_system
 from evals import report
 from evals.cases import Case, CaseFileError, load_cases
-from evals.checks import code_checks
+from evals.checks import Check, code_checks
 from evals.judge import AnthropicJudge, Judge, Seen
 from evals.prices import usd
 from packages.core import storage
@@ -190,6 +190,10 @@ def _total(usages: list[Usage], key: str) -> int:
     return sum(u[key] for u in usages)
 
 
+def _check_row(c: Check) -> dict:
+    return {"check": c.check, "pass": c.passed, "detail": c.detail, "reason": c.reason}
+
+
 async def run_case(case: Case, user_id: uuid.UUID, model: str, judge: Judge) -> dict:
     started = time.monotonic()
     messages: list = [{"role": r, "content": c} for r, c in case.history]
@@ -219,12 +223,7 @@ async def run_case(case: Case, user_id: uuid.UUID, model: str, judge: Judge) -> 
             text_answer = "".join(answer)
             tools_fired = [r["name"] for r in results]
             checks = [
-                {
-                    "check": c.check,
-                    "pass": c.passed,
-                    "detail": c.detail,
-                    "reason": c.reason,
-                }
+                _check_row(c)
                 for c in code_checks(case.expect, text_answer, tools_fired)
             ]
             seen = Seen(
@@ -243,15 +242,7 @@ async def run_case(case: Case, user_id: uuid.UUID, model: str, judge: Judge) -> 
             judge_usage = verdict.usage
             if verdict.error:
                 error = verdict.error
-            checks += [
-                {
-                    "check": c.check,
-                    "pass": c.passed,
-                    "detail": c.detail,
-                    "reason": c.reason,
-                }
-                for c in verdict.checks
-            ]
+            checks += [_check_row(c) for c in verdict.checks]
             chunks = await retrieve(case.question, user_id) if case.documents else None
             if chunks is not None:
                 retrieval_score = _score_retrieval(case, chunks)

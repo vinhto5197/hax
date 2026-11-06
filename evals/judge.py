@@ -12,7 +12,6 @@ one retry and then makes the case an `error`, never a pass.
 
 import json
 import os
-import re
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -106,22 +105,6 @@ class Judge(Protocol):
     ) -> JudgeResult: ...
 
 
-_FENCE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL)
-
-
-def _first_object(text: str) -> Any:
-    fenced = _FENCE.search(text)
-    if fenced:
-        text = fenced.group(1)
-    decoder = json.JSONDecoder()
-    for start in (i for i, ch in enumerate(text) if ch == "{"):
-        try:
-            return decoder.raw_decode(text, start)[0]
-        except json.JSONDecodeError:
-            continue
-    raise ValueError("no JSON object")
-
-
 def _verdict(entry: Any, where: str) -> tuple[bool, str]:
     # The model sometimes sends a nested object as a JSON string inside the
     # tool call's input; it is the same verdict, so it is read as one.
@@ -136,16 +119,6 @@ def _verdict(entry: Any, where: str) -> tuple[bool, str]:
     if not isinstance(passed, bool) or not isinstance(reason, str):
         raise ValueError(f"{where} needs a boolean pass and a string reason")
     return passed, reason
-
-
-def parse_verdict(
-    text: str, key_points: tuple[str, ...], grounded: bool
-) -> list[Check] | str:
-    try:
-        reply = _first_object(text)
-    except ValueError as exc:
-        return str(exc) or UNPARSEABLE
-    return check_verdict(reply, key_points, grounded)
 
 
 def check_verdict(
@@ -267,25 +240,15 @@ class AnthropicJudge:
                 return JudgeResult(checks=[], usage=usage, error=TRUNCATED)
             if stop == "refusal":
                 return JudgeResult(checks=[], usage=usage, error=REFUSED)
-            # A tool call is the contract, its input already parsed; a text
-            # reply is still read the old way.
+            # A tool call is the contract, its input already parsed.
             calls = [b for b in resp.content if b.type == "tool_use"]
-            text = (
-                json.dumps(calls[0].input)
-                if calls
-                else "".join(b.text for b in resp.content if b.type == "text")
-            )
-            parsed = (
-                check_verdict(calls[0].input, key_points, grounded)
-                if calls
-                else parse_verdict(text, key_points, grounded)
-            )
-            last = (
-                f"{parsed}; reply began {text[:200]!r}"
-                if isinstance(parsed, str)
-                else ""
-            )
+            if not calls:
+                text = "".join(b.text for b in resp.content if b.type == "text")
+                last = f"no tool call; reply began {text[:200]!r}"
+                continue
+            parsed = check_verdict(calls[0].input, key_points, grounded)
             if not isinstance(parsed, str):
                 return JudgeResult(checks=parsed, usage=usage, error=None)
+            last = f"{parsed}; reply began {json.dumps(calls[0].input)[:200]!r}"
         # The parser's reason and the reply's start, so a failure explains itself.
         return JudgeResult(checks=[], usage=usage, error=f"{UNPARSEABLE} ({last})")

@@ -1,7 +1,8 @@
-"""The model judge: parse_verdict turns the judge's strict-JSON reply into
+"""The model judge: check_verdict turns the judge's tool-call input into
 Checks in key-point order (or an error string, never a raise); AnthropicJudge
-grades one answer against what the model under test was shown, retries an
-unparseable reply once, and reports summed usage. No real API is called."""
+grades one answer against what the model under test was shown, retries a
+reply with no usable verdict once, and reports summed usage. No real API is
+called."""
 
 import json
 from types import SimpleNamespace
@@ -16,7 +17,7 @@ from evals.judge import (
     AnthropicJudge,
     JudgeResult,
     Seen,
-    parse_verdict,
+    check_verdict,
 )
 
 POINTS = ("Paris is the capital", "Population is about 2 million")
@@ -73,6 +74,17 @@ def _resp(text: str, usage: SimpleNamespace | None = None) -> SimpleNamespace:
     )
 
 
+def _tool_resp(verdict: str, usage: SimpleNamespace | None = None) -> SimpleNamespace:
+    return SimpleNamespace(
+        content=[
+            SimpleNamespace(
+                type="tool_use", name="record_verdict", input=json.loads(verdict)
+            )
+        ],
+        usage=usage or _usage(),
+    )
+
+
 class FakeClient:
     def __init__(self, *replies: Any) -> None:
         self._replies = list(replies)
@@ -96,11 +108,11 @@ def _user_text(call: dict[str, Any]) -> str:
     return content
 
 
-# parse_verdict
+# check_verdict
 
 
 def test_parse_valid_verdict():
-    checks = parse_verdict(_good_reply(), POINTS, True)
+    checks = check_verdict(json.loads(_good_reply()), POINTS, True)
 
     assert checks == [
         Check("key_point", True, POINTS[0], "stated"),
@@ -109,31 +121,13 @@ def test_parse_valid_verdict():
     ]
 
 
-@pytest.mark.parametrize(
-    "wrap",
-    [
-        "```json\n{}\n```",
-        "Here is my verdict:\n```json\n{}\n```\nThat is all.",
-        "My verdict follows. {} Hope that helps.",
-    ],
-)
-def test_parse_tolerates_code_fence(wrap: str):
-    text = wrap.replace("{}", _good_reply())
-
-    checks = parse_verdict(text, POINTS, True)
-
-    assert isinstance(checks, list)
-    assert [c.passed for c in checks] == [True, False, True]
-    assert [c.detail for c in checks] == [POINTS[0], POINTS[1], None]
-
-
 def test_parse_missing_point_is_error():
     text = _verdict(
         [{"index": 1, "pass": True, "reason": "stated"}],
         {"pass": True, "reason": "ok"},
     )
 
-    result = parse_verdict(text, POINTS, True)
+    result = check_verdict(json.loads(text), POINTS, True)
 
     assert isinstance(result, str) and result
 
@@ -149,7 +143,7 @@ def test_parse_ignores_extra_points():
         ]
     )
 
-    checks = parse_verdict(text, POINTS, False)
+    checks = check_verdict(json.loads(text), POINTS, False)
 
     assert checks == [
         Check("key_point", True, POINTS[0], "first"),
@@ -166,14 +160,14 @@ def test_parse_conflicting_duplicate_point_is_error():
         ]
     )
 
-    result = parse_verdict(text, POINTS, False)
+    result = check_verdict(json.loads(text), POINTS, False)
 
     assert isinstance(result, str) and result
 
 
 @pytest.mark.parametrize("points", [5, True, "1", {"index": 1}])
 def test_parse_points_not_a_list_is_error(points):
-    result = parse_verdict(json.dumps({"points": points}), POINTS, False)
+    result = check_verdict({"points": points}, POINTS, False)
 
     assert isinstance(result, str) and result
 
@@ -195,7 +189,7 @@ def test_parse_out_of_order_points():
         {"pass": False, "reason": "made up"},
     )
 
-    checks = parse_verdict(text, POINTS, True)
+    checks = check_verdict(json.loads(text), POINTS, True)
 
     assert checks == [
         Check("key_point", True, POINTS[0], "first"),
@@ -207,7 +201,6 @@ def test_parse_out_of_order_points():
 @pytest.mark.parametrize(
     "text",
     [
-        "not json",
         "[]",
         _verdict(
             [
@@ -222,10 +215,10 @@ def test_parse_out_of_order_points():
             ]
         ),
     ],
-    ids=["not-json", "array", "pass-not-bool", "missing-reason"],
+    ids=["array", "pass-not-bool", "missing-reason"],
 )
 def test_parse_garbage_is_error(text: str):
-    result = parse_verdict(text, POINTS, False)
+    result = check_verdict(json.loads(text), POINTS, False)
 
     assert isinstance(result, str) and result
 
@@ -244,7 +237,7 @@ def test_parse_missing_grounded_is_error_when_asked(grounded: dict[str, Any] | N
         grounded,
     )
 
-    result = parse_verdict(text, POINTS, True)
+    result = check_verdict(json.loads(text), POINTS, True)
 
     assert isinstance(result, str) and result
 
@@ -252,7 +245,7 @@ def test_parse_missing_grounded_is_error_when_asked(grounded: dict[str, Any] | N
 def test_parse_ignores_grounded_when_not_asked():
     text = _good_reply()
 
-    checks = parse_verdict(text, POINTS, False)
+    checks = check_verdict(json.loads(text), POINTS, False)
 
     assert isinstance(checks, list)
     assert [c.check for c in checks] == ["key_point", "key_point"]
@@ -261,7 +254,7 @@ def test_parse_ignores_grounded_when_not_asked():
 def test_parse_grounded_only():
     text = _verdict([], {"pass": False, "reason": "unsupported claim"})
 
-    checks = parse_verdict(text, (), True)
+    checks = check_verdict(json.loads(text), (), True)
 
     assert checks == [Check("grounded", False, None, "unsupported claim")]
 
@@ -302,10 +295,28 @@ async def test_grade_retries_once_then_errors():
     }
 
 
+async def test_grade_tool_call_rejected_twice_errors_with_the_reason():
+    missing_point = _verdict(
+        [{"index": 1, "pass": True, "reason": "stated"}],
+        {"pass": True, "reason": "ok"},
+    )
+    client = FakeClient(_tool_resp(missing_point), _tool_resp(missing_point))
+    judge = AnthropicJudge(model="m", client=client)
+
+    result = await judge.grade("q", "a", POINTS, True, _seen())
+
+    assert len(client.calls) == 2
+    assert result.checks == []
+    assert result.error is not None
+    assert result.error.startswith("judge reply unparseable")
+    reason = check_verdict(json.loads(missing_point), POINTS, True)
+    assert isinstance(reason, str) and reason in result.error
+
+
 async def test_grade_retry_that_parses_succeeds():
     client = FakeClient(
         _resp("garbage", _usage(100, 20)),
-        _resp(_good_reply(), _usage(50, 10)),
+        _tool_resp(_good_reply(), _usage(50, 10)),
     )
     judge = AnthropicJudge(model="m", client=client)
 
@@ -351,7 +362,7 @@ async def test_prompt_carries_seen():
         note="NOTE-I-am-a-baker",
         history=(("user", "HIST-USER-turn"), ("assistant", "HIST-ASSISTANT-turn")),
     )
-    client = FakeClient(_resp(_good_reply()))
+    client = FakeClient(_tool_resp(_good_reply()))
     judge = AnthropicJudge(model="m", client=client)
 
     await judge.grade("QUESTION-what-city", "ANSWER-paris", POINTS, True, seen)
@@ -373,7 +384,7 @@ async def test_prompt_carries_seen():
 
 
 async def test_grade_reports_usage():
-    client = FakeClient(_resp(_good_reply(), _usage(120, 40, None, None)))
+    client = FakeClient(_tool_resp(_good_reply(), _usage(120, 40, None, None)))
     judge = AnthropicJudge(model="judge-model", client=client)
 
     result = await judge.grade("q", "a", POINTS, True, _seen())
@@ -389,7 +400,7 @@ async def test_grade_reports_usage():
 
 
 async def test_grade_uses_the_given_model():
-    client = FakeClient(_resp("garbage"), _resp(_good_reply()))
+    client = FakeClient(_resp("garbage"), _tool_resp(_good_reply()))
     judge = AnthropicJudge(model="m", client=client)
 
     await judge.grade("q", "a", POINTS, False, _seen())
@@ -401,7 +412,7 @@ async def test_grade_uses_the_given_model():
 async def test_truncated_reply_is_error_without_retry():
     resp = _resp('{"points": [{"index": 1, "pass": tr')
     resp.stop_reason = "max_tokens"
-    client = FakeClient(resp, _resp(_good_reply()))
+    client = FakeClient(resp, _tool_resp(_good_reply()))
     judge = AnthropicJudge(model="m", client=client)
 
     result = await judge.grade("q", "a", POINTS, False, _seen())
@@ -413,7 +424,7 @@ async def test_truncated_reply_is_error_without_retry():
 
 async def test_judge_model_read_from_env_at_construction(monkeypatch):
     monkeypatch.setenv("JUDGE_MODEL", "env-model")
-    client = FakeClient(_resp(_good_reply()))
+    client = FakeClient(_tool_resp(_good_reply()))
 
     await AnthropicJudge(client=client).grade("q", "a", POINTS, False, _seen())
 
@@ -423,7 +434,7 @@ async def test_judge_model_read_from_env_at_construction(monkeypatch):
 async def test_empty_judge_model_env_falls_back_to_the_default(monkeypatch):
     # make eval passes JUDGE_MODEL= when it is not on its command line.
     monkeypatch.setenv("JUDGE_MODEL", "")
-    client = FakeClient(_resp(_good_reply()))
+    client = FakeClient(_tool_resp(_good_reply()))
 
     await AnthropicJudge(client=client).grade("q", "a", POINTS, False, _seen())
 
@@ -476,7 +487,7 @@ async def test_tool_verdict_with_backticks_in_a_reason_still_parses():
 async def test_refusal_is_an_error_without_retry():
     resp = _resp("")
     resp.stop_reason = "refusal"
-    client = FakeClient(resp, _resp(_good_reply()))
+    client = FakeClient(resp, _tool_resp(_good_reply()))
 
     result = await AnthropicJudge(model="m", client=client).grade(
         "q", "a", POINTS, False, _seen()
