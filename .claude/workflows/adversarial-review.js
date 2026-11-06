@@ -88,7 +88,8 @@ phase('Find')
 const perLens = await parallel(LENSES.map(l => () => stop('Find') ? null :
   agent(`${BASE}\n## Your lens: ${l.key}\n${l.prompt}\n\nReport ONLY findings you can substantiate with file:line evidence and a concrete scenario. Fewer, sharper findings beat volume. Severity: critical = exposure/corruption/bypass reachable today; high = same with an uncommon precondition, or prod-outage class; medium = defense gap with a realistic future trigger; low = hygiene/quality. An empty list is a valid result.`,
     { label: `find:${l.key}`, phase: 'Find', schema: FINDINGS_SCHEMA, model: FABLE_LENSES.has(l.key) ? HEAVY_MODEL : FINDER_MODEL })))
-const raw = perLens.filter(Boolean).flatMap((r, i) => r.findings.map(f => ({ ...f, lens: LENSES[i].key })))
+// Indexed before filtering: a lens that failed or was skipped never shifts the names after it.
+const raw = perLens.flatMap((r, i) => r ? r.findings.map(f => ({ ...f, lens: LENSES[i].key })) : [])
 log(`Find: ${raw.length} raw findings from ${perLens.filter(Boolean).length}/${LENSES.length} lenses`)
 
 phase('Dedup')
