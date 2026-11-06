@@ -2,7 +2,7 @@
 
 Every user-visible behaviour of the web app, and the test that would go red if it regressed. A behaviour change edits this file in the same PR as its test: a new row, or a row's **Pinned by** column.
 
-Swept through: 1b4245f — the weekly journeys sweep (`docs/routines/journeys-prompt.md`) checks only the changes after this commit and moves the line in its PR.
+Swept through: 713d45a — the weekly journeys sweep (`docs/routines/journeys-prompt.md`) checks only the changes after this commit and moves the line in its PR.
 
 Lanes: **J** a Playwright journey in `apps/web/e2e/` can observe it; **U** only a unit test can stage it (a race, an ordering, a mocked boundary); **L** a person has to look. Journey short names: demo = `demo.guest`, newchat = `new-chat.member`, hist = `history.member`, switch = `switch-mid-stream.member`, guard = `turn-guard.member`, setup = `auth.setup`; every other journey goes by its file stem (`<area>.<guest|member>`). `py:` is a pytest module under `tests/`. A gap is a behaviour no test in its lane pins; a row whose gap is `–` is covered. **Gap** holds only the lane(s) of the gap, or `–`; a note on partial coverage goes in **Pinned by**, in parentheses.
 
@@ -80,6 +80,7 @@ What the e2e stack can stage today, and what it cannot:
 | 41 | Download by clicking the filename (labelled "Download <filename>", ↓ after the name); download error message | `documents-lifecycle.member`, DocumentsPanel.test, chatApi.test, py:test_authz_documents | – |
 | 42 | Empty state, count, help text, collapse; closed by default on short screens; skeleton rows and no count while loading; a failed first list shows neither | `documents-panel.member`, DocumentsPanel.test | – |
 | 69 | An in-flight document reads "Processing…" with a spinner, a hint and aria-busy | `documents-lifecycle.member`, DocumentsPanel.test | – |
+| 88 | A refusal whose 422 carries a validation array shows each field and message ("<field>: <msg>", joined by "; "), never the bare status | `documents-panel.member` (an upload), chatApi.test | – |
 
 ## Sidebar, drawer, phone
 
@@ -101,6 +102,7 @@ What the e2e stack can stage today, and what it cannot:
 | 75 | The dialog and its text survive a resize across the breakpoint and a remount of the sidebar; it closes when the signed-in member changes, and a save under another member's cookie does not go out | `about-you.member` (resize), AboutYouProvider.test, Shell.test (route change: no journey can open the dialog in time) | – |
 | 77 | Delete targets (conversation and document rows) are at least 44 px wide, conversation ones 44 px tall, and never overlap a neighbour; AA contrast at rest | `chat-basics.member`, `documents-panel.member` (the contrast: L) | – |
 | 83 | Skeleton rows match the real rows' height and spacing; still under reduced motion; hidden from assistive tech, the list aria-busy until its first fetch lands or fails | `chat-basics.member` (the documents geometry and the look: L), Sidebar.test, DocumentsPanel.test (aria-hidden, aria-busy) | – |
+| 87 | Keyboard: the account menu opened from the keyboard focuses its first item; ArrowUp/ArrowDown wrap, Home and End jump, Tab closes it, Escape returns focus to the button; Tab and Shift+Tab cycle inside the About you dialog, skipping a disabled Save; closing the dialog returns focus to the account button (the composer if the drawer has gone) | `about-you.member` (desktop), AccountMenu.test, AboutYouDialog.test (the composer fallback) | – |
 
 ## Auth
 
@@ -136,4 +138,4 @@ What the e2e stack can stage today, and what it cannot:
 
 Produced by `python scripts/testing_map_counts.py` from the tables above; rerun it after editing a row and paste its output here.
 
-91 behaviours; 89 covered; 2 gaps: J 0 (J\* 0), U 0, L 2.
+93 behaviours; 91 covered; 2 gaps: J 0 (J\* 0), U 0, L 2.

@@ -147,6 +147,41 @@ for (const { label, file, message } of REFUSALS) {
   });
 }
 
+// The refusal is stubbed, so the API's limiter never counts it. A 422's
+// validation array reads "<field>: <msg>" joined by "; ", never the status.
+test("an upload refused with a validation 422 shows each field and message", async ({
+  page,
+}) => {
+  await page.route("**/api/documents", (route) =>
+    route.request().method() === "POST"
+      ? route.fulfill({
+          status: 422,
+          json: {
+            detail: [
+              { loc: ["body", "file"], msg: "Field required", type: "missing" },
+              { loc: ["body"], msg: "Body is malformed", type: "value_error" },
+            ],
+          },
+        })
+      : route.fallback(),
+  );
+  await page.goto("/chat");
+  await expect(page.getByText(EMPTY)).toBeVisible();
+
+  await fileInput(page).setInputFiles({
+    name: "notes.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("refused before it is stored"),
+  });
+  await expect(
+    panel(page).getByText("file: Field required; Body is malformed", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(panel(page).getByText(/API 422/)).toHaveCount(0);
+  await expect(page.getByText(EMPTY)).toBeVisible();
+});
+
 // The listing is stubbed: the e2e stack cannot store an upload, and this test
 // is about geometry only. Each delete target spans its own row and no more.
 test("document delete targets are 44 px wide and never overlap a neighbour", async ({
