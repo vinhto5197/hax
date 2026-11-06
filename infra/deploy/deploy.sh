@@ -14,7 +14,7 @@
 #        overwritten (DEPLOY_OVERWRITE=1 overrides, e.g. a CI re-run).
 # roll   over SSM, the box fetches compose.prod.yml + Caddyfile at <sha> from
 #        the public repo, pins the two image tags in /opt/hax/images.env, then
-#        compose pull + migrate + up -d + caddy reload. So <sha> must be pushed: a deploy is always a
+#        compose pull + an import check + migrate + up -d + caddy reload. So <sha> must be pushed: a deploy is always a
 #        commit on GitHub, never a working tree.
 # all    the three in order (default). build/push always use HEAD; a sha
 #        argument is accepted by roll only (rollback), never by build or push,
@@ -30,7 +30,10 @@ cd "$(dirname "$0")/../.."
 export AWS_PAGER=""
 
 STEP=${1:-all}
-HEAD_SHA=$(git rev-parse --short HEAD)
+# Exactly 7 characters, as roll looks images up: --short grows with the
+# repository (or core.abbrev), which would tag images roll cannot find.
+HEAD_SHA=$(git rev-parse HEAD)
+HEAD_SHA=${HEAD_SHA:0:7}
 TAG=${2:-$HEAD_SHA}
 OWNER=${GHCR_OWNER:-$(gh api user -q .login)}
 REPO=${GITHUB_REPO:-$OWNER/hax}
@@ -94,9 +97,9 @@ test -f .env || { echo "/opt/hax/.env missing: write it first (infra/deploy/READ
 # must not interleave their file writes and compose ups. Waits up to 10 min.
 exec 9> .deploy.lock
 flock -w 600 9 || { echo "another deploy holds /opt/hax/.deploy.lock"; exit 1; }
-# Nothing the running stack reads changes until the pull and the migrate
-# have succeeded: the three files land as .new/.next, the pull and the
-# one-off migrate run from those, and only then are they promoted. A failure
+# Nothing the running stack reads changes until the pull, the import check
+# and the migrate have succeeded: the three files land as .new/.next, the
+# pull and the one-off runs use those, and only then are they promoted. A failure
 # before that point leaves the box exactly as it was. (up -d recreates
 # api/worker BEFORE compose runs the migrate they depend on, so a migrate
 # that failed inside up -d would leave every /api/* route dead; the one-off
@@ -126,6 +129,13 @@ IMAGES_ENV=images.env.next COMPOSE_FILE=compose.prod.yml.new compose pull --quie
 # the rest of the script as the command's input — the roll ends there,
 # "successfully", with whatever follows never run. (No backticks in these
 # comments: the heredoc is unquoted, so a backtick would execute locally.)
+# The new image's api and worker code must import before anything changes:
+# an import that fails only in the built image (a dev-only package, a file
+# outside the copied tree) passes the tests, then crash-loops the api after
+# up -d. It needs no database (--no-deps), so it runs before the migrate and
+# a bad image leaves the schema untouched too. It does not prove the
+# processes start (an entrypoint binary, the api's startup checks).
+IMAGES_ENV=images.env.next COMPOSE_FILE=compose.prod.yml.new compose run --rm -T --no-deps api python -c 'import apps.api.main, apps.worker.celery_app, apps.worker.tasks' < /dev/null
 IMAGES_ENV=images.env.next COMPOSE_FILE=compose.prod.yml.new compose run --rm -T migrate < /dev/null
 mv compose.prod.yml.new compose.prod.yml
 # The Caddyfile is written IN PLACE, not renamed over: the caddy container

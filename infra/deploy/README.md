@@ -95,9 +95,13 @@ downgrade fails on the NOT NULL constraint.
 
 On the box, `roll` takes `/opt/hax/.deploy.lock` (a second roll waits, up
 to ten minutes), fetches `compose.prod.yml` and `Caddyfile` and writes the
-image tags as staged copies next to `.env`, pulls, runs `migrate` once as a
-throwaway container, and only then promotes the three files and runs
-`up -d`; a failure before the promotion leaves the box untouched. Compose
+image tags as staged copies next to `.env`, pulls, imports the new image's
+api and worker code in a throwaway container, runs `migrate` once in another,
+and only then promotes the three files and runs `up -d`; a failure before the
+promotion leaves the box untouched (a failed import also leaves the schema
+untouched: it runs first). The import catches api or worker code that cannot
+import; an image that imports but then fails to start or serve is not
+caught, and is rolled back by hand. Compose
 orders the rest: `migrate` runs to head, `api`, `worker` and `worker-fast` wait for it, `caddy` waits
 for `api` healthy. First deploy: `up` pulls ~1 GB of images, and Caddy's
 certificate takes a few seconds after that; watch it with the logs below.
