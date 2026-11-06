@@ -69,7 +69,7 @@ This repo is v0 — an **open-source skeleton** that ships the complete vertical
 
 5. **Milestone 5 — Cleanup + hardening + eval** *(final pass before v0 is "done")*
    - Test infrastructure: pytest (async fixtures, real-Postgres authz suite),
-     Vitest, Playwright journeys, `make coverage`; see README Tests and
+     Vitest, Playwright journeys, `make coverage`; see docs/dev-setup.md Tests and
      Verifying web changes below. *(shipped)*
    - **Eval infrastructure**: a measurable harness for RAG/agent quality
      (Q/A dataset → run → score via exact-match or LLM-as-judge) so retrieval

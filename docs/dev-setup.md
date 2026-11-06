@@ -1,0 +1,251 @@
+# Local development
+
+Everything needed to run, test and debug hax on a laptop. The [README](../README.md) has the short version.
+
+## Prerequisites
+
+Install these before setup. Versions are minimums.
+
+| Tool           | Version | Notes                                           |
+| -------------- | ------- | ----------------------------------------------- |
+| Python         | 3.11+   | Via pyenv or Homebrew                           |
+| Node.js        | 22.22+  | Via nvm or Homebrew (CI and the image use 22)   |
+| Docker         | 20+     | Docker Desktop, Colima, Rancher, etc.           |
+| docker-compose | 2+      | Usually bundled with Docker; Homebrew otherwise |
+| Make           | any     | Pre-installed on macOS / Linux                  |
+| direnv         | 2+      | Optional, recommended — auto-loads venv + `.env` on `cd` |
+
+> **Windows:** the tooling and `make` targets assume a Unix shell (the Makefile recipes use `bash`, `nc`, `pkill`, `docker exec`, etc.). Use [WSL2](https://learn.microsoft.com/windows/wsl/install) — a Linux environment on Windows — and run everything from there; `make`, Docker, and the setup scripts then work exactly as on Linux. Native cmd/PowerShell is not supported, even with `make` installed.
+
+## Local Dev Setup
+
+First-time setup (creates venv, installs deps, pre-commit hooks):
+
+```bash
+source setup.sh
+```
+
+This creates the venv, installs deps, copies `.env.example` to `.env` (if missing), and sets up pre-commit hooks. Defaults work for local dev.
+
+### Loading the environment
+
+`make dev` needs the Python venv active and `.env` exported into your shell — the API reads `ANTHROPIC_API_KEY` and the web app reads `NEXT_PUBLIC_API_URL` from the environment.
+
+- **Recommended — [direnv](https://direnv.net):** the committed `.envrc` activates the venv and loads `.env` automatically on `cd` into the repo. Install direnv, hook it into your shell, then approve this repo once:
+
+  ```bash
+  brew install direnv          # then add: eval "$(direnv hook zsh)"  to ~/.zshrc
+  direnv allow                 # approve .envrc (one time)
+  ```
+
+- **Starting `next dev` by hand** (outside `make dev`, e.g. from an editor task) needs `NEXT_PUBLIC_API_URL=http://localhost:8000` in its environment: Next loads only `apps/web/.env`, not the root one, and without the variable the chat client posts to Next itself and gets a 404.
+
+- **Without direnv:** run this once per shell before `make dev`:
+
+  ```bash
+  source .venv/bin/activate && set -a && source .env && set +a
+  ```
+
+Make sure Docker is running before starting services:
+
+```bash
+# If using Colima
+colima start
+
+# If using Docker Desktop, just open the app
+```
+
+Start everything (Postgres, Redis, RustFS, Mailpit, FastAPI, Next.js):
+
+```bash
+make dev
+```
+
+Ingestion, transactional email, conversation titles and the daily sweeps run
+in **two Celery workers** on two queues — ingestion on its
+own, everything fast on the default one with the scheduler embedded — so a
+batch of uploads never delays an email. `make worker` starts both. Run it in
+a second terminal — otherwise an upload just sits at `pending`, no email
+arrives, and new conversations stay "Untitled" (`make dev` prints this
+reminder too):
+
+```bash
+make worker
+```
+
+Stop all services (API, web, and both workers):
+
+```bash
+make dev-stop
+```
+
+Other useful commands:
+
+```bash
+make infra-logs      # tail Postgres + Redis + RustFS + Mailpit logs
+make infra-clean     # tear down containers AND delete volumes (full reset)
+make infra-psql      # open a psql shell against postgres
+make infra-redis-cli # open a redis-cli shell against redis
+make infra-verify    # run the full end-to-end infra check (see below)
+make setup           # re-run setup.sh without sourcing
+```
+
+### Run the production stack locally
+
+The production box runs `infra/compose/compose.prod.yml` — Caddy in front of
+web + api on one origin, plus the two workers, Redis and a migrate one-shot. Running
+that exact topology on a laptop catches container, proxy and same-origin issues
+before they reach the box. `infra/compose/compose.prod.local.yml` swaps in local
+Postgres, RustFS and Mailpit for RDS, S3 and the SMTP relay.
+
+1. Create the env file (gitignored) from the template, with local values:
+   `cp .env.prod.example infra/compose/.env.local`, then follow the "Local
+   production run" note at its top (postgres/s3/mailpit hostnames,
+   `SITE_ADDRESS=localhost`, `https://localhost` origins, fresh
+   `openssl rand -base64 32` secrets, your model API keys).
+2. Build and start:
+
+   ```bash
+   make prod-build   # api/worker/migrate image + web image
+   make prod-up      # whole stack, detached
+   make prod-logs    # tail every service
+   make prod-down    # stop (volumes are kept)
+   make prod-clean   # stop and delete volumes (full reset)
+   ```
+
+3. Open <https://localhost>. Caddy serves it with its own internal CA, so the
+   browser shows a certificate warning once — accept it. Mailpit for this
+   stack is at <http://localhost:8026>. The landing page is the anonymous
+   demo: send a message without an account to try it (a few turns, no
+   uploads); log in for the full product.
+
+It publishes only 80/443 and 8026. Port 8026 is also the e2e inbox's (`hax-mailpit-e2e`, started by `make dev`): stop that container first to run both.
+The ingest worker runs inside a 1 GiB memory fence (`mem_limit` in
+`compose.prod.yml`); on Docker Desktop, raise its memory allowance if the
+whole stack does not fit: the Docker VM can run out of memory before the
+fence ever applies.
+
+### Deploy
+
+The live stack is one EC2 box running `compose.prod.yml` against RDS and S3,
+provisioned by Terraform; ADR 0013 records the topology and every thin choice.
+Two runbooks: [infra/terraform/README.md](../infra/terraform/README.md) brings the
+infrastructure up (bootstrap state, plan, apply, RDS bootstrap) and
+[infra/deploy/README.md](../infra/deploy/README.md) ships a commit to it. After
+the one-time setup, every push to `main` that passes CI rolls the box
+(`.github/workflows/ci.yml` → `infra/deploy/deploy.sh`: build, push to GHCR by
+sha, roll over SSM, with AWS access by OIDC and no stored key). The same
+script by hand is the fallback and the rollback. Secrets live only in
+`/opt/hax/.env` on the box.
+
+### Verify local infra
+
+After a fresh clone, a Docker version bump, or anything else that touches the data services, run this end-to-end pass to confirm Postgres + Redis are wired up correctly. Stop and diagnose if any step fails.
+
+**Shortcut:** `make infra-verify` runs the same checks non-interactively via [infra/compose/verify.sh](../infra/compose/verify.sh); the steps below are the form for debugging one failure.
+
+1. `make infra-clean` — start from a known-empty state (deletes named volumes).
+2. `make infra-up` — bring the compose services up in the background (postgres, redis, s3, mailpit, and mailpit-e2e for the browser journeys). The storage console is at http://localhost:9001/rustfs/console/index.html (sign in with `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` from `.env`).
+3. `make infra-ps` — postgres, redis and s3 should report `(healthy)` (~20s on cold start); mailpit declares no healthcheck.
+4. `make infra-psql`, then `SELECT * FROM pg_extension WHERE extname='vector';` — expect one row (confirms the `vector` extension is loaded). Exit with `\q`.
+5. `make infra-redis-cli`, then `PING` — expect `PONG`. Exit with `exit`.
+6. Confirm host-side connectivity as the owner role `hax` (the URL migrations use, `MIGRATIONS_DATABASE_URL`; the app itself connects as the least-privilege `hax_app`, see `DATABASE_URL` in `.env.example`). With `psql` on the host: `psql postgresql://hax:hax@localhost:5432/hax -c '\dx'`. Without `psql`, via the venv: `.venv/bin/python -c "from sqlalchemy import create_engine, text; print(create_engine('postgresql://hax:hax@localhost:5432/hax').connect().execute(text('SELECT 1')).scalar())"` (expect `1`).
+7. Volume-persistence check: in `make infra-psql`, run `CREATE TABLE _probe (x int); INSERT INTO _probe VALUES (1);`. Then `make infra-down`, `make infra-up`, `make infra-psql`, `SELECT * FROM _probe;` — expect the row. Clean up with `DROP TABLE _probe;`.
+8. `make infra-down` — leave the machine in containers-down, volumes-kept state.
+
+### Database migrations
+
+The Postgres schema is managed by [Alembic](https://alembic.sqlalchemy.org). ORM models live in [packages/db/models/](../packages/db/models/); migration scripts in [packages/db/migrations/versions/](../packages/db/migrations/versions/). See [ADR 0006](adr/0006-async-sqlalchemy-asyncpg-alembic.md) for why the stack is async (SQLAlchemy 2.0 + asyncpg + Alembic).
+
+Postgres must be up (`make infra-up`) for any of these:
+
+```bash
+make migrate                   # apply all pending migrations (idempotent; no-op if at head)
+make migration m="add x table" # autogenerate a migration after changing models
+make migrate-down              # roll back the most recent migration
+```
+
+- **Fresh database:** after `make infra-up`, run `make migrate` once to create the schema. `make dev` does **not** auto-migrate — run `make migrate` yourself after pulling new migrations or starting from an empty volume.
+- **Existing Postgres volume:** [infra/compose/postgres/init.sql](../infra/compose/postgres/init.sql) (the `vector` extension and the `hax_app` role with its grants) runs only when the volume is first created. A volume from before a change to it never sees the change; apply it by hand (it is idempotent), or reset with `make infra-clean`:
+
+  ```bash
+  docker exec -i hax-postgres psql -U hax -d hax < infra/compose/postgres/init.sql
+  ```
+
+- **`make migrate` is idempotent.** Alembic records applied revisions in an `alembic_version` table and runs only what's pending, so re-running is safe.
+- **After changing a model:** run `make migration m="..."`, then **review the generated file** before committing — autogenerate misses some changes (e.g. constraint/type edits) and can emit an empty migration. Apply it with `make migrate`.
+- **`make migrate-down`** reverses the schema change and steps the version pointer back one; it does **not** delete the migration file (migrations are version-controlled history — to undo further, write a new migration forward).
+
+### Tests
+
+```bash
+make test         # Python: pytest (needs the dev Postgres from `make infra-up`)
+make types-check  # Python types: Pyright (standard) over apps/, packages/, evals/ and tests/, as CI and pre-commit run it
+make test-web     # Web: Vitest + React Testing Library, no services needed
+make coverage     # Line coverage: pytest over apps/ and packages/, then Vitest over the web
+make e2e          # Browser journeys: Playwright (Chromium) against an isolated stack
+```
+
+`make test` and `make e2e` always run under `scripts/with-lock.sh` when `local/` exists, so two runs that share the test database or the e2e ports queue instead of colliding; a second run waits for the first.
+
+CI and the production image install Python packages only at the versions in `constraints.txt`, on the same Python patch version, so an upstream release cannot turn CI red overnight or reach production untested. CI fails if any installed package is missing from the file, or was installed from a URL or path instead of the index, so a new dependency comes with a refreshed `make constraints`. The build toolchain is pinned outside it: setuptools exactly in `pyproject.toml`'s `[build-system]`, pip by the Python image's tag; bump both by hand in the same refresh. To move to newer versions on purpose: upgrade the dev venv, run the suites green, then `make constraints` and commit the new file on its own.
+
+Web tests sit beside the code they cover as `*.test.ts` / `*.test.tsx`. All three suites run in CI, and the web unit suite also runs as a pre-commit hook when a source file under `apps/web` changes. Pyright runs in CI's test job and as a pre-commit hook when a Python file, `pyproject.toml` or `constraints.txt` is staged.
+
+`make e2e` needs `make infra-up`. It resets its own database (`hax_e2e`) and Redis db 15, builds the web, and starts the web on :3001, the API on :8001 and a scripted stand-in for the model on :8787, so it runs alongside `make dev` without touching dev data. Its build replaces any local production build in `apps/web/.next` (one pointed at :8001); `next dev` is unaffected. First time: `cd apps/web && npx playwright install chromium`. Watch the browser with `make e2e ARGS="--headed"`, or step through with `make e2e ARGS="--ui"`. A failed journey prints the path of its trace; open it with `cd apps/web && npx playwright show-trace <path>`. CI runs it on every push and a failure blocks the deploy; the failed run's page has a `playwright-report` artifact with the traces.
+
+### Auth setup
+
+The landing page's demo works without an account; saved conversations, uploads and the full tool set need a login, which these steps set up.
+
+1. **Generate secrets** in `.env`:
+
+   ```bash
+   openssl rand -base64 32   # run twice: once for AUTH_SECRET, once for INTERNAL_API_SECRET
+   ```
+
+   `AUTH_SECRET` is the JWT secret shared between Auth.js (web) and FastAPI; `INTERNAL_API_SECRET` gates the server-to-server `/internal/auth/*` routes. They must be **different values**.
+
+2. **Two-URL env contract** (row-level security): `DATABASE_URL` is what the API/worker connect with at runtime, and it must point at the least-privilege **`hax_app`** role — a superuser role bypasses Postgres RLS entirely, which would make the per-user isolation silently decorative. `MIGRATIONS_DATABASE_URL` is separate and points at the **`hax`** owner role — Alembic needs ownership to run DDL. `.env.example` has both pre-filled for the compose Postgres; don't point `DATABASE_URL` at `hax`.
+
+3. **Set `BOOTSTRAP_USER_EMAIL` before your first `make migrate`** — only relevant if your database predates auth (has unowned conversations/documents). The auth migration assigns those legacy rows to a user created with this email; on a fresh empty database it's unused and can stay blank.
+
+4. **Claim the bootstrap account** (it's created without a password, and unverified):
+
+   ```bash
+   .venv/bin/python scripts/set_password.py you@example.com
+   ```
+
+   This only sets the password hash — the row stays unverified, so with the gate on (default), logging in with it gets you the "verify your email" message; click **Resend** on the login page to get a link. Simpler: skip the script and use **Forgot password** with that email instead — it proves the inbox and sets the password in one step, no verify click needed. New users just sign up on `/signup`; no script needed.
+
+5. **Google sign-in (optional).** One-time setup in [Google Cloud Console](https://console.cloud.google.com):
+   1. Create (or pick) a project → **APIs & Services → OAuth consent screen** (now "Google Auth Platform"): choose **External**, fill the app name + your email. Under **Test users**, add the Google account(s) you'll log in with — a precaution: Google may refuse unlisted accounts while the app is in *Testing*. The app can stay in Testing; no Google verification is needed for the basic sign-in scopes.
+   2. **Credentials → Create credentials → OAuth client ID → Web application.** Authorized JavaScript origin: `http://localhost:3000`. Authorized redirect URI: `http://localhost:3000/auth/callback/google` (note `/auth`, not `/api/auth` — Auth.js runs under `basePath: "/auth"` here).
+   3. Copy the client ID and secret into `.env` as `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET`, then restart `make dev` (Next reads env at start).
+
+   Linking rules (ADR 0011): only if Google reports the email verified, a Google sign-in whose email matches an existing account **links to it** and marks the email verified; if that account was never verified, its password is cleared and its sessions signed out (the reset flow re-adds a password). A Google-born account has no password until the reset flow adds one. For the deployed origin (production) add its origin + `/auth/callback/google` to the same client.
+
+6. **Email verification + password reset.** The login gate is **on** by default (`AUTH_REQUIRE_EMAIL_VERIFICATION=true`): signup emails a verify link, and an unverified password account can't log in until it's clicked. In dev, every email — verify, reset, "you already have an account" — lands in **Mailpit** at `http://localhost:8025` (nothing leaves the machine); nothing sends unless the worker is running (`make worker`), so an email that never arrives usually means the worker isn't up. Lifecycle in one paragraph: sign up → check Mailpit → click Confirm → log in. Forgot your password (or want to add one to a Google-born account)? Use **Forgot password** → check Mailpit → set a new password — this signs you out of every other session. After pulling code that adds a new worker task, restart `make worker`: Celery discards messages for tasks it doesn't recognize rather than queuing them.
+
+### Debugging (VS Code)
+
+Full-stack debugging launches the **API under a debugger** plus a **debuggable Chrome** for the frontend, via [.vscode/launch.json](../.vscode/launch.json). Requires the Python extension (`ms-python.python`); the JS/Chrome debugger is built into VS Code.
+
+Use `make debug` instead of `make dev` — it starts infra + web but **not** the API, leaving `:8000` free for the debugger to launch uvicorn itself:
+
+```bash
+make migrate   # if the schema isn't applied
+make debug     # infra + Next on :3000; the API is left for the debugger
+```
+
+Then in VS Code: **Run & Debug** → **"Full stack (API + Web)"** → **F5**. This launches uvicorn under `debugpy` on `:8000` and opens a debuggable Chrome at `:3000`.
+
+- **Backend** breakpoints go in `apps/api/**` / `packages/**` — they pause when a request reaches them.
+- **Frontend** breakpoints go in `apps/web/**/*.tsx` — Next's dev source maps map them to the running JS.
+- Frontend and backend are **separate debug sessions** (switch in the **Call Stack** panel). You can't single-step across the network boundary; each side pauses at its own breakpoints.
+
+> **Don't run `make dev` and F5 together.** `make dev` already binds `:8000`, so the debugger's uvicorn fails to start and your backend breakpoints silently never fire. Use `make debug` (or `make dev-stop` first).
+
+**The assistant's browser.** [.mcp.json](../.mcp.json) registers Playwright MCP for Claude Code (approve it when Claude Code asks): a headless Chrome with an in-memory profile, aimed at the local dev and e2e stacks only (`localhost:3000/8000/3001/8001`; production is blocked). The allowlist is a guard rail, not a security boundary, so the browser is never given production credentials. Screenshots land in `.playwright-mcp/` (gitignored).
+
+Check what's running at any time with `make status` (a TCP probe of each service's port, and a process check per Celery worker, by its queue).

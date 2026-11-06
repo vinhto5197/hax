@@ -61,7 +61,7 @@ A commit id like `0ff6f52` can be read with `git show 0ff6f52`. You do not need 
 
 ## Look at
 
-- [`../../README.md`](../../README.md): goal, stack table, architecture diagram
+- [`../../README.md`](../../README.md): goal, stack table, architecture diagram; [`../dev-setup.md`](../dev-setup.md): running it locally
 - [`../../CLAUDE.md`](../../CLAUDE.md): the milestones, "what good means", non-goals
 - [`../adr/README.md`](../adr/README.md): the ADR format, rules and index
 - `91a7329`: the initial commit, 2026-02-04

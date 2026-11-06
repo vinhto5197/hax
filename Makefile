@@ -170,7 +170,7 @@ prod-build:
 	$(COMPOSE_PROD) build
 
 prod-up:
-	@test -f $(PROD_ENV) || { echo "Missing $(PROD_ENV): copy .env.prod.example and fill in local values (see README)."; exit 1; }
+	@test -f $(PROD_ENV) || { echo "Missing $(PROD_ENV): copy .env.prod.example and fill in local values (see docs/dev-setup.md)."; exit 1; }
 	$(COMPOSE_PROD) up -d
 
 prod-down:
