@@ -110,3 +110,59 @@ test("row 12: a code reply shows a highlighted code block and an image whose src
   await page.waitForTimeout(1_000);
   expect(remote).toEqual([]);
 });
+
+test("row 10: sorting a table by its headers never changes a column's width; the sorted header shows ▲ then ▼", async ({
+  page,
+}) => {
+  const table = await askForTable(page);
+  const headers = table.locator("thead th");
+  await expect(headers).toHaveCount(2);
+
+  async function widths() {
+    return Promise.all(
+      (await headers.all()).map(
+        async (cell) => (await cell.boundingBox())!.width,
+      ),
+    );
+  }
+  function expectSameWidths(after: number[], label: string) {
+    after.forEach((width, i) => {
+      expect(
+        Math.abs(width - original[i]),
+        `${label}: header ${i} is ${width}px, was ${original[i]}px`,
+      ).toBeLessThanOrEqual(0.5);
+    });
+  }
+
+  const original = await widths();
+  const item = table.getByRole("columnheader", { name: /Item/ });
+  const count = table.getByRole("columnheader", { name: /Count/ });
+  const itemButton = item.getByRole("button", { name: "Item" });
+  const countButton = count.getByRole("button", { name: "Count" });
+  // Every header always holds its aria-hidden marker; an unsorted one is
+  // visibility:hidden, so only visibility and the glyph tell sorted apart.
+  const itemMarker = item.locator('[aria-hidden="true"]');
+  const countMarker = count.locator('[aria-hidden="true"]');
+
+  await itemButton.click();
+  await expect(itemMarker).toBeVisible();
+  await expect(itemMarker).toHaveText("▲");
+  await expect(countMarker).toBeHidden();
+  const ascending = await widths();
+
+  await itemButton.click();
+  await expect(itemMarker).toBeVisible();
+  await expect(itemMarker).toHaveText("▼");
+  await expect(countMarker).toBeHidden();
+  const descending = await widths();
+
+  await countButton.click();
+  await expect(countMarker).toBeVisible();
+  await expect(countMarker).toHaveText("▲");
+  await expect(itemMarker).toBeHidden();
+  const other = await widths();
+
+  expectSameWidths(ascending, "Item ascending");
+  expectSameWidths(descending, "Item descending");
+  expectSameWidths(other, "Count ascending");
+});

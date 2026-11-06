@@ -187,11 +187,15 @@ export function DataTable({ node }: ExtraProps) {
                     className="inline-flex items-center gap-1 hover:underline"
                   >
                     {h}
-                    {sort?.col === i ? (
-                      <span aria-hidden="true">
-                        {sort.dir === 1 ? "▲" : "▼"}
-                      </span>
-                    ) : null}
+                    {/* Always rendered, hidden when unsorted: the table's auto
+                        layout sizes columns from content, so a marker that
+                        appeared would reflow every column. */}
+                    <span
+                      aria-hidden="true"
+                      className={sort?.col === i ? undefined : "invisible"}
+                    >
+                      {sort?.col === i && sort.dir === -1 ? "▼" : "▲"}
+                    </span>
                   </button>
                 </th>
               ))}
