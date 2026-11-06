@@ -308,11 +308,6 @@ export interface paths {
         /**
          * Create Anonymous
          * @description A demo visitor: a user row with no email.
-         *
-         *     X-Visitor-IP is the browser's address as Next's server saw it (Caddy's
-         *     X-Forwarded-For); trusted because this router is reachable only with the
-         *     internal secret. Without it the limit would key on Next's own address and
-         *     every visitor would share one bucket.
          */
         post: operations["create_anonymous_internal_auth_anonymous_post"];
         delete?: never;
