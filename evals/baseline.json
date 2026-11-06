@@ -115,6 +115,12 @@
       "tier": "must"
     },
     {
+      "case_hash": "445856ab97da",
+      "id": "note-no-preamble",
+      "outcome": "pass",
+      "tier": "must"
+    },
+    {
       "case_hash": "3b100658d256",
       "id": "note-preference",
       "outcome": "pass",
@@ -125,6 +131,18 @@
       "id": "note-relevant",
       "outcome": "pass",
       "tier": "must"
+    },
+    {
+      "case_hash": "69f0de14792a",
+      "id": "note-tone-documents",
+      "outcome": "fail",
+      "tier": "probe"
+    },
+    {
+      "case_hash": "a7d5c453c041",
+      "id": "note-tone-table",
+      "outcome": "pass",
+      "tier": "probe"
     },
     {
       "case_hash": "a95542dc6dd1",
@@ -207,7 +225,7 @@
     {
       "case_hash": "33db3daf65d9",
       "id": "translate-novel",
-      "outcome": "pass",
+      "outcome": "fail",
       "tier": "probe"
     },
     {
@@ -223,19 +241,19 @@
       "tier": "must"
     }
   ],
-  "commit": "c2be3b3",
+  "commit": "777940b",
   "judge": "claude-sonnet-4-6",
   "model": "claude-haiku-4-5",
-  "run": "2026-11-06T12-50-25_c2be3b3.json",
+  "run": "2026-11-06T18-46-41_777940b.json",
   "summary": {
     "by_check": {
-      "contains_any": "19/19",
-      "contains_none": "5/5",
+      "contains_any": "20/21",
+      "contains_none": "7/8",
       "exact_reply": "1/1",
-      "grounded": "15/16",
-      "key_point": "29/30",
-      "table": "1/1",
-      "tools": "31/31"
+      "grounded": "18/19",
+      "key_point": "33/34",
+      "table": "2/2",
+      "tools": "34/34"
     }
   }
 }

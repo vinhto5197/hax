@@ -127,3 +127,16 @@ def test_member_prompt_forbids_adding_unsupported_facts():
     assert "every fact, number and reason must come from them" in text
     assert "follow directly from them" in text
     assert "never add one as a guess" in text
+
+
+def test_member_prompt_forbids_announcing_a_tool_call():
+    # The model opened answers with "I'll search your documents"; the
+    # note-no-preamble and note-tone-* cases in evals/cases.jsonl measure
+    # it, this pins the instruction to say nothing before a tool call (the
+    # interface already shows a status line) and open with the answer.
+    from apps.api.routers.chat import AGENTIC_SYSTEM
+
+    text = " ".join(AGENTIC_SYSTEM.split())
+    assert "Never announce a tool call" in text
+    assert "write nothing before calling a tool" in text
+    assert "begin your reply with the answer itself" in text
