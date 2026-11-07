@@ -122,7 +122,9 @@ this repo. Write prod-level comments only:
 - Logic: Vitest beside the source (`make test-web`).
 - Known behaviour ("after X, Y"): a Playwright journey in `apps/web/e2e/`
   (`make e2e`, gated in CI). A bug found by hand becomes a journey before it
-  is fixed; runbooks do not repeat what a journey covers.
+  is fixed (a model-behavior bug: an eval case that replays the reported
+  session, its note and questions, and fails before the fix); runbooks do
+  not repeat what a journey covers.
 - Looking: after a UI change, the assistant drives the changed screen with
   Playwright MCP (`.mcp.json`) on the local dev or e2e stack — desktop and
   phone width, console clean, screenshots in the hand-off. Never production:

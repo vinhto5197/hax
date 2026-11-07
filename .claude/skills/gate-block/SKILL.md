@@ -11,6 +11,8 @@ The maintainer reviews a finished change from one block, not from the diff. The 
 
 The problem in plain words, as a user or developer meets it, with jargon defined; then how the change fixes it. Only then the sections below. A reader who has forgotten the item must be able to review from the block alone.
 
+**A fix that changes a design** (not a bug inside one) is offered before it is built: at least two alternatives, each with its cost and what it breaks, and a recommendation; nothing is built until the maintainer picks.
+
 ## Ship, show or ask
 
 Every PR and every bite is classed, and the class decides who merges:
