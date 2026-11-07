@@ -38,14 +38,30 @@ On 2026-11-06, `6c58180` fixed a quiet lie. When the embedding service (the outs
 
 Later that day, `2dfcc52` took the lesson one step further. The system prompt now says a tool error that retrying does not fix is reported as that step failing, "never as the information being absent". It added two cases: a must case that a number stated for one thing is not borrowed for another, and a probe recording that a re-asked answer can still name a deleted document. The baseline moved in the same commit.
 
+**When the eval said fixed.** On v0's last day, on the live site, the maintainer noticed that an About-you note held only sometimes. A note asking the model not to open with "let me look into your documents" was ignored. What followed is the eval used as a working tool, with the eval itself needing correction at almost every step.
+
+1. **The complaint became cases.** Three must cases: a fixed opening the note asks for, on a document answer and on a table answer, and no announcement of a search. The first full run passed all three.
+2. **One run is a sample of one.** Five more runs of only the note cases made it 3 failures in 6 runs for the no-announcement case. A rate, not a pass, was the real measurement.
+3. **The failing answers, not the score, said what was wrong.** Each opened with a line like "I'll search your notes…": the line the model writes just before it calls a tool, which the loop streamed to the user like any text. The bug was this narration, not the tone.
+4. **A first fix measured worse and was reverted.** Rewording the About-you preface to say the note's style applies to "any text before a tool call" left the failure rate unchanged and made the table case start failing. The model now wrote "Short answer: I don't have access to your Nevron grammar document yet. Let me search for it." It never shipped.
+5. **A second fix measured better, and the checks were tightened.** One sentence in the system prompt, "Never announce a tool call", took the no-announcement case to 0 failures in 9 runs. The other two cases had only checked that the opener appeared somewhere, so "I'll search…" followed by "Short answer:" passed. Checked for narration anywhere in the reply, they still failed about half the time, and they became probes, tracked but never failing a run. `6fa179e` shipped it.
+6. **Live, it still narrated before every search.** The cases asked one question that needed one search, with a plain note. The reported session had a persona note and questions that needed two or three searches. The real test became that session itself, its note and its three questions, replayed through the API three times.
+7. **The fix moved into the loop, and the options were judged by what they break.** Holding back each model call's text until the call ended, and dropping it if a tool call followed, passed its own tests and failed 20 browser journeys: short replies stopped streaming, and a Stop in that window kept nothing. Retracting it instead (stream as usual, then withdraw the text of a call that ends in a tool call) kept every journey green and passed the replay in 9 of 9 answers. `e5ff520`. The ADR 0002 addendum of 2026-11-06 records these measurements and the rejected hold. A separate reasoning channel, the way large chat apps keep this text out of the answer, was left to measure later.
+8. **The eval followed the new mechanism.** The runner applies retracts, so it grades what users see, and a case shaped like the reported session, `note-persona-multisearch`, joined the must set.
+
+In this chapter's terms: every decision was settled by a measurement, and the measurement kept needing work. It took repeated runs for a rate, checks shaped like the bug, the probe tier for what fails at random, and a replay of the case actually reported. `f089eb8` turned the last one into a rule: a model-behavior bug found by hand becomes an eval case that replays the reported session and fails before the fix.
+
 ## Look at
 
 - [`evals/README.md`](../../evals/README.md): running, when it is required, reading results, adding a case.
 - [`evals/run.py`](../../evals/run.py), [`evals/checks.py`](../../evals/checks.py), [`evals/judge.py`](../../evals/judge.py), [`evals/report.py`](../../evals/report.py).
 - [`evals/baseline.json`](../../evals/baseline.json): the committed baseline.
-- [ADR 0002](../adr/0002-anthropic-sdk-not-agent-sdk.md), addenda 2026-11-04 and 2026-11-05.
+- [ADR 0002](../adr/0002-anthropic-sdk-not-agent-sdk.md), addenda 2026-11-04, 2026-11-05 and 2026-11-06 (retract).
 - [ADR 0007](../adr/0007-voyage-ai-for-embeddings.md), addendum 2026-11-05.
 - `42eb45a`: the baseline becomes a committed snapshot.
 - `d554c9e`: the judge reads only its forced tool call.
 - `6c58180`: a search outage is an error, not an empty search.
 - `2dfcc52`: tool errors reported as failures; two new cases.
+- `6fa179e`: the prompt sentence against announcing a tool call, and the note cases.
+- `e5ff520`: narration before a tool call is retracted; the eval grades without it.
+- `f089eb8`: a hand-found model bug becomes an eval case that replays the reported session.

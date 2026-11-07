@@ -13,6 +13,7 @@ v0 is the open skeleton: a chat product that answers from a user's own documents
 - **Let the harness, not the model, say what was used.** The harness is the loop code that runs the model and its tools. The sources under an answer are the passages the search tool actually returned, recorded by the loop, not citations the model writes. ADR 0002, 2026-10-06 addendum. [Chapter 8](./08-tools-and-the-loop.md).
 - **"Nothing found" and "could not look" are different messages.** An outage that returned an empty list made the model tell users their documents lacked the answer (`6c58180`). [Chapter 18](./18-measuring-the-model.md).
 - **Judge model changes by flips, not impressions.** Fixed cases, code checks plus a judge model, a committed baseline, and one rerun before a `broke` flip counts, because the same model passes and fails the same case on different runs. [Chapter 18](./18-measuring-the-model.md).
+- **A passing eval proves the cases you wrote, not the bug that was reported.** A prompt fix passed its cases and still failed the live session that prompted it; replaying that session found the gap, and the fix moved into the loop. [Chapter 18](./18-measuring-the-model.md).
 - **Measure before you set a knob.** The distance cutoff stays unset because measured distances for right answers and for off-corpus questions overlap. [Chapter 18](./18-measuring-the-model.md).
 
 ## Thread B: full-stack engineering

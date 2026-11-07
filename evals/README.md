@@ -34,6 +34,10 @@ nobody references), so two runs at once would undo each other. It refuses to sta
 anywhere else. The retrieval, chunking and model settings your shell may
 export are unset; a variant goes on the `make` command line, never in `.env`.
 
+A few cases alone: `make eval EVAL_CASES=<file>` runs a JSONL file of cases
+instead of the committed set. Running one case several times this way measures
+a rate ("fails 3 runs in 6"), which one full run cannot show, for cents.
+
 A run takes about a minute: four cases run at a time (`EVAL_CONCURRENCY` in
 the environment changes it). Each run's report prints its cost, estimated from
 list prices (`evals/prices.py`); a full run on Haiku is well under a dollar.
@@ -139,6 +143,12 @@ One JSON object per line in `evals/cases.jsonl`:
   key points as support, so without the tools check an answer from memory
   would pass (`tests/evals/test_committed_cases.py` enforces it).
 - The file is checked before any API call; an error names the line.
+- A case for a bug found by hand is shaped like the reported session (its
+  note, a question needing as many searches, earlier turns in
+  `context.history`) and fails before the fix; a simpler case can pass while
+  the real session still fails. Its checks look for the bug's shape wherever
+  it appears (a forbidden opener anywhere, not only a required phrase
+  somewhere).
 - Everything here is public: no personal data, no real user content.
 
 The corpus (`evals/corpus/`) is two invented documents, a grammar of the

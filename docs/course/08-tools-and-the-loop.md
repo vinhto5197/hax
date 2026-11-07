@@ -16,7 +16,7 @@ The tools live in [`packages/core/agent/tools.py`](../../packages/core/agent/too
 
 Two limits keep the loop honest. `MAX_ITERS` caps a turn at five tool rounds. If the model is still asking for tools after the fifth, the harness makes one last call with no tools at all, using `FINAL_ANSWER_PROMPT`: answer now with what you have, and say plainly what you could not verify.
 
-The harness yields three kinds of events: content (text to show), status (a short note such as "Searching documents…") and sources. `search_documents` returns a `ToolOutput` holding both the text the model reads and the list of passages behind it. The harness sends only the text to the model and passes the sources on; the server saves them with the message, and the client shows them under the answer.
+The harness yields four kinds of events: content (text to show), retract, status (a short note such as "Searching documents…") and sources. A retract withdraws the text a model call wrote just before asking for a tool, its narration ("Let me check your documents…"): the browser removes it from the reply on screen and the server never stores it, while the model keeps it in its own history. [Chapter 18](./18-measuring-the-model.md) tells how that event came about. `search_documents` returns a `ToolOutput` holding both the text the model reads and the list of passages behind it. The harness sends only the text to the model and passes the sources on; the server saves them with the message, and the client shows them under the answer.
 
 ## What was decided, and why
 
@@ -34,7 +34,7 @@ Eight days later came a measured problem. With Haiku, the default model, `438b57
 
 ## Look at
 
-- [`packages/core/agent/harness.py`](../../packages/core/agent/harness.py) — the loop, `MAX_ITERS`, `FINAL_ANSWER_PROMPT`, the three event kinds
+- [`packages/core/agent/harness.py`](../../packages/core/agent/harness.py) — the loop, `MAX_ITERS`, `FINAL_ANSWER_PROMPT`, the four event kinds
 - [`packages/core/agent/tools.py`](../../packages/core/agent/tools.py) — the four tools, `ToolContext`, `ToolOutput`
 - [`packages/core/schemas/chat.py`](../../packages/core/schemas/chat.py) — the model allowlist
 - [`apps/api/routers/chat.py`](../../apps/api/routers/chat.py) — `AGENTIC_SYSTEM`, the system prompt
