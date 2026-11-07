@@ -1,4 +1,18 @@
-# hax
+# If anything is written by a human in this repo, it's this note
+
+As of Nov 6, 2026, this repo is officially retired. It will receive no more maintenance. It has served its purpose and I have gone on to make a private fork of it to develop a real business application.
+
+Documentation of the entire process in the form of a course: [How hax was built](docs/course/README.md)
+
+It has been a surreal learning experience. I started the project with little full-stack experience (my professional background is data), and have grown a lot over the entire time I have been working on it. If you dig into the repo's commit history, you'll see that I moved very slow and committed very little in the beginning. "Why is this guy taking this much time to build something so simple that Claude can oneshot?"
+
+I still believe in the fundamentals of full-stack development. Most of the early days was spent probing and interrogating Claude how Next is set up, how requests travel between Next and FastAPI, why something is written a certain way in TypeScript, how React hooks even work, how tools are called by the harness. Listing all my questions for the sake of "learning full-stack" would make the modern AI Engineer lol hard. But all that front loading paid off well (I think), as my ability to review code and make design decisions have been much faster, and I was confidently orchestrating instead of developing in the tail end of the project. If I did what I'm doing now when I first started out, I would never have approved any of Claude's output code, due to the lack of confidence in understanding my own codebase.
+
+I chose this idea because of the thing that started the whole AI craze: ChatGPT. LLM is at the frontier of AI, and a chatbot is something probably every product out there uses to some extent, so let's build something that is so general purposed that any future product could find useful. The project's scope ended up ballooning through all the decisions I added along the way, but I'm glad I always had a "who cares, let's implement this" mindset. Probably a terrible mindset to have when business is involved and speed is of utmost importance, but I did learn a lot by just randomly doing things.
+
+I have poured a lot of love into this project. I hope you will find hax useful, whether you developed your own harness, or just a feature on your app. If you're just here to learn as a non-technical person starting out, I definitely recommend follow the course listed above, which I documented all of my processes in written form.
+
+## hax
 
 AI-first product: primary interface is a **chat experience** that answers user questions using the user's own data and context. This repo is **v0** — an open-source skeleton that ships the full vertical slice. When v0 is done, no further code is added here; a private repo forks from it for v1, the proprietary domain-specific version.
 
@@ -30,20 +44,20 @@ The full guide is [docs/dev-setup.md](docs/dev-setup.md): the keys and secrets (
 
 ## Stack
 
-| Layer      | Tech                                                               |
-| ---------- | ------------------------------------------------------------------ |
+| Layer      | Tech                                                                              |
+| ---------- | --------------------------------------------------------------------------------- |
 | Frontend   | Next.js (SSR + routing), React, TypeScript, Tailwind v4 (design tokens, ADR 0014) |
-| Backend    | FastAPI                                                            |
-| LLM        | Anthropic SDK — hand-rolled agentic tool-use loop (ADR 0002)       |
-| Embeddings | Voyage AI (ADR 0007); LangChain for text splitting only (ADR 0009) |
-| Streaming  | SSE (FastAPI `StreamingResponse`) for chat                         |
-| Async      | Celery + Redis (broker + cache)                                    |
-| Data       | Postgres + pgvector (embeddings)                                   |
-| Storage    | Object storage for uploads — S3 in prod, RustFS in dev (boto3)     |
-| Email      | Transactional email — Mailpit (dev), real SMTP relay in prod       |
-| Types      | OpenAPI spec → generated TypeScript (openapi-typescript)           |
-| Infra      | Docker, Docker Compose                                             |
-| Deploy     | AWS (EC2 + RDS + S3) via Terraform; GHCR images; SSM roll (ADR 0013) |
+| Backend    | FastAPI                                                                           |
+| LLM        | Anthropic SDK — hand-rolled agentic tool-use loop (ADR 0002)                      |
+| Embeddings | Voyage AI (ADR 0007); LangChain for text splitting only (ADR 0009)                |
+| Streaming  | SSE (FastAPI `StreamingResponse`) for chat                                        |
+| Async      | Celery + Redis (broker + cache)                                                   |
+| Data       | Postgres + pgvector (embeddings)                                                  |
+| Storage    | Object storage for uploads — S3 in prod, RustFS in dev (boto3)                    |
+| Email      | Transactional email — Mailpit (dev), real SMTP relay in prod                      |
+| Types      | OpenAPI spec → generated TypeScript (openapi-typescript)                          |
+| Infra      | Docker, Docker Compose                                                            |
+| Deploy     | AWS (EC2 + RDS + S3) via Terraform; GHCR images; SSM roll (ADR 0013)              |
 
 ## Status
 
