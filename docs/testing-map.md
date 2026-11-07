@@ -18,7 +18,7 @@ What the e2e stack can stage today, and what it cannot:
 | 1 | Enter sends; the question shows above the reply | demo, every member journey | – |
 | 2 | Shift+Enter adds a line; Enter during IME composition is ignored | `chat-basics.member` (Shift+Enter; IME: U) | – |
 | 3 | Send disabled when empty; composer and picker disabled while streaming; focus returns after (never on a touch device: no autofocus on load, after a reply or after a password login, so no keyboard pops) | `chat-basics.member`, `touch-focus.member`, `touch-focus.guest`, useChat.test (whitespace only) | – |
-| 4 | Reply streams piece by piece | switch, guard | – |
+| 4 | Reply streams piece by piece; narration before a tool call ("Let me look that up.") is withdrawn from the reply and never stored | switch, guard, `narration.member`, useChat.test, chatApi.test, py:test_harness_retract, py:test_retract_persist | – |
 | 5 | "Assistant is thinking…" and the tool status line | MessageList.test, useChat.test | – |
 | 6 | URL becomes `/chat/<id>`; a sidebar row appears | newchat, hist | – |
 | 7 | "Untitled" row replaced by the title once polled | newchat, py:test_title_trigger | – |

@@ -2,10 +2,15 @@
 
 Streams `messages.stream(tools=…)` in a loop: forward text deltas, run requested
 tools from the registry, feed results back, repeat until the model stops asking
-(or MAX_ITERS). Yields structured events — `{"content": …}` deltas,
-`{"status": …}` tool-activity notes, and `{"sources": […]}` provenance after
-a tool that returned ToolOutput — that the route serializes to SSE. Sources
-are user-facing only: the model receives ToolOutput.text and nothing else.
+(or MAX_ITERS). Text a call streams before it asks for a tool is narration
+("I'll search your notes…"): it streams like any text, then a
+`{"retract": <exactly that call's streamed text>}` event withdraws it before
+the tool's status, so the user sees and the route stores only answers; the
+model keeps it in its own history. Yields structured events — `{"content": …}`
+deltas, `{"retract": …}`, `{"status": …}` tool-activity notes, and
+`{"sources": […]}` provenance after a tool that returned ToolOutput — that the
+route serializes to SSE. Sources are user-facing only: the model receives
+ToolOutput.text and nothing else.
 """
 
 import logging
@@ -138,8 +143,8 @@ async def stream_completion_agentic(
     on_usage: Callable[[Usage], None] | None = None,
     on_tool_result: Callable[[ToolResult], None] | None = None,
 ) -> AsyncIterator[dict]:
-    """Run the tool-use loop, yielding {"content": …} / {"status": …} /
-    {"sources": …} events.
+    """Run the tool-use loop, yielding {"content": …} / {"retract": …} /
+    {"status": …} / {"sources": …} events.
 
     tools=False sends no tool schemas, so the model can only answer in prose
     (the demo visitor's mode); the loop then ends after its first iteration.
@@ -151,12 +156,16 @@ async def stream_completion_agentic(
     # a separator instead of concatenating into run-ons.
     emitted_text = False
     final: Message | None = None
+    # What the current call streamed, separator included: a retract must name
+    # exactly the text the route and the browser remove from the end.
+    call_text: list[str] = []
 
     async def _call(label: str, schemas: list) -> AsyncGenerator[dict, None]:
         # Streams one model call over the current `messages`, leaving its
         # response in `final`. Callers wrap it in aclosing so a closed turn
         # exits the SDK stream at once, as an inline `async with` would.
         nonlocal emitted_text, final
+        call_text.clear()
         kwargs: dict = {
             "model": model,
             "max_tokens": MAX_TOKENS,
@@ -168,19 +177,21 @@ async def stream_completion_agentic(
             kwargs["system"] = system
 
         async with _client.messages.stream(**kwargs) as stream:
-            # Forward every text delta, including pre-tool-call narration.
             first_delta = True
             async for text in stream.text_stream:
                 if first_delta and emitted_text:
+                    call_text.append("\n\n")
                     yield {"content": "\n\n"}
                 first_delta = False
                 emitted_text = True
+                call_text.append(text)
                 yield {"content": text}
             final = await stream.get_final_message()
 
         _report_usage(label, model, final.usage, on_usage)
 
     for iteration in range(MAX_ITERS):
+        emitted_before = emitted_text
         async with aclosing(_call(str(iteration), tool_schemas)) as events:
             async for event in events:
                 yield event
@@ -188,6 +199,10 @@ async def stream_completion_agentic(
 
         if final.stop_reason != "tool_use":
             return  # end_turn — the answer already streamed
+
+        if narration := "".join(call_text):
+            yield {"retract": narration}
+            emitted_text = emitted_before
 
         messages.append({"role": "assistant", "content": final.content})
         tool_results: list[ToolResultBlockParam] = []

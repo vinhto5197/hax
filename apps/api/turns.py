@@ -124,6 +124,11 @@ class Turn:
                 event: dict = {"content": item} if isinstance(item, str) else item
                 if "content" in event:
                     buffer.append(event["content"])
+                elif "retract" in event:
+                    # Narration the harness withdrew: store only what stays.
+                    text = "".join(buffer)
+                    if event["retract"] and text.endswith(event["retract"]):
+                        buffer[:] = [text[: -len(event["retract"])]]
                 for s in event.get("sources", ()):
                     sources.setdefault((s["document_id"], s["chunk_idx"]), s)
                 self._queue.put_nowait(event)
@@ -136,7 +141,11 @@ class Turn:
                         self._consumer = asyncio.create_task(consume())
                         try:
                             await self._consumer
-                            completed = True
+                            # A blank reply (nothing, or only narration the
+                            # harness withdrew) fails, so the member gets Try
+                            # again; the model API also rejects a stored
+                            # whitespace-only text block on every later turn.
+                            completed = bool("".join(buffer).strip())
                         except asyncio.CancelledError:
                             # A stop only when this task itself is not being
                             # cancelled: a drain or the deadline (or both at

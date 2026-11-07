@@ -121,6 +121,12 @@
       "tier": "must"
     },
     {
+      "case_hash": "5fcf7663dda3",
+      "id": "note-persona-multisearch",
+      "outcome": "pass",
+      "tier": "must"
+    },
+    {
       "case_hash": "3b100658d256",
       "id": "note-preference",
       "outcome": "pass",
@@ -225,7 +231,7 @@
     {
       "case_hash": "33db3daf65d9",
       "id": "translate-novel",
-      "outcome": "fail",
+      "outcome": "pass",
       "tier": "probe"
     },
     {
@@ -241,19 +247,19 @@
       "tier": "must"
     }
   ],
-  "commit": "777940b",
+  "commit": "6fa179e",
   "judge": "claude-sonnet-4-6",
   "model": "claude-haiku-4-5",
-  "run": "2026-11-06T18-46-41_777940b.json",
+  "run": "2026-11-06T19-33-27_6fa179e.json",
   "summary": {
     "by_check": {
       "contains_any": "20/21",
-      "contains_none": "7/8",
+      "contains_none": "9/9",
       "exact_reply": "1/1",
-      "grounded": "18/19",
-      "key_point": "33/34",
+      "grounded": "17/19",
+      "key_point": "34/35",
       "table": "2/2",
-      "tools": "34/34"
+      "tools": "35/35"
     }
   }
 }

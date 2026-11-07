@@ -22,6 +22,10 @@
 //   tool_use whose query is the rest of the prompt, trimmed (stop_reason
 //   "tool_use"); the follow-up call, whose last user turn carries the
 //   tool_result, waits 1.5 s and streams "Here is what your documents say.";
+// - a prompt starting with "narrate:" answers like "search:", except that
+//   the first call streams the text "Let me look that up." (a text block at
+//   index 0, in three deltas) before its search_documents tool_use block
+//   (index 1); the follow-up call answers as "search:"'s does;
 // - a prompt starting with "table:" streams a Markdown table of Item and
 //   Count (Apples 10, Pears 9, Plums —, Figs 100);
 // - a prompt starting with "code:" streams a fenced python greet() function,
@@ -103,7 +107,8 @@ function carriesToolResult(turn) {
 }
 
 // One reply: text pieces streamed delayMs apart after leadMs, or a single
-// tool_use block.
+// tool_use block, optionally after narration pieces in a text block of its
+// own.
 function scriptReply(messages) {
   if (carriesToolResult(lastUserTurn(messages))) {
     return {
@@ -117,6 +122,15 @@ function scriptReply(messages) {
       toolUse: {
         name: "search_documents",
         input: { query: prompt.slice("search:".length).trim() },
+      },
+    };
+  }
+  if (prompt.startsWith("narrate:")) {
+    return {
+      narration: ["Let me ", "look that ", "up."],
+      toolUse: {
+        name: "search_documents",
+        input: { query: prompt.slice("narrate:".length).trim() },
       },
     };
   }
@@ -181,6 +195,7 @@ async function streamReply(req, res, body) {
   const {
     pieces = [],
     toolUse,
+    narration = [],
     delayMs = 0,
     leadMs = 0,
     fail,
@@ -219,8 +234,22 @@ async function streamReply(req, res, body) {
 
   if (toolUse) {
     toolUseCount += 1;
+    if (narration.length > 0) {
+      send("content_block_start", {
+        index: 0,
+        content_block: { type: "text", text: "" },
+      });
+      for (const piece of narration) {
+        send("content_block_delta", {
+          index: 0,
+          delta: { type: "text_delta", text: piece },
+        });
+      }
+      send("content_block_stop", { index: 0 });
+    }
+    const index = narration.length > 0 ? 1 : 0;
     send("content_block_start", {
-      index: 0,
+      index,
       content_block: {
         type: "tool_use",
         id: `toolu_fake_${toolUseCount}`,
@@ -229,13 +258,13 @@ async function streamReply(req, res, body) {
       },
     });
     send("content_block_delta", {
-      index: 0,
+      index,
       delta: {
         type: "input_json_delta",
         partial_json: JSON.stringify(toolUse.input),
       },
     });
-    send("content_block_stop", { index: 0 });
+    send("content_block_stop", { index });
     send("message_delta", {
       delta: { stop_reason: "tool_use", stop_sequence: null },
       usage: { output_tokens: 1 },

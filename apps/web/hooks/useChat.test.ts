@@ -141,6 +141,17 @@ async function tick(ms: number) {
   });
 }
 
+// A retract frame as the stream reader delivers it. Typed locally so the file
+// compiles before StreamHandlers declares onRetract; a hook that passes no
+// handler fails here, not silently.
+function retract(handlers: StreamHandlers, text: string) {
+  const { onRetract } = handlers as StreamHandlers & {
+    onRetract?: (text: string) => void;
+  };
+  if (!onRetract) throw new Error("the hook passed no onRetract handler");
+  onRetract(text);
+}
+
 // The id the hook chose for its latest send, as streamChat received it.
 function sentId(): string {
   const id = streamChat.mock.calls.at(-1)?.[4];
@@ -378,6 +389,71 @@ describe("useChat sending", () => {
     expect(result.current.messages[1]).toMatchObject({
       role: "assistant",
       content: "Hello world",
+    });
+  });
+
+  it("retracted narration leaves the reply: streamingContent and the committed assistant message are exactly the answer", async () => {
+    const turn = holdTurn();
+    const { result } = renderHook(() => useChat(null, null));
+    const { settled } = await start(result, "hi");
+    act(() => turn.handlers.onChunk("Let me look that up."));
+    expect(result.current.streamingContent).toBe("Let me look that up.");
+    act(() => retract(turn.handlers, "Let me look that up."));
+    expect(result.current.streamingContent).toBe("");
+    act(() => turn.handlers.onChunk("Here is the answer."));
+    expect(result.current.streamingContent).toBe("Here is the answer.");
+
+    await settle(settled, () => turn.end());
+    expect(result.current.messages).toHaveLength(2);
+    expect(result.current.messages[1]).toMatchObject({
+      role: "assistant",
+      content: "Here is the answer.",
+    });
+  });
+
+  it("a retract removes only the retracted text from the end of what is shown", async () => {
+    const result = await newChatTurn(holdTurn(), (h) => {
+      h.onChunk("First part. ");
+      h.onChunk("Let me ");
+      h.onChunk("look that up.");
+      retract(h, "Let me look that up.");
+      h.onChunk("Here is the answer.");
+    });
+    expect(result.current.messages[1]).toMatchObject({
+      role: "assistant",
+      content: "First part. Here is the answer.",
+    });
+  });
+
+  it("a retract whose text is not at the end of the shown content leaves it unchanged", async () => {
+    const turn = holdTurn();
+    const { result } = renderHook(() => useChat(null, null));
+    const { settled } = await start(result, "hi");
+    act(() => turn.handlers.onChunk("Let me look that up. Found it."));
+    act(() => retract(turn.handlers, "Let me look that up."));
+    expect(result.current.streamingContent).toBe(
+      "Let me look that up. Found it.",
+    );
+    act(() => turn.handlers.onChunk(" Done."));
+    expect(result.current.streamingContent).toBe(
+      "Let me look that up. Found it. Done.",
+    );
+
+    await settle(settled, () => turn.end());
+    expect(result.current.messages[1]).toMatchObject({
+      role: "assistant",
+      content: "Let me look that up. Found it. Done.",
+    });
+  });
+
+  it("a retract before any text leaves the reply unchanged", async () => {
+    const result = await newChatTurn(holdTurn(), (h) => {
+      retract(h, "Let me look that up.");
+      h.onChunk("Here is the answer.");
+    });
+    expect(result.current.messages[1]).toMatchObject({
+      role: "assistant",
+      content: "Here is the answer.",
     });
   });
 

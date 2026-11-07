@@ -418,6 +418,11 @@ export function useChat(
           setStatus(null);
         },
         onStatus: setStatus,
+        onRetract: (text: string) => {
+          if (!fullContent.endsWith(text)) return;
+          fullContent = fullContent.slice(0, -text.length);
+          setStreamingContent(fullContent);
+        },
         onSources: (batch: Source[]) => {
           for (const s of batch) {
             const key = `${s.document_id}:${s.chunk_idx}`;

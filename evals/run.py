@@ -231,6 +231,11 @@ async def run_case(case: Case, user_id: uuid.UUID, model: str, judge: Judge) -> 
             ):
                 if "content" in event:
                     answer.append(event["content"])
+                elif "retract" in event:
+                    # Graded on what the user sees, as the route stores it.
+                    text = "".join(answer)
+                    if event["retract"] and text.endswith(event["retract"]):
+                        answer[:] = [text[: -len(event["retract"])]]
                 elif "sources" in event:
                     passages += [s["excerpt"] for s in event["sources"]]
             text_answer = "".join(answer)

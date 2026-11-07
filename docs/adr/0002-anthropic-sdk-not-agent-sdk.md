@@ -397,3 +397,13 @@ request surface, which these addenda keep out).
 
 The text fallback is gone: with the call forced, a reply without one is
 retried once and then becomes an `error`, like any reply that fails validation.
+
+## Addendum (2026-11-06) — narration before a tool call is withdrawn
+
+**Context.** Before a tool call the model often writes a line about it ("I'll search your documents…", "Let me check…"), sometimes with a false claim ("I don't have any info on Nevron"). It streamed to the user and was stored with the answer, and it overrode a member's note asking for no such opener. A sentence in `AGENTIC_SYSTEM` reduced it in single-search eval cases but not in a real session (a persona note, two or three searches per turn).
+
+**Decision.** The harness withdraws it. Text streams as before; when a call ends in a tool call, the harness yields `{"retract": <exactly the text that call streamed, its "\n\n" separator included>}` before the tool's status. The route removes that text from the end of what it stores (`apps/api/turns.py`), the browser removes it from the end of the reply on screen (`useChat`), and the eval grades the reply without it. The model keeps its narration in its own history (`final.content` is unchanged). A retract whose text is not at the end of the reply is ignored. Provider-neutral: it needs only "this call ended in a tool call".
+
+**Accepted.** The narration shows for the moment between its last word and the tool call, then the status line takes its place. An answer written before a tool call ("2 + 3 is 5. I'll email that.") is withdrawn with it; rare, and nothing can tell it from narration. A Stop during narration keeps what was written, as for any text.
+
+**Rejected.** Holding a call's text until it ends or passes 400 characters: no flash, but short replies stopped streaming, a Stop in that window kept nothing, and the scripted journeys that watch a reply stream all broke. The prompt sentence alone: measured insufficient. Provider-specific controls: none exists for this, and ADR 0002 keeps mechanisms in the harness.

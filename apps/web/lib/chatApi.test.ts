@@ -50,6 +50,7 @@ function handlers(): StreamHandlers & {
   log: Array<[string, unknown]>;
   onStatus: ReturnType<typeof vi.fn>;
   onSources: ReturnType<typeof vi.fn>;
+  onRetract: ReturnType<typeof vi.fn>;
 } {
   const log: Array<[string, unknown]> = [];
   return {
@@ -58,6 +59,7 @@ function handlers(): StreamHandlers & {
     onChunk: vi.fn((content: string) => log.push(["chunk", content])),
     onStatus: vi.fn((status: string) => log.push(["status", status])),
     onSources: vi.fn((sources: Source[]) => log.push(["sources", sources])),
+    onRetract: vi.fn((text: string) => log.push(["retract", text])),
   };
 }
 
@@ -765,6 +767,118 @@ describe("streamChat reply failure", () => {
     expect(h.log).toEqual([
       ["chunk", "Hello"],
       ["chunk", " world"],
+    ]);
+  });
+});
+
+describe("streamChat retract", () => {
+  it("passes a retract frame's text to onRetract in stream order, and the stream goes on", async () => {
+    const api = await load();
+    const h = handlers();
+    stream([
+      sseEvent({ conversation_id: "c1" }),
+      sseEvent({ content: "Let me look that up." }),
+      sseEvent({ retract: "Let me look that up." }),
+      sseEvent({ status: "Searching your documents" }),
+      sseEvent({ content: "Here is the answer." }),
+      sseEvent("[DONE]"),
+    ]);
+    await expect(api.streamChat("hi", null, h)).resolves.toBeUndefined();
+    expect(h.onRetract).toHaveBeenCalledExactlyOnceWith("Let me look that up.");
+    expect(h.log).toEqual([
+      ["conversation", "c1"],
+      ["chunk", "Let me look that up."],
+      ["retract", "Let me look that up."],
+      ["status", "Searching your documents"],
+      ["chunk", "Here is the answer."],
+    ]);
+  });
+
+  it("a retract frame never ends the stream: EOF after it without [DONE] is still a lost connection", async () => {
+    const api = await load();
+    const h = handlers();
+    stream([
+      sseEvent({ content: "Let me look that up." }),
+      sseEvent({ retract: "Let me look that up." }),
+    ]);
+    const err = await rejection(api.streamChat("hi", null, h));
+    expect(err).toBeInstanceOf(api.ConnectionLostError);
+    expect(h.log).toEqual([
+      ["chunk", "Let me look that up."],
+      ["retract", "Let me look that up."],
+    ]);
+  });
+
+  it("streamRetry passes a retract frame to onRetract too", async () => {
+    const api = await load();
+    const h = handlers();
+    stream([
+      sseEvent({ content: "Let me check." }),
+      sseEvent({ retract: "Let me check." }),
+      sseEvent({ content: "Done." }),
+      sseEvent("[DONE]"),
+    ]);
+    await api.streamRetry("c1", "m1", false, h);
+    expect(h.log).toEqual([
+      ["chunk", "Let me check."],
+      ["retract", "Let me check."],
+      ["chunk", "Done."],
+    ]);
+  });
+
+  it.each([
+    ["an empty retract", { retract: "" }],
+    ["a numeric retract", { retract: 42 }],
+    ["a null retract", { retract: null }],
+    ["a list retract", { retract: ["Let me look that up."] }],
+    ["an object retract", { retract: { text: "Let me look that up." } }],
+  ])("ignores %s and keeps streaming", async (_label, frame) => {
+    const api = await load();
+    const h = handlers();
+    stream([
+      sseEvent({ content: "before" }),
+      sseEvent(frame),
+      sseEvent({ content: "after" }),
+      sseEvent("[DONE]"),
+    ]);
+    await expect(api.streamChat("hi", null, h)).resolves.toBeUndefined();
+    expect(h.onRetract).not.toHaveBeenCalled();
+    expect(h.log).toEqual([
+      ["chunk", "before"],
+      ["chunk", "after"],
+    ]);
+  });
+
+  it("a frame carrying both an error code and a retract is a failure and its retract is not delivered", async () => {
+    const api = await load();
+    const h = handlers();
+    stream([
+      sseEvent({ content: "Let me look that up." }),
+      sseEvent({ error: "reply_failed", retract: "Let me look that up." }),
+    ]);
+    const err = await rejection(api.streamChat("hi", null, h));
+    expect(err).toBeInstanceOf(api.ReplyFailedError);
+    expect((err as Error).message).toBe("reply_failed");
+    expect(h.onRetract).not.toHaveBeenCalled();
+    expect(h.log).toEqual([["chunk", "Let me look that up."]]);
+  });
+
+  it("works without the optional retract handler", async () => {
+    const api = await load();
+    const onConversationId = vi.fn();
+    const onChunk = vi.fn();
+    stream([
+      sseEvent({ content: "Let me look that up." }),
+      sseEvent({ retract: "Let me look that up." }),
+      sseEvent({ content: "Here is the answer." }),
+      sseEvent("[DONE]"),
+    ]);
+    await expect(
+      api.streamChat("hi", null, { onConversationId, onChunk }),
+    ).resolves.toBeUndefined();
+    expect(onChunk.mock.calls).toEqual([
+      ["Let me look that up."],
+      ["Here is the answer."],
     ]);
   });
 });

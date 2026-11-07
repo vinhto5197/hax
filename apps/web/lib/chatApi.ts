@@ -273,14 +273,15 @@ const SILENCE_LIMIT_MS = 45_000;
 
 // Parsed result of one SSE event — a discriminated union so callers switch on
 // `type`: prelude (conversation), token (chunk), tool-activity note (status),
-// provenance (sources), terminator (done), model failure (error), or
-// unparseable/empty (ignore).
+// provenance (sources), withdrawn narration (retract), terminator (done),
+// model failure (error), or unparseable/empty (ignore).
 type StreamEvent =
   | { type: "conversation"; conversationId: string }
   | { type: "error"; code: string }
   | { type: "chunk"; content: string }
   | { type: "status"; status: string }
   | { type: "sources"; sources: Source[] }
+  | { type: "retract"; text: string }
   | { type: "done" }
   | { type: "ignore" };
 
@@ -317,6 +318,7 @@ function parseStreamEvent(rawEvent: string): StreamEvent {
         conversation_id?: unknown;
         status?: unknown;
         sources?: unknown;
+        retract?: unknown;
       };
       // First: a failure frame is a failure whatever else it carries.
       if (typeof parsed.error === "string") {
@@ -327,6 +329,9 @@ function parseStreamEvent(rawEvent: string): StreamEvent {
       }
       if (typeof parsed.content === "string" && parsed.content.length > 0) {
         return { type: "chunk", content: parsed.content };
+      }
+      if (typeof parsed.retract === "string" && parsed.retract.length > 0) {
+        return { type: "retract", text: parsed.retract };
       }
       if (typeof parsed.status === "string" && parsed.status.length > 0) {
         return { type: "status", status: parsed.status };
@@ -350,6 +355,9 @@ export type StreamHandlers = {
   onStatus?: (status: string) => void;
   // Optional — omitting it just drops the provenance.
   onSources?: (sources: Source[]) => void;
+  // Narration the server withdrew: exactly the text last streamed, to remove
+  // from the end of the reply (the server never stores it).
+  onRetract?: (text: string) => void;
 };
 
 // Rejects with ConnectionLostError once the response has started and the
@@ -482,6 +490,7 @@ async function readReplyStream(
         if (parsed.type === "chunk") handlers.onChunk(parsed.content);
         if (parsed.type === "status") handlers.onStatus?.(parsed.status);
         if (parsed.type === "sources") handlers.onSources?.(parsed.sources);
+        if (parsed.type === "retract") handlers.onRetract?.(parsed.text);
       }
     }
   } finally {
