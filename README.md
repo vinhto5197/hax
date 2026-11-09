@@ -1,10 +1,10 @@
 # If anything is written by a human in this repo, it's this note
 
-As of Nov 6, 2026, this repo is officially retired. It will receive no more maintenance. It has served its purpose and I have gone on to make a private fork of it to develop a real business application.
+As of Nov 8, 2026, this repo is officially retired. It will receive no more maintenance. It has served its purpose and I have gone on to make a private fork of it to develop a real business application.
 
 Documentation of the entire process in the form of a course: [How hax was built](docs/course/README.md)
 
-Live site [hax-ai.chat](https://hax-ai.chat) is currently still up as of Nov 6, 2026, but would be replaced when the private fork deploys. Stay tuned.
+Live site [hax-ai.chat](https://hax-ai.chat) is currently still up as of Nov 8, 2026, but would be replaced when the private fork deploys. Stay tuned.
 
 It has been a surreal learning experience. I started the project with little full-stack experience (my professional background is data), and have grown a lot over the entire time I have been working on it. If you dig into the repo's commit history, you'll see that I moved very slow and committed very little in the beginning. "Why is this guy taking this much time to build something so simple that Claude can oneshot?"
 
@@ -63,7 +63,7 @@ The full guide is [docs/dev-setup.md](docs/dev-setup.md): the keys and secrets (
 
 ## Status
 
-All five milestones shipped; v0 is retired (Nov 6, 2026). Decisions
+All five milestones shipped; v0 is retired (Nov 8, 2026). Decisions
 are recorded in the [ADR index](docs/adr/README.md); how the project was
 built, decision by decision, is the [course](docs/course/README.md).
 
