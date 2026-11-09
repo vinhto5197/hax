@@ -73,6 +73,11 @@ another user can see your files. It allows a few turns and does not search
 documents, upload files or use tools. Sign up to upload your own documents and
 use the full set of tools.
 
+## Who made Hax
+
+Hax was created by Vinh To. Its source code is public on GitHub:
+https://github.com/vinhto5197/hax
+
 ## How Hax is built
 
 Hax is open source: a Next.js web app, a FastAPI backend, two Celery workers,

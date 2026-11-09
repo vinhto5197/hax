@@ -19,7 +19,9 @@ def test_both_system_prompts_name_the_product_hax_capitalized():
     from apps.api.routers.chat import AGENTIC_SYSTEM
 
     for prompt in (DEMO_SYSTEM_PROMPT, AGENTIC_SYSTEM):
-        assert re.search(r"\bhax\b", prompt) is None
+        # A URL keeps its own lowercase path (the repository is .../hax).
+        prose = re.sub(r"https?://\S+", "", prompt)
+        assert re.search(r"\bhax\b", prose) is None
         assert "Hax" in prompt
 
 

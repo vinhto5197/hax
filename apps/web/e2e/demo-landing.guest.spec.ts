@@ -86,6 +86,19 @@ test("the evolving notice sits right below the top bar on the landing, and above
   );
 });
 
+test("the evolving notice links the public repo, opening in a new tab", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const link = page.getByRole("link", { name: "github.com/vinhto5197/hax" });
+  await expect(link).toBeVisible();
+  await expect(link).toHaveAttribute(
+    "href",
+    "https://github.com/vinhto5197/hax",
+  );
+  await expect(link).toHaveAttribute("target", "_blank");
+});
+
 test("a demo turn runs in place: the URL stays /", async ({ page }) => {
   await page.goto("/");
   await send(page, "Demo landing journey: does the URL move?");
